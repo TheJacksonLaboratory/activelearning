@@ -63,39 +63,6 @@ def add_dropout(net, p=0.05):
             module.insert(l_idx + 1, DropoutEvalOverrider(dropout_layer))
 
 
-def annotate_samples(active_samples, patch_size, num_workers):
-    samples_imgs = []
-    samples_u_sps = []
-
-    for image_metadata, output_filename, _ in active_samples:
-        labels = datautils.annotate_mask(
-            dict(input_image=(image_metadata, True)),
-                 patch_size=args.patch_size
-            )
-        )
-
-        annotate_mask(layers_metadata, patch_size=256, **kwargs)
-
-    samples_imgs_da = da.stack(samples_imgs, axis=0)
-    samples_u_sps_da = da.stack(samples_u_sps, axis=0)
-    samples_annotations = zarr.zeros(samples_u_sps_da.shape, dtype=np.int64)
-
-    viewer = napari.Viewer(title="Phase III: Annotating samples")
-    viewer.add_image(samples_imgs_da, rgb=True, name="Inputs")
-    viewer.add_image(samples_u_sps_da, name="Uncertainity heatmap", opacity=0.35, colormap="inferno")
-    viewer.add_labels(samples_annotations, name="New annotations")
-
-    napari.run()
-
-    curr_idx = 0
-    for image_metadata, output_filename, rois in active_samples.values():
-        curr_annotations = zarr.open(output_filename, mode="a")["annotations/0"]
-        for roi in rois:
-            ann_roi = tuple(roi[image_metadata["source_axes"].index(ax)] for ax in "YX")
-            curr_annotations[ann_roi] = samples_annotations[curr_idx, ...]
-            curr_idx += 1
-
-
 def compute_BALD(probs):
     if probs.ndim == 3:
         probs = np.stack((probs, 1 - probs), axis=1)
@@ -128,83 +95,113 @@ def compute_acquisition(probs, super_pixel_labels):
     return u_sp, u_sp_lab
 
 
-def compute_confidence_image(model, inference_fn, image_metadata, mask_metadata, output_filename, image_index=None, patch_size=256, samples_per_image=None, repetitions=30, num_workers=0, **inference_fn_args):
-    train_dataset = datautils.get_zarrdataset(image_metadata, mask_metadata=mask_metadata, patch_size=patch_size)
-    train_dataloader = DataLoader(train_dataset, num_workers=num_workers, batch_size=1, pin_memory=torch.cuda.is_available(), worker_init_fn=zds.zarrdataset_worker_init_fn)
+def compute_confidence_image(model, inference_fn, output_dir, image_metadata,
+                             image_index=None,
+                             patch_size=256,
+                             samples_per_image=None,
+                             repetitions=30,
+                             num_workers=0,
+                             **inference_fn_args):
+    train_dataset = datautils.get_zarrdataset(image_metadata,
+                                              patch_size=patch_size)
+    train_dataloader = DataLoader(
+        train_dataset,
+        num_workers=num_workers,
+        batch_size=1,
+        pin_memory=torch.cuda.is_available(),
+        worker_init_fn=zds.zarrdataset_worker_init_fn
+    )
 
-    confidence_map = zarr.open(output_filename, mode="a")["confidence_map/0"]
+    image_metadata["confidence_maps"] = datautils.prepare_output_zarr(
+        "confidence_map/0",
+        output_dir=output_dir,
+        patch_size=patch_size,
+        output_axes="YX",
+        output_dtype=np.float32,
+        output_mode="images",
+        **image_metadata["images"]
+    )
+
+    conf_map_grp = zarr.open(image_metadata["confidence_maps"]["filenames"],
+                             mode="a")
+    conf_map = conf_map_grp[image_metadata["confidence_maps"]["data_group"]]
 
     n_samples = 0
     samples_u_img = []
 
-    for i, (pos, img, img_sp) in tqdm.tqdm(enumerate(train_dataloader), position=1, leave=False, total=samples_per_image, desc="Acquiring samples"):
+    q_img = tqdm.tqdm(position=1, leave=False, total=samples_per_image,
+                      desc="Acquiring samples")
+    for i, (pos, img, img_sp) in enumerate(train_dataloader):
         probs = []
-        for _ in tqdm.tqdm(range(repetitions), desc=f"Computing confidence for sample {i + 1}", position=2, leave=False):
-            probs.append(inference_fn(img[0].numpy(), model, **inference_fn_args))
+        for _ in tqdm.tqdm(range(repetitions),
+                           desc=f"Computing confidence for sample {i + 1}",
+                           position=2,
+                           leave=False):
+            probs.append(inference_fn(
+                img[0].numpy(), model, **inference_fn_args)
+            )
 
         probs = np.stack(probs, axis=0)
 
         u_sp, u_sp_lab = compute_acquisition(probs, img_sp[0, ..., 0].numpy())
 
-        pos_u_lab = (slice(pos[0, 0, 0].item(), pos[0, 0, 1].item()), slice(pos[0, 1, 0].item(), pos[0, 1, 1].item()))
-        confidence_map[pos_u_lab] = u_sp_lab
+        pos_u_lab = (slice(pos[0, 0, 0].item(), pos[0, 0, 1].item()),
+                     slice(pos[0, 1, 0].item(), pos[0, 1, 1].item()))
+        conf_map[pos_u_lab] = u_sp_lab
 
-        samples_u_img += [
-            (u, image_index, pos_u_lab)
-            for u in u_sp
-        ]
+        samples_u_img += [(u, image_index) for u in u_sp]
 
         n_samples += 1
+        q_img.update()
+
         if samples_per_image is not None and n_samples >= samples_per_image:
             break
+
+    q_img.close()
 
     return samples_u_img
 
 
-def compute_confidence_dataset(model, inference_fn, images_metadata, masks_metadata, output_filenames, patch_size=256, samples_per_image=None, max_samples_to_annotate=None, repetitions=30, num_workers=0, **inference_fn_args):
+def compute_confidence_dataset(model, inference_fn, output_dir,
+                               dataset_metadata,
+                               patch_size=256,
+                               samples_per_image=None,
+                               max_samples_to_annotate=None,
+                               repetitions=30,
+                               num_workers=0,
+                               **inference_fn_args):
     samples_u_list = []
+
     add_dropout(model)
 
-    q = tqdm.tqdm(leave=True, position=0, total=len(images_metadata))
-    for image_index, (im_metadata, mk_metadata, output_fiename) in enumerate(zip(images_metadata, masks_metadata, output_filenames)):
-        samples_u_list += compute_confidence_image(model, inference_fn, im_metadata, mk_metadata, output_fiename, image_index, patch_size, samples_per_image=samples_per_image, repetitions=repetitions, num_workers=num_workers, **inference_fn_args)
+    q = tqdm.tqdm(leave=True, position=0, total=len(dataset_metadata))
+    for image_index, image_metadata in enumerate(dataset_metadata):
+        samples_u_img = compute_confidence_image(
+            model,
+            inference_fn,
+            output_dir,
+            image_metadata,
+            image_index,
+            patch_size,
+            samples_per_image=samples_per_image,
+            repetitions=repetitions,
+            num_workers=num_workers,
+            **inference_fn_args
+        )
+        samples_u_list += samples_u_img
+
         q.update()
 
     q.close()
+
     samples_u_list.sort(reverse=True)
     if max_samples_to_annotate is not None:
         samples_u_list = samples_u_list[:max_samples_to_annotate]
 
-    # Remove the samples that have high confidence from the selected images
-    active_samples = []
-    active_image_indices = []
+    samples_u_list = np.array(samples_u_list)[:, 1].astype(np.int32)
+    active_samples = np.unique(samples_u_list).tolist()
 
-    for _, image_index, pos_u_lab in samples_u_list:
-        if image_index in active_image_indices:
-            curr_sample = active_image_indices.index(image_index)
-        else:
-            active_image_indices.append(image_index)
-            active_samples.append((images_metadata[image_index], output_filenames[image_index], []))
-            curr_sample = -1
+    active_images = [dataset_metadata[image_index]
+                     for image_index in active_samples]
 
-        curr_image_metadata = images_metadata[image_index]
-
-        base_roi = curr_image_metadata["roi"]
-        if not isinstance(base_roi, (tuple, list)):
-            base_roi = [base_roi]
-
-        if len(base_roi) < len(curr_image_metadata["source_axes"]):
-            base_roi = cycle(base_roi)
-
-        offset_roi = tuple(
-            slice((slice_ax.start if slice_ax.start is not None else 0) + pos_u_lab["YX".index(ax)].start,
-                  (slice_ax.start if slice_ax.start is not None else 0) + pos_u_lab["YX".index(ax)].stop)
-            if ax in "YX" else
-            slice_ax
-            for ax, slice_ax in zip(curr_image_metadata["source_axes"], base_roi)
-        )
-
-        if offset_roi not in active_samples[curr_sample][2]:
-            active_samples[curr_sample][2].append(offset_roi)
-
-    return active_samples
+    return active_images

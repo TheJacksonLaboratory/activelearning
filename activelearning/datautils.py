@@ -7,6 +7,7 @@ import dask.array as da
 from dask.diagnostics import ProgressBar
 import cv2
 import numpy as np
+from skimage.util.shape import view_as_blocks
 from itertools import repeat
 from functools import partial, reduce
 import operator
@@ -63,28 +64,7 @@ class SuperPixelGenerator(zds.MaskGenerator):
         return labels
 
 
-def save_mask(mask, filename, output_dir, mask_data_group="mask"):
-    os.makedirs(output_dir, exist_ok=True)
-
-    basename = ".".join(os.path.basename(filename).split(".")[:-1])
-    mask_filename = os.path.join(output_dir, basename + ".zarr")
-
-    root_grp = zarr.open(mask_filename, mode="a")
-
-    root_grp.create_dataset(
-        name=mask_data_group + "/0",
-        data=mask > 0,
-        dtype=bool,
-        chunks=True,
-        compressor=zarr.Blosc(clevel=9),
-        write_empty_chunks=False,
-        overwrite=True
-    )
-
-    return mask_filename
-
-
-def retrieve_pyramid_loaders(filename, data_group=None, **kwargs):
+def retrieve_pyramid_loaders(filenames, data_group=None, **kwargs):
     if data_group is None or data_group.lower() == "none":
         pyramid_group = [None]
     else:
@@ -102,7 +82,7 @@ def retrieve_pyramid_loaders(filename, data_group=None, **kwargs):
     pyramid_stores = []
     for grp in pyramid_group:
         try:
-            image, store = zds.image2array(filename, data_group=grp)
+            image, store = zds.image2array(filenames, data_group=grp)
             pyramid_images.append(image)
             pyramid_stores.append(store)
 
@@ -112,42 +92,79 @@ def retrieve_pyramid_loaders(filename, data_group=None, **kwargs):
     return pyramid_images, pyramid_stores
 
 
-def generate_pyramid(pyramid_images, source_axes, axes=None, roi=None, **kwargs):
+def generate_pyramid(pyramid_images, roi=None, **kwargs):
     pyramid_dask_images = []
-
-    if axes is None:
-        axes = source_axes
-
-    permutation_order = zds.map_axes_order(source_axes, axes)
-
-    non_required_axes = set(source_axes).difference(set(axes))
-
     for image in pyramid_images:
         da_image = da.from_zarr(image)[roi]
-        da_image = da.transpose(da_image, permutation_order)
-        da_image = da.squeeze(da_image, tuple(
-            permutation_order.index(source_axes.index(ax))
-            for ax in non_required_axes
-        ))
         pyramid_dask_images.append(da_image)
 
     return pyramid_dask_images
 
 
-def annotate_mask(layers_metadata, patch_size=256, **kwargs):
-    layers_masks = {}
+def annotate_mask(output_dir, layers_metadata, layer_to_annotate=None,
+                  annotation_name="masks",
+                  patch_size=256,
+                  scale=1.0,
+                  mask_dtype=bool,
+                  mask_modality="masks",
+                  **kwargs):
     layers_pyramid_stores = []
     active_axes = None
 
+    mask_metadata = None
+    mask_temp = None
+    mask_org = None
+    main_layer_shape_dict = None
+
     viewer = napari.Viewer(title="Phase I: Masking")
-    for layer_name, (image_metadata, annotate_this) in layers_metadata.items():
-        pyramid_images, pyramid_stores = retrieve_pyramid_loaders(**image_metadata)
+    for layer_name, image_metadata in layers_metadata.items():
+        pyramid_images, pyramid_stores = retrieve_pyramid_loaders(
+            **image_metadata
+        )
         layers_pyramid_stores += pyramid_stores
 
         image_pyramid = generate_pyramid(pyramid_images, **image_metadata)
-        channel_axis = image_metadata["axes"].index("C") if "C" in image_metadata["axes"] else None
-        is_rgb = image_pyramid[0].shape[channel_axis] == 3
-        current_layer = viewer.add_image(image_pyramid, name=layer_name, multiscale=True, channel_axis=channel_axis if not is_rgb else None, rgb=is_rgb)
+        if "C" in image_metadata["source_axes"]:
+            channel_axis = image_metadata["source_axes"].index("C")
+            # is_rgb = image_pyramid[0].shape[channel_axis] == 3
+        else:
+            channel_axis = None
+            # is_rgb = False
+
+        current_layer_shape_dict = {
+            ax: s
+            for s, ax in zip(image_pyramid[0].shape,
+                             image_metadata["source_axes"])
+        }
+        if "C" in current_layer_shape_dict:
+            is_rgb = current_layer_shape_dict.pop("C") == 3
+        else:
+            is_rgb = False
+
+        if layer_name == "images":
+            main_layer_shape_dict = current_layer_shape_dict
+            current_layer_scale = [1] * len(main_layer_shape_dict)
+            current_layer_translate = [0] * len(main_layer_shape_dict)
+        else:
+            current_layer_scale = [
+                main_layer_shape_dict.get(ax, 1) / s
+                for ax, s in current_layer_shape_dict.items()
+            ]
+
+            current_layer_translate = [
+                (scl - 1) / 2
+                for scl in current_layer_scale
+            ]
+
+        current_layer = viewer.add_image(
+            image_pyramid,
+            name=layer_name,
+            multiscale=True,
+            channel_axis=channel_axis,
+            colormap=["red", "green", "blue"],
+            scale=current_layer_scale,
+            translate=current_layer_translate
+        )
 
         if isinstance(current_layer, list):
             current_layer = current_layer[0]
@@ -159,18 +176,30 @@ def annotate_mask(layers_metadata, patch_size=256, **kwargs):
         if active_axes is None:
             active_axes = current_active_axes
 
-        if annotate_this:
-            mask_shape = [
-                round(s / patch_size)
-                for s, ax in zip(current_layer.data.shape, current_active_axes)
-                if ax in "YX"
-            ]
+        if layer_to_annotate is not None and layer_name == layer_to_annotate:
+            mask_metadata = prepare_output_zarr(
+                annotation_name + "/0",
+                output_dir=output_dir,
+                patch_size=patch_size,
+                scale=scale,
+                output_axes=current_active_axes,
+                output_dtype=mask_dtype,
+                output_modality=mask_modality,
+                **image_metadata
+            )
 
-            mask_scale = [patch_size for ax in current_active_axes]
+            mask_org = zarr.open(
+                mask_metadata["filenames"] + "/"
+                + mask_metadata["data_group"],
+                mode="a")
 
-            layers_masks[layer_name] = np.zeros(mask_shape, dtype=np.int32)
+            mask_temp = np.zeros_like(mask_org, dtype=np.int32)
 
-            viewer.add_labels(data=layers_masks[layer_name], scale=mask_scale, name=layer_name + "-annotation", translate=[(patch_size - 1) / 2 for ms in mask_shape])
+            mask_scale = [1 / scale] * len(current_active_axes)
+
+            viewer.add_labels(data=mask_temp, scale=mask_scale,
+                              name=annotation_name,
+                              translate=[(scl - 1) / 2 for scl in mask_scale])
 
     viewer.dims.axis_labels = tuple(active_axes)
 
@@ -184,66 +213,29 @@ def annotate_mask(layers_metadata, patch_size=256, **kwargs):
         if store is not None:
             store.close()
 
-    return layers_masks
-
-
-def get_zarrdataset(image_metadata, mask_metadata=None, patch_size=512,
-                    output_filename=None,
-                    shuffle=True,
-                    **superpixel_kwargs):
-    data_specs = [
-        zds.ImagesDatasetSpecs(
-            filenames=image_metadata["filename"],
-            data_group=image_metadata["data_group"],
-            source_axes=image_metadata["source_axes"],
-            axes=image_metadata["axes"],
-            roi=image_metadata["roi"],
-        )
-    ]
-
-    if output_filename is None:
-        data_specs.append(
-            zds.ImagesDatasetSpecs(
-                filenames=image_metadata["filename"],
-                data_group=image_metadata["data_group"],
-                source_axes=image_metadata["source_axes"],
-                axes=image_metadata["axes"],
-                roi=image_metadata["roi"],
-                image_loader_func=SuperPixelGenerator(**superpixel_kwargs),
-                modality="superpixels"
-            )
-        )
-
-    else:
-        if isinstance(image_metadata["roi"], str):
-            base_roi_list = zds.parse_rois(image_metadata["roi"])
-
-        else:
-            base_roi_list = image_metadata["roi"]
-
-        if not isinstance(base_roi_list, list):
-            base_roi_list = [base_roi_list]
-
-        sp_roi = [
-            tuple(base_roi[image_metadata["source_axes"].index(ax)] for ax in "YX")
-            for base_roi in base_roi_list
-        ]
-
-        data_specs.append(
-            zds.ImagesDatasetSpecs(
-                filenames=output_filename,
-                data_group="confidence_map/0",
-                source_axes="YX",
-                modality="superpixels",
-                roi=sp_roi
-            )
-        )
-
     if mask_metadata is not None:
-        data_specs.append(zds.MasksDatasetSpecs(**mask_metadata))
+        layers_metadata[annotation_name] = mask_metadata
+        if type(mask_org) is bool:
+            mask_org[:] = mask_temp[:] > 0
+        else:
+            mask_org[:] = mask_temp[:]
+
+
+def get_zarrdataset(dataset_metadata, patch_size=512, shuffle=True,
+                    **superpixel_kwargs):
+
+    dataset_metadata["superpixels"] = zds.ImagesDatasetSpecs(
+        filenames=dataset_metadata["images"]["filenames"],
+        data_group=dataset_metadata["images"]["data_group"],
+        source_axes=dataset_metadata["images"]["source_axes"],
+        axes=dataset_metadata["images"]["axes"],
+        roi=dataset_metadata["images"]["roi"],
+        image_loader_func=SuperPixelGenerator(**superpixel_kwargs),
+        modality="superpixels"
+    )
 
     train_dataset = zds.ZarrDataset(
-        data_specs,
+        list(dataset_metadata.values()),
         return_positions=True,
         draw_same_chunk=True,
         patch_sampler=zds.PatchSampler(patch_size=patch_size,
@@ -254,28 +246,48 @@ def get_zarrdataset(image_metadata, mask_metadata=None, patch_size=512,
     return train_dataset
 
 
-def downsample_image(output_filename, group, num_scales=5):
-    for s in range(num_scales):
-        source_arr = da.from_zarr(output_filename,
-                                  component="%s/%i" % (group, s))
+def downsample_chunk(chunk):
+    pad = [(0, s % 2) for s in chunk.shape]
+    padded_chunk = np.pad(chunk, pad_width=pad)
+    chunk_blocks = view_as_blocks(padded_chunk, block_shape=(2, 2))
+    flatten_view = chunk_blocks.reshape(chunk_blocks.shape[0],
+                                        chunk_blocks.shape[1], -1)
+    max_blocks = np.max(flatten_view, axis=2)
+
+    return max_blocks
+
+
+def downsample_image(filenames, source_axes, data_group=None, num_scales=5,
+                     **kwargs):
+    if data_group is not None:
+        root_group = "/".join(data_group.split("/")[:-1]) + "/%i"
+    else:
+        root_group = "%i"
+
+    source_arr = da.from_zarr(filenames, component=data_group)
+    min_size = min(source_arr.shape[source_axes.index(ax)]
+                   for ax in "YX" if ax in source_axes
+                   )
+    num_scales = min(num_scales, int(np.log2(min_size)))
+
+    for s in range(1, num_scales):
         target_arr = source_arr.map_blocks(
-            cv2.resize,
-            dsize=None,
-            fx=0.5,
-            fy=0.5,
-            interpolation=cv2.INTER_NEAREST,
-            chunks=tuple(tuple(round(chk / 2) for chk in chk_ax)
+            downsample_chunk,
+            chunks=tuple(tuple(np.ceil(chk / 2) for chk in chk_ax)
                          for chk_ax in source_arr.chunks),
             dtype=source_arr.dtype,
             meta=np.empty((0, ), dtype=source_arr.dtype)
         )
 
         with ProgressBar():
-            target_arr.to_zarr(output_filename,
-                               component="%s/%i" % (group, s + 1),
+            target_arr.to_zarr(filenames,
+                               component=root_group % s,
                                compressor=zarr.Blosc(clevel=9),
                                write_empty_chunks=False,
                                overwrite=True)
+
+        source_arr = da.from_zarr(filenames,
+                                  component=root_group % s)
 
 
 def parse_dataset_metadata(filenames):
@@ -291,68 +303,87 @@ def parse_dataset_metadata(filenames):
             filenames = [filenames]
 
     assert isinstance(filenames, list) and all(map(isinstance, filenames, repeat(str))), "Type of input filenames is not supported"
-    dataset_metadata = list(map(partial(zds.parse_metadata, default_source_axes="TCZYX"), filenames))
-
+    dataset_metadata = map(partial(zds.parse_metadata, default_source_axes="TCZYX"), filenames)
     dataset_metadata = reduce(lambda l1, l2: l1 + l2, dataset_metadata)
+    for metadata in dataset_metadata:
+        metadata["filenames"] = metadata.pop("filename")
 
+    dataset_metadata = list(map(lambda metadata:
+                                zds.ImagesDatasetSpecs(**metadata),
+                                dataset_metadata))
     return dataset_metadata
 
 
-def prepare_output_arrays(filename, source_axes, data_group, roi, output_dir=None, patch_size=256, **kwargs):
-    output_basename = ".".join(os.path.basename(filename).split(".")[:-1])
+def prepare_output_zarr(output_array_name, output_dir, filenames, source_axes,
+                        data_group=None,
+                        roi=None,
+                        axes=None,
+                        patch_size=256,
+                        scale=1.0,
+                        output_axes=None,
+                        output_dtype=None,
+                        output_modality=None,
+                        data=None,
+                        **kwargs):
+    output_basename = ".".join(os.path.basename(filenames).split(".")[:-1])
     output_basename += ".zarr"
     output_filename = os.path.join(output_dir, output_basename)
 
-    img_collection = zds.ImageCollection(
-        dict(
-            images=dict(
-                filename=filename,
-                source_axes=source_axes,
-                data_group=data_group,
-                roi=roi
-            ),
-        ),
+    # Load the metadata from the input image to define the size of the output
+    # zarr arrays.
+    image_loader = zds.ImageLoader(
+        filename=filenames,
+        source_axes=source_axes,
+        data_group=data_group,
+        roi=roi,
+        axes=axes
     )
 
-    image_shape = img_collection.collection["images"].shape
+    image_shape = image_loader.shape
 
-    confidence_shape = [
-        image_shape[source_axes.index(ax)]
-        for ax in "YX"
-        if ax in source_axes
+    if output_dtype is None:
+        output_dtype = image_loader.arr.dtype
+
+    if output_axes is None:
+        output_axes = image_loader.axes
+
+    output_shape = [
+        round(scale * image_shape[image_loader.axes.index(ax)])
+        for ax in output_axes
+        if ax in image_loader.axes
     ]
 
-    confidence_chunks = [patch_size, patch_size]
+    output_chunks = [
+        patch_size if ax in "ZYX" else 1
+        for ax in output_axes
+    ]
 
-    out_grp = zarr.open(output_filename)
+    out_grp = zarr.open(output_filename, mode="a")
 
     out_grp.create_dataset(
-        name="confidence_map/0",
-        shape=confidence_shape,
-        chunks=confidence_chunks,
+        data=data,
+        name=output_array_name,
+        shape=output_shape,
+        chunks=output_chunks,
         compressor=zarr.Blosc(clevel=9),
-        dtype=np.float32,
+        dtype=output_dtype,
         write_empty_chunks=False,
         overwrite=True
     )
 
-    out_grp.create_dataset(
-        name="annotations/0",
-        shape=confidence_shape,
-        chunks=confidence_chunks,
-        compressor=zarr.Blosc(clevel=9),
-        dtype=np.int64,
-        write_empty_chunks=False,
-        overwrite=True
+    if output_modality == "labels":
+        dataspecs_class = zds.LabelsDatasetSpecs
+    elif output_modality == "masks":
+        dataspecs_class = zds.MasksDatasetSpecs
+    else:
+        dataspecs_class = zds.ImagesDatasetSpecs
+
+    output_metadata = dataspecs_class(
+        filenames=output_filename,
+        source_axes=output_axes,
+        axes=output_axes,
+        data_group=output_array_name,
+        roi=slice(None)
     )
 
-    return output_filename
-
-
-def prepare_output_dataset(output_dir, images_metadata, patch_size=256):
-    output_filenames = []
-    for im_metadata in images_metadata:
-        output_filename = prepare_output_arrays(output_dir=output_dir, patch_size=patch_size, **im_metadata)
-        output_filenames.append(output_filename)
-
-    return output_filenames
+    return output_metadata

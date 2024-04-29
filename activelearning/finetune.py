@@ -1,5 +1,4 @@
 import argparse
-from itertools import cycle
 import numpy as np
 import torch
 from cellpose import models, transforms
@@ -20,7 +19,8 @@ def cellpose_model_init():
 
 
 def cellpose_inference(img, model):
-    x = transforms.convert_image(img, None, normalize=False, invert=False, nchan=img.shape[-1])
+    x = transforms.convert_image(img, None, normalize=False, invert=False,
+                                 nchan=img.shape[-1])
     x = transforms.normalize_img(x, invert=False)
 
     x = torch.from_numpy(np.moveaxis(x, -1, 0))[None, :2, ...]
@@ -68,40 +68,59 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     images_metadata = datautils.parse_dataset_metadata(args.train_filenames)
+    dataset_metadata = list(dict(images=im_md) for im_md in images_metadata)
 
     if args.train_masks_filenames is not None:
-        masks_metadata = datautils.parse_dataset_metadata(args.train_masks_filenames)
+        masks_metadata_list = \
+            datautils.parse_dataset_metadata(args.train_masks_filenames)
+        for image_metadata_dict, mask_metadata in zip(dataset_metadata,
+                                                      masks_metadata_list):
+            image_metadata_dict["masks"] = mask_metadata
 
     else:
         # Mask valid sampling regions in input images
-        masks_metadata = []
-        for im_metadata in images_metadata:
-            layers_masks = datautils.annotate_mask(
-                dict(
-                    input_image=(im_metadata, True)
-                ),
-                patch_size=args.patch_size
+        for image_metadata_dict in dataset_metadata:
+            datautils.annotate_mask(
+                args.output_dir,
+                image_metadata_dict,
+                layer_to_annotate="images",
+                annotation_name="sampling_mask",
+                patch_size=1,
+                scale=1 / args.patch_size,
+                mask_modality="masks",
+                mask_dtype=bool
             )
 
-            mask = layers_masks["input_image"]
-            mask_filename = datautils.save_mask(mask, im_metadata["filename"], args.output_dir, mask_data_group="mask")
-
-            masks_metadata.append(dict(
-                filenames=mask_filename,
-                source_axes="YX",
-                data_group="mask/0",
-                roi=None
-            ))
-
-    output_filenames = datautils.prepare_output_dataset(args.output_dir, images_metadata, args.patch_size)
-
     cellpose_model = cellpose_model_init()
-    # TODO: Generate a DataSpecs object from the confidence maps and output filename 
-    active_filenames = alutils.compute_confidence_dataset(cellpose_model.net, cellpose_inference, images_metadata, masks_metadata, output_filenames, patch_size=args.patch_size, samples_per_image=args.samples_per_image, max_samples_to_annotate=args.max_samples_to_annotate, repetitions=args.repetitions, num_workers=args.num_workers)
 
-    for image_metadata, output_filename, _ in active_filenames:
-        datautils.downsample_image(output_filename, "confidence_map", num_scales=5)
+    active_dataset_metadata = alutils.compute_confidence_dataset(
+        cellpose_model.net,
+        cellpose_inference,
+        args.output_dir,
+        dataset_metadata,
+        patch_size=args.patch_size,
+        samples_per_image=args.samples_per_image,
+        max_samples_to_annotate=args.max_samples_to_annotate,
+        repetitions=args.repetitions,
+        num_workers=args.num_workers
+    )
 
-    alutils.annotate_samples(active_filenames, args.patch_size, args.num_workers)
-    for image_metadata, output_filename, _ in active_filenames:
-        datautils.downsample_image(output_filename, "annotations", num_scales=5)
+    for image_metadata in active_dataset_metadata:
+        # Remove the superpixel modality
+        image_metadata.pop("superpixels")
+
+    for image_metadata in active_dataset_metadata:
+        datautils.downsample_image(**image_metadata["confidence_maps"],
+                                   num_scales=5)
+
+    for image_metadata_dict in active_dataset_metadata:
+        datautils.annotate_mask(args.output_dir, image_metadata_dict,
+                                layer_to_annotate="confidence_maps",
+                                annotation_name="annotations",
+                                patch_size=args.patch_size,
+                                mask_dtype=np.int32,
+                                mask_modality="labels")
+
+    for image_metadata_dict in active_dataset_metadata:
+        datautils.downsample_image(**image_metadata["annotations"],
+                                   num_scales=5)
