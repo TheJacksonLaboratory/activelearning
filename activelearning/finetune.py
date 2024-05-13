@@ -85,7 +85,7 @@ if __name__ == "__main__":
                 image_metadata_dict,
                 layer_to_annotate="images",
                 annotation_name="sampling_mask",
-                patch_size=1,
+                patch_size=16,
                 scale=1 / args.patch_size,
                 mask_modality="masks",
                 mask_dtype=bool
@@ -109,10 +109,6 @@ if __name__ == "__main__":
         # Remove the superpixel modality
         image_metadata.pop("superpixels")
 
-    for image_metadata in active_dataset_metadata:
-        datautils.downsample_image(**image_metadata["confidence_maps"],
-                                   num_scales=5)
-
     for image_metadata_dict in active_dataset_metadata:
         datautils.annotate_mask(args.output_dir, image_metadata_dict,
                                 layer_to_annotate="confidence_maps",
@@ -120,7 +116,3 @@ if __name__ == "__main__":
                                 patch_size=args.patch_size,
                                 mask_dtype=np.int32,
                                 mask_modality="labels")
-
-    for image_metadata_dict in active_dataset_metadata:
-        datautils.downsample_image(**image_metadata["annotations"],
-                                   num_scales=5)
