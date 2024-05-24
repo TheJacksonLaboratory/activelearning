@@ -85,10 +85,9 @@ if __name__ == "__main__":
                 image_metadata_dict,
                 layer_to_annotate="images",
                 annotation_name="sampling_mask",
-                patch_size=16,
                 scale=1 / args.patch_size,
                 mask_modality="masks",
-                mask_dtype=bool
+                mask_dtype=np.int64
             )
 
     cellpose_model = cellpose_model_init()
@@ -105,6 +104,11 @@ if __name__ == "__main__":
         num_workers=args.num_workers
     )
 
+    datautils.downsample_image(
+        **image_metadata_dict["confidence_maps"],
+        num_cales=5
+    )
+
     for image_metadata in active_dataset_metadata:
         # Remove the superpixel modality
         image_metadata.pop("superpixels")
@@ -116,3 +120,8 @@ if __name__ == "__main__":
                                 patch_size=args.patch_size,
                                 mask_dtype=np.int32,
                                 mask_modality="labels")
+
+    datautils.downsample_image(
+        **image_metadata_dict["annotations"],
+        num_cales=5
+    )

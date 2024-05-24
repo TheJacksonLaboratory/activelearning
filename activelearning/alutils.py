@@ -1,14 +1,11 @@
+import os
 from typing import List, Tuple, Union
 import zarrdataset as zds
-import tqdm
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
-import dask.array as da
 import zarr
-import napari
-
-from itertools import cycle
+import tqdm
 
 import datautils
 
@@ -83,7 +80,7 @@ def compute_acquisition(probs, super_pixel_labels):
     super_pixel_indices = np.unique(super_pixel_labels)
 
     u_sp = []
-    u_sp_lab = np.zeros_like(super_pixel_labels)
+    u_sp_lab = np.zeros_like(super_pixel_labels, dtype=np.float32)
 
     for sp_l in super_pixel_indices:
         mask = super_pixel_labels == sp_l
@@ -112,30 +109,20 @@ def compute_confidence_image(model, inference_fn, output_dir, image_metadata,
         worker_init_fn=zds.zarrdataset_worker_init_fn
     )
 
-    num_scales = max(1, int(np.log(patch_size) / np.log(4)))
+    image_metadata["confidence_maps"] = datautils.prepare_output_zarr(
+        "confidence_map/0",
+        output_dir=output_dir,
+        scale=1,
+        output_axes="YX",
+        output_dtype=np.float32,
+        output_mode="images",
+        **image_metadata["images"]
+    )
 
-    confidence_maps_metadata = [
-        datautils.prepare_output_zarr(
-            "confidence_map/%i" % scale_i,
-            output_dir=output_dir,
-            chunk_size=(16 * patch_size) // 4**scale_i,
-            scale=1 / 4**scale_i,
-            output_axes="YX",
-            output_dtype=np.float32,
-            output_mode="images",
-            **image_metadata["images"]
-        )
-        for scale_i in range(num_scales)
-    ]
-
-    image_metadata["confidence_maps"] = confidence_maps_metadata[0]
-
-    conf_map_grp = zarr.open(image_metadata["confidence_maps"]["filenames"],
-                             mode="a")
-    conf_maps = [
-        conf_map_grp[metadata["data_group"]]
-        for metadata in confidence_maps_metadata
-    ]
+    conf_map = zarr.open(os.path.join(
+        image_metadata["confidence_maps"]["filenames"],
+        image_metadata["confidence_maps"]["data_group"]),
+        mode="a")
 
     n_samples = 0
     samples_u_img = []
@@ -156,13 +143,10 @@ def compute_confidence_image(model, inference_fn, output_dir, image_metadata,
 
         u_sp, u_sp_lab = compute_acquisition(probs, img_sp[0, ..., 0].numpy())
 
-        for scale_s in range(num_scales):
-            pos_u_lab = (slice(pos[0, 0, 0].item() // 4**scale_s,
-                               pos[0, 0, 1].item() // 4**scale_s),
-                         slice(pos[0, 1, 0].item() // 4**scale_s,
-                               pos[0, 1, 1].item() // 4**scale_s))
-            conf_maps[scale_s][pos_u_lab] = u_sp_lab[::4 ** scale_s,
-                                                     ::4 ** scale_s]
+        pos_u_lab = (slice(pos[0, 0, 0].item(), pos[0, 0, 1].item()),
+                     slice(pos[0, 1, 0].item(), pos[0, 1, 1].item()))
+
+        conf_map[pos_u_lab] = u_sp_lab
 
         samples_u_img += [(u, image_index) for u in u_sp]
 
