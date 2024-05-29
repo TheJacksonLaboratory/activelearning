@@ -7,8 +7,10 @@ import dask.array as da
 from dask.diagnostics import ProgressBar
 import cv2
 import numpy as np
-from itertools import repeat
 from functools import partial, reduce
+
+import torch
+from torch.utils.data import DataLoader
 
 
 class SuperPixelGenerator(zds.MaskGenerator):
@@ -62,8 +64,10 @@ class SuperPixelGenerator(zds.MaskGenerator):
         return labels
 
 
-def get_zarrdataset(dataset_metadata, patch_size=512, shuffle=True,
-                    **superpixel_kwargs):
+def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
+                   num_workers=0,
+                   batch_size=1,
+                   **superpixel_kwargs):
 
     dataset_metadata["superpixels"] = zds.ImagesDatasetSpecs(
         filenames=dataset_metadata["images"]["filenames"],
@@ -85,7 +89,15 @@ def get_zarrdataset(dataset_metadata, patch_size=512, shuffle=True,
         shuffle=shuffle
     )
 
-    return train_dataset
+    train_dataloader = DataLoader(
+        train_dataset,
+        num_workers=num_workers,
+        batch_size=batch_size,
+        pin_memory=torch.cuda.is_available(),
+        worker_init_fn=zds.zarrdataset_worker_init_fn
+    )
+
+    return train_dataloader
 
 
 def parse_dataset_metadata(filenames):

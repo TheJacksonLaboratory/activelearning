@@ -1,11 +1,12 @@
 import argparse
 import numpy as np
 import torch
-from cellpose import models, transforms
 
 
 import datautils
 import alutils
+
+from cellpose import models, transforms
 
 
 def cellpose_model_init():
