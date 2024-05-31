@@ -60,6 +60,8 @@ class SuperPixelGenerator(zds.MaskGenerator):
 
         if image_channels > 1:
             labels = np.expand_dims(labels, self.axes.index("C"))
+        else:
+            labels = labels[..., None]
 
         return labels
 
@@ -170,44 +172,3 @@ def prepare_output_zarr(output_array_name, output_dir, filenames, source_axes,
     ]
 
     return output_metadata
-
-
-def downsample_chunk(chunk):
-    pad = [(0, s % 2) for s in chunk.shape]
-    padded_chunk = np.pad(chunk, pad_width=pad)
-    downsampled = cv2.resize(padded_chunk, dsize=None, fx=0.5, fy=0.5,
-                             interpolation=cv2.INTER_NEAREST)
-    return downsampled
-
-
-def downsample_image(filenames, source_axes, data_group=None, num_scales=5,
-                     **kwargs):
-    if data_group is not None:
-        root_group = "/".join(data_group.split("/")[:-1]) + "/%i"
-    else:
-        root_group = "%i"
-
-    source_arr = da.from_zarr(filenames, component=data_group)
-    min_size = min(source_arr.shape[source_axes.index(ax)]
-                   for ax in "YX" if ax in source_axes
-                   )
-    num_scales = min(num_scales, int(np.log2(min_size)))
-
-    for s in range(1, num_scales):
-        target_arr = source_arr.map_blocks(
-            downsample_chunk,
-            chunks=tuple(tuple(np.ceil(chk / 2) for chk in chk_ax)
-                         for chk_ax in source_arr.chunks),
-            dtype=source_arr.dtype,
-            meta=np.empty((0, ), dtype=source_arr.dtype)
-        )
-
-        with ProgressBar():
-            target_arr.to_zarr(filenames,
-                               component=root_group % s,
-                               compressor=zarr.Blosc(clevel=9),
-                               write_empty_chunks=False,
-                               overwrite=True)
-
-        source_arr = da.from_zarr(filenames,
-                                  component=root_group % s)
