@@ -13,7 +13,7 @@ from napari.layers._multiscale_data import MultiScaleData
 import tensorstore as ts
 import numpy as np
 import zarr
-from ome_zarr.writer import write_multiscales_metadata
+from ome_zarr.writer import write_multiscale, write_multiscales_metadata, write_label_metadata
 import zarrdataset as zds
 import dask.array as da
 
@@ -203,17 +203,15 @@ def save_zarr(output_filename, data, shape, chunk_size, group_name, dtype):
         overwrite=True
     )
 
-    # TODO: Write metadata so napari (or any ome-zarr reader) can open these files
 
-
-def downsample_image(filename, source_axes, data_group=None, scale=4,
-                     num_scales=5):
-    if data_group is not None:
-        root_group = "/".join(data_group.split("/")[:-1]) + "/%i"
-    else:
-        root_group = "%i"
-
+def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
+                     reference_source_axes=None,
+                     reference_scale=None):
     source_arr = da.from_zarr(filename, component=data_group)
+
+    data_group = "/".join(data_group.split("/")[:-1])
+    root_group = data_group + "/%i"
+
     min_size = min(source_arr.shape[source_axes.index(ax)]
                    for ax in "YX" if ax in source_axes
                    )
@@ -224,11 +222,28 @@ def downsample_image(filename, source_axes, data_group=None, scale=4,
         for ax, ax_s in zip(source_axes, source_arr.shape)
     )
 
+    if reference_source_axes is None or reference_scale is None:
+        reference_source_axes = source_axes
+        reference_scale = [1.0] * len(source_axes)
+
+    reference_scale_axes = {
+        ax: ax_scl
+        for ax, ax_scl in zip(reference_source_axes, reference_scale)
+    }
+
+    datasets = [{
+        "coordinateTransformations": [{
+            "type": "scale",
+            "scale": [reference_scale_axes.get(ax, 1.0) for ax in source_axes]
+        }],
+        "path": "0"
+    }]
+
     for s in range(1, num_scales):
         target_arr = source_arr[downscale_selection]
         target_arr = target_arr.rechunk(
             tuple(
-                tuple(chk // scale for chk in chk_ax)
+                tuple(np.ceil(chk / scale) for chk in chk_ax)
                 for chk_ax in source_arr.chunks
             )
         )
@@ -242,8 +257,18 @@ def downsample_image(filename, source_axes, data_group=None, scale=4,
         source_arr = da.from_zarr(filename,
                                   component=root_group % s)
 
-    # TODO: Write mutliscales metadata so napari (or any ome-zarr reader) can open these files
-    write_multiscales_metadata
+        datasets.append({
+            "coordinateTransformations": [
+                {"type": "scale",
+                 "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
+                           if ax in "ZYX" else 1.0
+                           for ax in source_axes]
+                }],
+            "path": str(s)
+        })
+
+    root = zarr.open(Path(filename) / data_group, mode="a")
+    write_multiscales_metadata(root, datasets, axes=list(source_axes.lower()))
 
 
 class MaskGenerator(QWidget):
@@ -330,15 +355,201 @@ class MaskGenerator(QWidget):
                                metadata={"source_axes": mask_axes})
 
     def generate_masks(self):
-        for layer in self.viewer.layers.selection:
-            if not isinstance(layer, Image):
-                continue
+        selected_image_layers = list(filter(
+            lambda layer: isinstance(layer, Image),
+            self.viewer.layers.selection
+        ))
 
-            self._generate_mask_layer(layer)
+        # Remove sibling layers
+        layers_to_mask = []
+        while selected_image_layers:
+            reference_layer = selected_image_layers.pop()
+
+            sibling_layers = list(filter(
+                partial(compare_layers, ref_layer=reference_layer,
+                        compare_type=True,
+                        compare_shape=True),
+                selected_image_layers
+            ))
+
+            for curr_layer in sibling_layers:
+                if curr_layer in selected_image_layers:
+                    selected_image_layers.remove(curr_layer)
+
+            layers_to_mask.append(sibling_layers[0])
+
+        for curr_layer in layers_to_mask:
+            self._generate_mask_layer(curr_layer)
+
+
+class LabelsManager(QWidget):
+    def __init__(self, viewer: napari.Viewer) -> None:
+        super().__init__()
+
+        self.viewer = viewer
+
+        self._current_patch_id = 0
+        self._current_image_id = 0
+
+        self.prev_img_btn = QPushButton('<<')
+        self.prev_img_btn.clicked.connect(self._previus_image)
+
+        self.prev_patch_btn = QPushButton('<')
+        self.prev_patch_btn.clicked.connect(self._previus_patch)
+
+        self.next_patch_btn = QPushButton('>')
+        self.next_patch_btn.clicked.connect(self._next_patch)
+
+        self.next_img_btn = QPushButton('>>')
+        self.next_img_btn.clicked.connect(self._next_image)
+
+        self.fix_labels_btn = QPushButton("Fix current labels")
+        self.fix_labels_btn.clicked.connect(self.fix_labels)
+
+        self.nav_btn_layout = QHBoxLayout()
+        self.nav_btn_layout.addWidget(self.prev_img_btn)
+        self.nav_btn_layout.addWidget(self.prev_patch_btn)
+        self.nav_btn_layout.addWidget(self.next_patch_btn)
+        self.nav_btn_layout.addWidget(self.next_img_btn)
+
+        self.fix_btn_layout = QVBoxLayout()
+        self.fix_btn_layout.addWidget(self.fix_labels_btn)
+        self.fix_btn_layout.addLayout(self.nav_btn_layout)
+
+        self.setLayout(self.fix_btn_layout)
+
+        self.txn = None
+        self.layer_name = None
+
+        self.sampling_positions = {}
+
+        self.viewer.layers.events.removing.connect(
+            self._remove_sampling_positions
+        )
+
+    def _remove_sampling_positions(self, event):
+        for removed_layers in event._sources[0]:
+            output_name = removed_layers.name
+
+            # Remove any invalid character from the name
+            for chr in [" ", ".", "/", "\\"]:
+                output_name = "-".join(output_name.split(chr))
+
+            if output_name in self.sampling_positions:
+                index = self.sampling_positions.index(output_name)
+                self.sampling_positions.pop(output_name)
+
+                if self._current_image_id > index:
+                    self._current_image_id -= 1
+                elif self._current_image_id == index:
+                    self._next_image()
+
+    def _previus_image(self):
+        self.navigate(delta_image_index=-1)
+
+    def _previus_patch(self):
+        self.navigate(delta_patch_index=-1)
+
+    def _next_image(self):
+        self.navigate(delta_image_index=1)
+
+    def _next_patch(self):
+        self.navigate(delta_patch_index=1)
+
+    def navigate(self, delta_image_index=0, delta_patch_index=0):
+        if self.txn:
+            self.txn.commit_async()
+            self.viewer.layers.remove(self.viewer.layers["Labels edit"])
+            self.viewer.layers[self.layer_name].refresh()
+
+        if not len(self.sampling_positions):
+            return
+
+        layer_names = list(self.sampling_positions.keys())
+
+        self._current_image_id += delta_image_index
+        self._current_patch_id += delta_patch_index
+
+        if delta_patch_index:
+            if self._current_patch_id < 0:
+                self._current_image_id -= 1
+
+            elif (len(self.sampling_positions[layer_names[self._current_image_id]])
+                  <= self._current_patch_id):
+                self._current_image_id += 1
+                self._current_patch_id = 0
+
+        if self._current_image_id < 0:
+            self._current_image_id = len(layer_names) - 1
+
+        elif self._current_image_id >= len(layer_names):
+            self._current_image_id = 0
+
+        self.layer_name = layer_names[self._current_image_id]
+
+        current_position_list = \
+            self.sampling_positions[self.layer_name]
+
+        if self._current_patch_id < 0:
+            self._current_patch_id = len(current_position_list) - 1
+
+        self.current_position = \
+            current_position_list[self._current_patch_id]
+
+        current_center = [(ax_roi.stop + ax_roi.start) / 2
+                          for ax_roi in self.current_position]
+
+        self.viewer.dims.order = tuple(range(self.viewer.dims.ndim))
+        self.viewer.camera.center = (
+            *self.viewer.camera.center[:-len(current_center)],
+            *current_center
+        )
+        self.viewer.camera.zoom = 2
+
+    def fix_labels(self):
+        if not self.layer_name:
+            return
+
+        layer = self.viewer.layers[self.layer_name]
+
+        input_filename = layer._source.path
+        data_group = ""
+
+        if input_filename:
+            input_filename = str(input_filename)
+            data_group = "/".join(input_filename.split(".")[-1].split("/")[1:])
+
+        if data_group:
+            input_filename = input_filename[:-len(data_group) - 1]
+
+        if isinstance(layer.data, MultiScaleData):
+            data_group += "/0"
+
+        spec = {
+            'driver': 'zarr',
+            'kvstore': {
+                'driver': 'file',
+                'path': str(Path(input_filename) / data_group),
+            },
+        }
+
+        ts_array = ts.open(spec).result()
+
+        self.txn = ts.Transaction()
+
+        lazy_data = ts_array.with_transaction(self.txn)
+        lazy_data = lazy_data[ts.d[:][self.current_position].translate_to[0]]
+
+        self.viewer.add_labels(lazy_data, name="Labels edit",
+                               blending="translucent_no_depth",
+                               opacity=0.7,
+                               translate=[ax_roi.start
+                                          for ax_roi in self.current_position])
+        self.viewer.layers["Labels edit"].bounding_box.visible = True
 
 
 class AcquisitionFunction(QWidget):
-    def __init__(self, viewer):
+    def __init__(self, viewer: napari.Viewer, labels_manager: LabelsManager):
         super().__init__()
 
         self.viewer = viewer
@@ -376,8 +587,6 @@ class AcquisitionFunction(QWidget):
         self.output_dir_btn.clicked.connect(self.output_dir_dlg.show)
         self.output_dir_dlg.directoryEntered.connect(self._update_output_dir)
 
-        self.output_dir_fe = FileEdit(mode="d", label="Ouptut directory")
-
         self.execute_btn = QPushButton("Execute")
         self.execute_btn.clicked.connect(self.compute_acquisition_fun)
 
@@ -389,25 +598,10 @@ class AcquisitionFunction(QWidget):
         self.layout.addWidget(self.execute_btn)
         self.setLayout(self.layout)
 
-        self.sampling_positions = {}
-
-        self.viewer.layers.events.removing.connect(
-            self._remove_sampling_positions
-        )
+        self.labels_manager = labels_manager
 
     def _update_output_dir(self, output_dir):
         self.output_dir_le.setText(output_dir)
-
-    def _remove_sampling_positions(self, event):
-        for removed_layers in event._sources[0]:
-            output_name = removed_layers.name
-
-            # Remove any invalid character from the name
-            for chr in [" ", ".", "/", "\\"]:
-                output_name = "-".join(output_name.split(chr))
-
-            if output_name in self.sampling_positions:
-                self.sampling_positions.pop(output_name)
 
     def _compute_acquisition_fun_layer(self, image_layer, mask_layer=None):
         patch_size = self.patch_size_spn.value()
@@ -503,6 +697,9 @@ class AcquisitionFunction(QWidget):
                           group_name="sampling_mask",
                           dtype=bool)
 
+                root = zarr.open(output_filename, mode="a")
+                write_label_metadata(root, name="sampling_mask")
+
                 mask_source_data = str(output_filename)
                 mask_data_group = "sampling_mask"
 
@@ -559,6 +756,7 @@ class AcquisitionFunction(QWidget):
             acquisition_fun[pos_u_lab] = u_sp_lab
             acquisition_fun_max = max(acquisition_fun_max, u_sp_lab.max())
 
+            # Execute segmentation once to get the expected labels
             seg_out = cellpose_segment(img[0].numpy(), model)
             segmentation_out[pos_u_lab] = seg_out
 
@@ -569,29 +767,50 @@ class AcquisitionFunction(QWidget):
             if n_samples >= max_samples:
                 break
 
-        # Downsample the acquisition function
-        downsample_image(output_filename, "YX", data_group="acquisition_fun/0",
-                         scale=4,
-                         num_scales=5)
+        layer_name = image_layer.name + " segmentation output"
+        self.labels_manager.sampling_positions[layer_name] =\
+            img_sampling_positions
 
-        viewer.open(str(output_filename) + "/acquisition_fun",
-                    name=image_layer.name + " acquisition function",
-                    opacity=0.8,
-                    blending="translucent_no_depth",
-                    colormap="magma",
-                    contrast_limits=(0, acquisition_fun_max))
+        # Downsample the acquisition function
+        downsample_image(
+            output_filename,
+            source_axes="YX",
+            data_group="acquisition_fun/0",
+            scale=4,
+            num_scales=5,
+            reference_source_axes=displayed_source_axes,
+            reference_scale=image_layer.scale
+        )
+
+        viewer.open(
+            str(output_filename) + "/acquisition_fun",
+            layer_type="image",
+            name=image_layer.name + " acquisition function",
+            multiscale=True,
+            opacity=0.8,
+            blending="translucent_no_depth",
+            colormap="magma",
+            contrast_limits=(0, acquisition_fun_max)
+        )
 
         # Downsample the segmentation output
-        downsample_image(output_filename, "YX", data_group="segmentation/0",
-                         scale=4,
-                         num_scales=5)
+        downsample_image(
+            output_filename,
+            source_axes="YX",
+            data_group="segmentation/0",
+            scale=4,
+            num_scales=5,
+            reference_source_axes=displayed_source_axes,
+            reference_scale=image_layer.scale,
+        )
 
-        viewer.open(str(output_filename) + "/segmentation",
-                    name=image_layer.name + " segmentation output",
-                    opacity=0.8)
-
-        self.sampling_positions[image_layer.name + " acquisition function"] =\
-            img_sampling_positions
+        viewer.open(
+            output_filename / "segmentation",
+            layer_type="labels",
+            name=image_layer.name + " segmentation output",
+            multiscale=True,
+            opacity=0.8
+        )
 
     def compute_acquisition_fun(self):
         selected_image_layers = list(filter(
@@ -602,10 +821,11 @@ class AcquisitionFunction(QWidget):
         layers_masks = []
 
         while selected_image_layers:
-            layer = selected_image_layers.pop()
+            reference_layer = selected_image_layers.pop()
 
             sibling_layers = list(filter(
-                partial(compare_layers, ref_layer=layer, compare_type=False,
+                partial(compare_layers, ref_layer=reference_layer,
+                        compare_type=False,
                         compare_shape=True),
                 viewer.layers
             ))
@@ -740,138 +960,19 @@ class MetadataManager(QWidget):
             self._update_metadata_layer(layer)
 
 
-class LabelsManager(QWidget):
-    def __init__(self, viewer: napari.Viewer,
-                 acquisition_function: AcquisitionFunction) -> None:
-        super().__init__()
-
-        self.viewer = viewer
-        self.acquisition_function = acquisition_function
-
-        self._current_patch_position = 0
-        self._current_image = 0
-
-        self.prev_img_btn = QPushButton('<<')
-        self.prev_img_btn.clicked.connect(self._previus_image)
-
-        self.prev_patch_btn = QPushButton('<')
-        self.prev_patch_btn.clicked.connect(self._previus_patch)
-
-        self.next_patch_btn = QPushButton('>')
-        self.next_patch_btn.clicked.connect(self._next_patch)
-
-        self.next_img_btn = QPushButton('>>')
-        self.next_img_btn.clicked.connect(self._next_image)
-
-        self.fix_labels_btn = QPushButton("Fix current labels")
-        self.fix_labels_btn.clicked.connect(self.fix_labels)
-
-        self.nav_btn_layout = QHBoxLayout()
-        self.nav_btn_layout.addWidget(self.prev_img_btn)
-        self.nav_btn_layout.addWidget(self.prev_patch_btn)
-        self.nav_btn_layout.addWidget(self.next_patch_btn)
-        self.nav_btn_layout.addWidget(self.next_img_btn)
-
-        self.fix_btn_layout = QVBoxLayout()
-        self.fix_btn_layout.addWidget(self.fix_labels_btn)
-        self.fix_btn_layout.addLayout(self.nav_btn_layout)
-
-        self.setLayout(self.fix_btn_layout)
-
-        self.txn = None
-
-    def _previus_image(self):
-        self.navigate(delta_image_index=-1)
-
-    def _previus_patch(self):
-        self.navigate(delta_patch_index=-1)
-
-    def _next_image(self):
-        self.navigate(delta_image_index=1)
-
-    def _next_patch(self):
-        self.navigate(delta_patch_index=1)
-
-    def navigate(self, delta_image_index=0, delta_patch_index=0):
-        if not len(self.acquisition_function.sampling_positions):
-            return
-
-        layer_names = list(self.acquisition_function.sampling_positions.keys())
-
-        self._current_image += delta_image_index
-        self._current_patch_position += delta_patch_index
-
-        if delta_patch_index:
-            if self._current_patch_position < 0:
-                self._current_image -= 1
-
-            elif (len(self.acquisition_function.sampling_positions[layer_names[self._current_image]])
-                  <= self._current_patch_position):
-                self._current_image += 1
-                self._current_patch_position = 0
-
-        if self._current_image < 0:
-            self._current_image = len(layer_names) - 1
-
-        elif self._current_image >= len(layer_names):
-            self._current_image = 0
-
-        if self._current_patch_position < 0:
-            self._current_patch_position = len(
-                self.acquisition_function.sampling_positions[layer_names[self._current_image]]
-            ) - 1
-
-        cur_position = (self.acquisition_function.sampling_positions
-                        [layer_names[self._current_image]]
-                        [self._current_patch_position])
-
-        current_center = [(ax_roi.stop + ax_roi.start) / 2
-                          for ax_roi in cur_position]
-
-        self.viewer.dims.order = tuple(range(self.viewer.dims.ndim))
-        self.viewer.camera.center = (
-            *self.viewer.camera.center[:-len(current_center)],
-            *current_center
-        )
-        self.viewer.camera.zoom = 2
-
-    def fix_labels(self):
-        layer_name = list(self.acquisition_function.sampling_positions.keys())[self._current_image]
-        current_position = self.acquisition_function.sampling_positions[layer_name][self._current_patch_position]
-
-        zarr_path = self.viewer.layers[layer_name]._source.path
-
-        spec = {
-            'driver': 'zarr',
-            'kvstore': {
-                'driver': 'file',
-                'path': zarr_path,
-            },
-        }
-
-        ts_array = ts.open(spec).result()
-
-        self.txn = ts.Transaction()
-
-        self.viewer.add_labels(ts_array.with_transaction(self.txn)[ts[current_position].translate_to[0]], name='paint', blending="opaque", opacity=0.7)
-        self.viewer.layers['paint'].translate = [ax_roi.start for ax_roi in current_position]
-        self.viewer.layers['paint'].bounding_box.visible = True
-
-
 if __name__ == "__main__":
     viewer = napari.Viewer()
-
-    mask_generator = MaskGenerator(viewer)
-    viewer.window.add_dock_widget(mask_generator)
-
-    acquisition_function = AcquisitionFunction(viewer)
-    viewer.window.add_dock_widget(acquisition_function)
 
     metadata_manager = MetadataManager(viewer)
     viewer.window.add_dock_widget(metadata_manager)
 
-    labels_manager_widget = LabelsManager(viewer, acquisition_function)
+    mask_generator = MaskGenerator(viewer)
+    viewer.window.add_dock_widget(mask_generator)
+
+    labels_manager_widget = LabelsManager(viewer)
     viewer.window.add_dock_widget(labels_manager_widget, area='right')
 
+    acquisition_function = AcquisitionFunction(viewer, labels_manager_widget)
+    viewer.window.add_dock_widget(acquisition_function)
 
     napari.run()
