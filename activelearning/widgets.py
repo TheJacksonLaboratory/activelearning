@@ -1,3 +1,4 @@
+import os
 from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QLineEdit,
                             QLabel,
@@ -13,7 +14,10 @@ from napari.layers._multiscale_data import MultiScaleData
 import tensorstore as ts
 import numpy as np
 import zarr
-from ome_zarr.writer import write_multiscale, write_multiscales_metadata, write_label_metadata
+
+from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
+from ome_types.model import Image as ot_Image
+from ome_types.model import Pixels, Channel, Pixels_DimensionOrder, UnitsLength, PixelType
 import zarrdataset as zds
 import dask.array as da
 
@@ -156,8 +160,23 @@ def compare_layers(layer, ref_layer=None, compare_type=True,
         return False
 
     if compare_shape:
+        ref_layer_axes = ref_layer.metadata.get("source_axes", None)
         layer_axes = layer.metadata.get("source_axes", None)
-        ref_layer_axes = layer.metadata.get("source_axes", None)
+
+        if (ref_layer_axes
+           and ref_layer.metadata.get("splitted_channels", False)):
+            ref_layer_axes = [
+                ax
+                for ax in ref_layer_axes
+                if ax != "C"
+            ]
+
+        if layer_axes and layer.metadata.get("splitted_channels", False):
+            layer_axes = [
+                ax
+                for ax in layer_axes
+                if ax != "C"
+            ]
 
         if not (layer_axes and ref_layer_axes):
             if layer.data.shape != ref_layer.data.shape:
@@ -206,16 +225,21 @@ def save_zarr(output_filename, data, shape, chunk_size, group_name, dtype):
 
 def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
                      reference_source_axes=None,
-                     reference_scale=None):
+                     reference_scale=None,
+                     reference_units=None):
     source_arr = da.from_zarr(filename, component=data_group)
 
     data_group = "/".join(data_group.split("/")[:-1])
     root_group = data_group + "/%i"
 
-    min_size = min(source_arr.shape[source_axes.index(ax)]
-                   for ax in "YX" if ax in source_axes
-                   )
-    num_scales = min(num_scales, int(np.log(min_size) / np.log(scale)))
+    source_arr_shape = {ax: source_arr.shape[source_axes.index(ax)]
+                        for ax in source_axes}
+
+    min_spatial_shape = min(source_arr_shape[ax]
+                            for ax in "YX" if ax in source_axes)
+
+    num_scales = min(num_scales, int(np.log(min_spatial_shape)
+                                     / np.log(scale)))
 
     downscale_selection = tuple(
         slice(None, None, scale) if ax in "ZYX" and ax_s > 1 else slice(None)
@@ -230,6 +254,12 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
         ax: ax_scl
         for ax, ax_scl in zip(reference_source_axes, reference_scale)
     }
+
+    if not reference_units:
+        reference_units = {
+            ax: UnitsLength.PIXEL
+            for ax in reference_source_axes
+        }
 
     datasets = [{
         "coordinateTransformations": [{
@@ -269,6 +299,45 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
 
     root = zarr.open(Path(filename) / data_group, mode="a")
     write_multiscales_metadata(root, datasets, axes=list(source_axes.lower()))
+
+    ome_pixel_types_map = {
+        np.dtype(np.float64): PixelType.DOUBLE,
+        np.dtype(np.float32): PixelType.FLOAT,
+        np.dtype(np.int32): PixelType.INT32,
+        np.dtype(np.int16): PixelType.INT16,
+        np.dtype(np.int8): PixelType.INT8,
+        np.dtype(np.uint32): PixelType.UINT32,
+        np.dtype(np.uint16): PixelType.UINT16,
+        np.dtype(np.uint8): PixelType.UINT8,
+        bool: PixelType.BIT,
+    }
+
+    ome_pixels = Pixels(
+        type=ome_pixel_types_map[source_arr.dtype],
+        channels=[
+            Channel(id=0, name="Sampling mask", samples_per_pixel=1),
+        ],
+        dimension_order=Pixels_DimensionOrder.XYZCT,
+        size_x=source_arr_shape["X"],
+        size_y=source_arr_shape["Y"],
+        size_z=source_arr_shape.get("Z", 1),
+        size_c=source_arr_shape.get("C", 1),
+        size_t=source_arr_shape.get("T", 1),
+        physical_size_x=reference_scale_axes["X"],
+        physical_size_x_unit=reference_units["X"],
+        physical_size_y=reference_scale_axes["Y"],
+        physical_size_y_unit=reference_units["Y"],
+        physical_size_z=reference_scale_axes.get("Z", None),
+        physical_size_z_unit=reference_units.get("Z", UnitsLength.PIXEL)
+    )
+
+    ome_image = ot_Image(
+        pixels=ome_pixels
+    )
+
+    os.makedirs(Path(filename) / "OME", exist_ok=True)
+    with open(Path(filename) / "OME/METADATA.ome.xml", mode="w") as fp:
+        fp.write(ome_image.to_xml())
 
 
 class MaskGenerator(QWidget):
@@ -356,7 +425,7 @@ class MaskGenerator(QWidget):
 
     def generate_masks(self):
         selected_image_layers = list(filter(
-            lambda layer: isinstance(layer, Image),
+            lambda curr_layer: isinstance(curr_layer, Image),
             self.viewer.layers.selection
         ))
 
@@ -496,8 +565,12 @@ class LabelsManager(QWidget):
         self.current_position = \
             current_position_list[self._current_patch_id]
 
-        current_center = [(ax_roi.stop + ax_roi.start) / 2
-                          for ax_roi in self.current_position]
+        segmentation_layer = self.viewer.layers[self.layer_name]
+        current_center = [
+            (ax_roi.stop + ax_roi.start) / 2 * ax_scl
+            for ax_roi, ax_scl in zip(self.current_position,
+                                      segmentation_layer.scale)
+        ]
 
         self.viewer.dims.order = tuple(range(self.viewer.dims.ndim))
         self.viewer.camera.center = (
@@ -510,9 +583,9 @@ class LabelsManager(QWidget):
         if not self.layer_name:
             return
 
-        layer = self.viewer.layers[self.layer_name]
+        segmentation_layer = self.viewer.layers[self.layer_name]
 
-        input_filename = layer._source.path
+        input_filename = segmentation_layer._source.path
         data_group = ""
 
         if input_filename:
@@ -522,7 +595,7 @@ class LabelsManager(QWidget):
         if data_group:
             input_filename = input_filename[:-len(data_group) - 1]
 
-        if isinstance(layer.data, MultiScaleData):
+        if isinstance(segmentation_layer.data, MultiScaleData):
             data_group += "/0"
 
         spec = {
@@ -587,7 +660,7 @@ class AcquisitionFunction(QWidget):
         self.output_dir_btn.clicked.connect(self.output_dir_dlg.show)
         self.output_dir_dlg.directoryEntered.connect(self._update_output_dir)
 
-        self.execute_btn = QPushButton("Execute")
+        self.execute_btn = QPushButton("Run on selected layers")
         self.execute_btn.clicked.connect(self.compute_acquisition_fun)
 
         self.layout = QVBoxLayout()
@@ -634,9 +707,17 @@ class AcquisitionFunction(QWidget):
             displayed_roi = image_layer.metadata["roi"][0]
 
         acquisition_fun_shape = [
-            s
-            for s, ax in zip(image_layer.data.shape, displayed_source_axes)
-            if ax in "ZYX" and s > 1
+            ax_s
+            for ax, ax_s in zip(displayed_source_axes, image_layer.data.shape)
+            if ax in "ZYX" and ax_s > 1
+        ]
+
+        acquisition_fun_scale = [
+            ax_scl
+            for ax, ax_s, ax_scl in zip(displayed_source_axes,
+                                        image_layer.data.shape,
+                                        image_layer.scale)
+            if ax in "ZYX" and ax_s > 1
         ]
 
         acquisition_fun_chunk_size = [max(patch_size, 4096)]
@@ -681,9 +762,11 @@ class AcquisitionFunction(QWidget):
         for chr in [" ", ".", "/", "\\"]:
             output_name = "-".join(output_name.split(chr))
 
-        output_filename = output_dir / Path(output_name + ".zarr")
 
         if mask_layer:
+            mask_output_filename = output_dir / (output_name
+                                                 + "_sampling_mask.zarr")
+
             mask_axes = "".join([
                 ax
                 for ax, ax_roi in zip(displayed_source_axes, displayed_roi)
@@ -691,17 +774,17 @@ class AcquisitionFunction(QWidget):
             ])
 
             if mask_layer._source.path is None:
-                save_zarr(output_filename, data=mask_layer.data,
+                save_zarr(mask_output_filename, data=mask_layer.data,
                           shape=mask_layer.data.shape,
                           chunk_size=max(1, int(patch_size ** 0.5)),
-                          group_name="sampling_mask",
+                          group_name="0/0",
                           dtype=bool)
 
-                root = zarr.open(output_filename, mode="a")
-                write_label_metadata(root, name="sampling_mask")
+                root = zarr.open(mask_output_filename, mode="a")
+                write_label_metadata(root, name="0")
 
-                mask_source_data = str(output_filename)
-                mask_data_group = "sampling_mask"
+                mask_source_data = str(mask_output_filename)
+                mask_data_group = "0/0"
 
             else:
                 mask_source_data = mask_layer.data
@@ -714,20 +797,24 @@ class AcquisitionFunction(QWidget):
                 axes=mask_axes
             )
 
-        save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
+        acquisition_filename = output_dir / (output_name
+                                             + "_acquisition_fun.zarr")
+        save_zarr(acquisition_filename, data=None,
+                  shape=acquisition_fun_shape,
                   chunk_size=acquisition_fun_chunk_size,
-                  group_name="acquisition_fun/0",
+                  group_name="0/0",
                   dtype=np.float32)
 
-        save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
+        segmentation_filename = output_dir / (output_name
+                                              + "_segmentation.zarr")
+        save_zarr(segmentation_filename, data=None, shape=acquisition_fun_shape,
                   chunk_size=acquisition_fun_chunk_size,
-                  group_name="segmentation/0",
+                  group_name="0/0",
                   dtype=np.int32)
 
-        acquisition_fun = zarr.open(str(output_filename)
-                                    + "/acquisition_fun/0",
+        acquisition_fun = zarr.open(str(acquisition_filename) + "/0/0",
                                     mode="a")
-        segmentation_out = zarr.open(str(output_filename) + "/segmentation/0",
+        segmentation_out = zarr.open(str(segmentation_filename) + "/0/0",
                                      mode="a")
 
         dl = datautils.get_dataloader(dataset_metadata, patch_size=patch_size,
@@ -773,9 +860,9 @@ class AcquisitionFunction(QWidget):
 
         # Downsample the acquisition function
         downsample_image(
-            output_filename,
+            acquisition_filename,
             source_axes="YX",
-            data_group="acquisition_fun/0",
+            data_group="0/0",
             scale=4,
             num_scales=5,
             reference_source_axes=displayed_source_axes,
@@ -783,11 +870,12 @@ class AcquisitionFunction(QWidget):
         )
 
         viewer.open(
-            str(output_filename) + "/acquisition_fun",
+            acquisition_filename,
             layer_type="image",
             name=image_layer.name + " acquisition function",
             multiscale=True,
             opacity=0.8,
+            scale=acquisition_fun_scale,
             blending="translucent_no_depth",
             colormap="magma",
             contrast_limits=(0, acquisition_fun_max)
@@ -795,9 +883,9 @@ class AcquisitionFunction(QWidget):
 
         # Downsample the segmentation output
         downsample_image(
-            output_filename,
+            segmentation_filename,
             source_axes="YX",
-            data_group="segmentation/0",
+            data_group="0/0",
             scale=4,
             num_scales=5,
             reference_source_axes=displayed_source_axes,
@@ -805,10 +893,11 @@ class AcquisitionFunction(QWidget):
         )
 
         viewer.open(
-            output_filename / "segmentation",
+            segmentation_filename,
             layer_type="labels",
             name=image_layer.name + " segmentation output",
             multiscale=True,
+            scale=acquisition_fun_scale,
             opacity=0.8
         )
 
@@ -964,15 +1053,13 @@ if __name__ == "__main__":
     viewer = napari.Viewer()
 
     metadata_manager = MetadataManager(viewer)
-    viewer.window.add_dock_widget(metadata_manager)
-
     mask_generator = MaskGenerator(viewer)
-    viewer.window.add_dock_widget(mask_generator)
-
     labels_manager_widget = LabelsManager(viewer)
-    viewer.window.add_dock_widget(labels_manager_widget, area='right')
-
     acquisition_function = AcquisitionFunction(viewer, labels_manager_widget)
+
+    viewer.window.add_dock_widget(metadata_manager)
+    viewer.window.add_dock_widget(mask_generator)
     viewer.window.add_dock_widget(acquisition_function)
+    viewer.window.add_dock_widget(labels_manager_widget, area='right')
 
     napari.run()
