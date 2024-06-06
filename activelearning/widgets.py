@@ -1,9 +1,9 @@
-import os
 from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QLineEdit,
                             QLabel,
                             QFileDialog,
-                            QSpinBox)
+                            QSpinBox,
+                            QProgressBar)
 
 from functools import partial
 from pathlib import Path
@@ -16,8 +16,7 @@ import numpy as np
 import zarr
 
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
-from ome_types.model import Image as ot_Image
-from ome_types.model import Pixels, Channel, Pixels_DimensionOrder, UnitsLength, PixelType
+
 import zarrdataset as zds
 import dask.array as da
 
@@ -145,7 +144,7 @@ def cellpose_segment(img, model):
     return seg
 
 
-def compare_layers(layer, ref_layer=None, compare_type=True,
+def  compare_layers(layer, ref_layer=None, compare_type=True,
                    compare_shape=True):
     ref_layer_base_name = " ".join(ref_layer.name.split(" ")[:-1])
 
@@ -257,7 +256,7 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
 
     if not reference_units:
         reference_units = {
-            ax: UnitsLength.PIXEL
+            ax: None
             for ax in reference_source_axes
         }
 
@@ -299,45 +298,6 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
 
     root = zarr.open(Path(filename) / data_group, mode="a")
     write_multiscales_metadata(root, datasets, axes=list(source_axes.lower()))
-
-    ome_pixel_types_map = {
-        np.dtype(np.float64): PixelType.DOUBLE,
-        np.dtype(np.float32): PixelType.FLOAT,
-        np.dtype(np.int32): PixelType.INT32,
-        np.dtype(np.int16): PixelType.INT16,
-        np.dtype(np.int8): PixelType.INT8,
-        np.dtype(np.uint32): PixelType.UINT32,
-        np.dtype(np.uint16): PixelType.UINT16,
-        np.dtype(np.uint8): PixelType.UINT8,
-        bool: PixelType.BIT,
-    }
-
-    ome_pixels = Pixels(
-        type=ome_pixel_types_map[source_arr.dtype],
-        channels=[
-            Channel(id=0, name="Sampling mask", samples_per_pixel=1),
-        ],
-        dimension_order=Pixels_DimensionOrder.XYZCT,
-        size_x=source_arr_shape["X"],
-        size_y=source_arr_shape["Y"],
-        size_z=source_arr_shape.get("Z", 1),
-        size_c=source_arr_shape.get("C", 1),
-        size_t=source_arr_shape.get("T", 1),
-        physical_size_x=reference_scale_axes["X"],
-        physical_size_x_unit=reference_units["X"],
-        physical_size_y=reference_scale_axes["Y"],
-        physical_size_y_unit=reference_units["Y"],
-        physical_size_z=reference_scale_axes.get("Z", None),
-        physical_size_z_unit=reference_units.get("Z", UnitsLength.PIXEL)
-    )
-
-    ome_image = ot_Image(
-        pixels=ome_pixels
-    )
-
-    os.makedirs(Path(filename) / "OME", exist_ok=True)
-    with open(Path(filename) / "OME/METADATA.ome.xml", mode="w") as fp:
-        fp.write(ome_image.to_xml())
 
 
 class MaskGenerator(QWidget):
@@ -445,7 +405,7 @@ class MaskGenerator(QWidget):
                 if curr_layer in selected_image_layers:
                     selected_image_layers.remove(curr_layer)
 
-            layers_to_mask.append(sibling_layers[0])
+            layers_to_mask.append(reference_layer)
 
         for curr_layer in layers_to_mask:
             self._generate_mask_layer(curr_layer)
@@ -538,12 +498,13 @@ class LabelsManager(QWidget):
 
         self._current_image_id += delta_image_index
         self._current_patch_id += delta_patch_index
+        self.layer_name = layer_names[self._current_image_id]
 
         if delta_patch_index:
             if self._current_patch_id < 0:
                 self._current_image_id -= 1
 
-            elif (len(self.sampling_positions[layer_names[self._current_image_id]])
+            elif (len(self.sampling_positions[self.layer_name])
                   <= self._current_patch_id):
                 self._current_image_id += 1
                 self._current_patch_id = 0
@@ -577,7 +538,22 @@ class LabelsManager(QWidget):
             *self.viewer.camera.center[:-len(current_center)],
             *current_center
         )
-        self.viewer.camera.zoom = 2
+        self.viewer.camera.zoom = 1 / min(segmentation_layer.scale)
+
+        # Toggle visibility to show the current segmentation layer and all
+        # layers related to it.
+        reference_layer_name = self.layer_name.split(" segmentation output")[0]
+        reference_layer = self.viewer.layers[reference_layer_name]
+
+        sibling_layers = list(filter(
+            partial(compare_layers, ref_layer=reference_layer,
+                    compare_type=False,
+                    compare_shape=True),
+            self.viewer.layers
+        ))
+
+        for curr_layer in self.viewer.layers:
+            curr_layer.visible = curr_layer in sibling_layers
 
     def fix_labels(self):
         if not self.layer_name:
@@ -663,12 +639,26 @@ class AcquisitionFunction(QWidget):
         self.execute_btn = QPushButton("Run on selected layers")
         self.execute_btn.clicked.connect(self.compute_acquisition_fun)
 
+        self.image_lbl = QLabel("Image queue:")
+        self.image_pb = QProgressBar()
+        self.image_lyt = QHBoxLayout()
+        self.image_lyt.addWidget(self.image_lbl)
+        self.image_lyt.addWidget(self.image_pb)
+
+        self.patch_lbl = QLabel("Patch queue:")
+        self.patch_pb = QProgressBar()
+        self.patch_lyt = QHBoxLayout()
+        self.patch_lyt.addWidget(self.patch_lbl)
+        self.patch_lyt.addWidget(self.patch_pb)
+
         self.layout = QVBoxLayout()
         self.layout.addLayout(self.patch_size_lyt)
         self.layout.addLayout(self.max_samples_lyt)
         self.layout.addLayout(self.MC_repetitions_lyt)
         self.layout.addLayout(self.output_dir_lyt)
         self.layout.addWidget(self.execute_btn)
+        self.layout.addLayout(self.image_lyt)
+        self.layout.addLayout(self.patch_lyt)
         self.setLayout(self.layout)
 
         self.labels_manager = labels_manager
@@ -762,11 +752,10 @@ class AcquisitionFunction(QWidget):
         for chr in [" ", ".", "/", "\\"]:
             output_name = "-".join(output_name.split(chr))
 
+        output_filename = output_dir / (output_name + ".zarr")
+        labels_metadata = []
 
         if mask_layer:
-            mask_output_filename = output_dir / (output_name
-                                                 + "_sampling_mask.zarr")
-
             mask_axes = "".join([
                 ax
                 for ax, ax_roi in zip(displayed_source_axes, displayed_roi)
@@ -774,17 +763,38 @@ class AcquisitionFunction(QWidget):
             ])
 
             if mask_layer._source.path is None:
-                save_zarr(mask_output_filename, data=mask_layer.data,
+                save_zarr(output_filename, data=mask_layer.data,
                           shape=mask_layer.data.shape,
                           chunk_size=max(1, int(patch_size ** 0.5)),
-                          group_name="0/0",
+                          group_name="labels/sampling_mask",
                           dtype=bool)
 
-                root = zarr.open(mask_output_filename, mode="a")
-                write_label_metadata(root, name="0")
+                mask_source_data = str(output_filename)
+                mask_data_group = "labels/sampling_mask"
 
-                mask_source_data = str(mask_output_filename)
-                mask_data_group = "0/0"
+                labels_metadata.append({
+                    "name": "labels/sampling_mask",
+                    "colors": [
+                        {
+                            "label-value": 0,
+                            "rgba": [0, 0, 0, 127]
+                        },
+                        {
+                            "label-value": 1,
+                            "rgba": [255, 255, 255, 127]
+                        }
+                    ],
+                    "properties": [
+                        {
+                            "label-value": 0,
+                            "class": "non sampleable"
+                        },
+                        {
+                            "label-value": 1,
+                            "class": "sampleable"
+                        },
+                    ]
+                })
 
             else:
                 mask_source_data = mask_layer.data
@@ -797,24 +807,22 @@ class AcquisitionFunction(QWidget):
                 axes=mask_axes
             )
 
-        acquisition_filename = output_dir / (output_name
-                                             + "_acquisition_fun.zarr")
-        save_zarr(acquisition_filename, data=None,
+        save_zarr(output_filename, data=None,
                   shape=acquisition_fun_shape,
                   chunk_size=acquisition_fun_chunk_size,
-                  group_name="0/0",
+                  group_name="labels/acquisition_fun/0",
                   dtype=np.float32)
 
-        segmentation_filename = output_dir / (output_name
-                                              + "_segmentation.zarr")
-        save_zarr(segmentation_filename, data=None, shape=acquisition_fun_shape,
+        save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
                   chunk_size=acquisition_fun_chunk_size,
-                  group_name="0/0",
+                  group_name="labels/segmentation/0",
                   dtype=np.int32)
 
-        acquisition_fun = zarr.open(str(acquisition_filename) + "/0/0",
+        acquisition_fun = zarr.open(str(output_filename)
+                                    + "/labels/acquisition_fun/0",
                                     mode="a")
-        segmentation_out = zarr.open(str(segmentation_filename) + "/0/0",
+        segmentation_out = zarr.open(str(output_filename)
+                                     + "/labels/segmentation/0",
                                      mode="a")
 
         dl = datautils.get_dataloader(dataset_metadata, patch_size=patch_size,
@@ -824,9 +832,12 @@ class AcquisitionFunction(QWidget):
         model = cellpose_model_init(use_dropout=False)
 
         acquisition_fun_max = 0
+        segmentation_max = 0
         n_samples = 0
         img_sampling_positions = []
 
+        self.patch_pb.setRange(0, max_samples)
+        self.patch_pb.reset()
         for pos, img, img_sp in dl:
             probs = []
             for _ in range(MC_repetitions):
@@ -845,24 +856,29 @@ class AcquisitionFunction(QWidget):
 
             # Execute segmentation once to get the expected labels
             seg_out = cellpose_segment(img[0].numpy(), model)
+            seg_out = np.where(seg_out, seg_out + segmentation_max, 0)
             segmentation_out[pos_u_lab] = seg_out
+
+            segmentation_max = max(segmentation_max, seg_out.max())
 
             img_sampling_positions.append(pos_u_lab)
 
             n_samples += 1
 
+            self.patch_pb.setValue(n_samples)
             if n_samples >= max_samples:
                 break
 
+        self.patch_pb.setValue(max_samples)
         layer_name = image_layer.name + " segmentation output"
         self.labels_manager.sampling_positions[layer_name] =\
             img_sampling_positions
 
         # Downsample the acquisition function
         downsample_image(
-            acquisition_filename,
+            output_filename,
             source_axes="YX",
-            data_group="0/0",
+            data_group="labels/acquisition_fun/0",
             scale=4,
             num_scales=5,
             reference_source_axes=displayed_source_axes,
@@ -870,7 +886,7 @@ class AcquisitionFunction(QWidget):
         )
 
         viewer.open(
-            acquisition_filename,
+            str(output_filename) + "/labels/acquisition_fun",
             layer_type="image",
             name=image_layer.name + " acquisition function",
             multiscale=True,
@@ -883,9 +899,9 @@ class AcquisitionFunction(QWidget):
 
         # Downsample the segmentation output
         downsample_image(
-            segmentation_filename,
+            output_filename,
             source_axes="YX",
-            data_group="0/0",
+            data_group="labels/segmentation/0",
             scale=4,
             num_scales=5,
             reference_source_axes=displayed_source_axes,
@@ -893,13 +909,17 @@ class AcquisitionFunction(QWidget):
         )
 
         viewer.open(
-            segmentation_filename,
+            str(output_filename) + "/labels/segmentation",
             layer_type="labels",
             name=image_layer.name + " segmentation output",
             multiscale=True,
             scale=acquisition_fun_scale,
             opacity=0.8
         )
+
+        z_grp = zarr.open(output_filename, mode="a")
+        for lab_meta in labels_metadata:
+            write_label_metadata(z_grp, **lab_meta)
 
     def compute_acquisition_fun(self):
         selected_image_layers = list(filter(
@@ -940,8 +960,11 @@ class AcquisitionFunction(QWidget):
 
             layers_masks.append((image_layers[0], mask_layers))
 
-        for image_layer, mask_layer in layers_masks:
+        self.image_pb.setRange(0, len(layers_masks))
+        self.image_pb.reset()
+        for n, (image_layer, mask_layer) in enumerate(layers_masks):
             self._compute_acquisition_fun_layer(image_layer, mask_layer)
+            self.image_pb.setValue(n + 1)
 
 
 class MetadataManager(QWidget):
@@ -1045,8 +1068,24 @@ class MetadataManager(QWidget):
             curr_layer.metadata["roi"] = roi
 
     def update_metadata(self):
-        for layer in self.viewer.layers.selection:
-            self._update_metadata_layer(layer)
+        selected_image_layers = list(self.viewer.layers.selection)
+
+        # Add sibling layers
+        while selected_image_layers:
+            reference_layer = selected_image_layers.pop()
+
+            sibling_layers = list(filter(
+                partial(compare_layers, ref_layer=reference_layer,
+                        compare_type=True,
+                        compare_shape=True),
+                self.viewer.layers
+            ))
+
+            for curr_layer in sibling_layers:
+                if curr_layer in selected_image_layers:
+                    selected_image_layers.remove(curr_layer)
+
+                self._update_metadata_layer(curr_layer)
 
 
 if __name__ == "__main__":
