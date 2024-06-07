@@ -1,9 +1,13 @@
+from uuid import uuid1
+from typing import List
 from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QLineEdit,
                             QLabel,
                             QFileDialog,
                             QSpinBox,
-                            QProgressBar)
+                            QProgressBar,
+                            QTreeWidget,
+                            QTreeWidgetItem)
 
 from functools import partial
 from pathlib import Path
@@ -144,18 +148,25 @@ def cellpose_segment(img, model):
     return seg
 
 
-def  compare_layers(layer, ref_layer=None, compare_type=True,
+def get_basename(layer_name):
+    layer_base_name = layer_name.split(" ")
+    if len(layer_base_name) > 1:
+        layer_base_name = " ".join(layer_base_name[:-1])
+    else:
+        layer_base_name = layer_base_name[0]
+
+    return layer_base_name
+
+
+def compare_layers(layer, ref_layer=None, compare_type=True,
                    compare_shape=True):
-    ref_layer_base_name = " ".join(ref_layer.name.split(" ")[:-1])
+    ref_layer_base_name = get_basename(ref_layer.name)
 
     if ref_layer_base_name not in layer.name:
         return False
 
-    if isinstance(layer, type(ref_layer)):
-        if not layer._source.path == ref_layer._source.path:
-            return False
-
-    elif compare_type:
+    if (compare_type and isinstance(layer, type(ref_layer))
+       and not layer._source.path == ref_layer._source.path):
         return False
 
     if compare_shape:
@@ -205,10 +216,13 @@ def  compare_layers(layer, ref_layer=None, compare_type=True,
 def save_zarr(output_filename, data, shape, chunk_size, group_name, dtype):
     out_grp = zarr.open(output_filename, mode="a")
 
-    if isinstance(chunk_size, int):
+    if chunk_size is not bool and isinstance(chunk_size, int):
         chunk_size = [chunk_size] * len(shape)
 
-    chunks_size_axes = list(map(min, shape, chunk_size))
+    if isinstance(chunk_size, list):
+        chunks_size_axes = list(map(min, shape, chunk_size))
+    else:
+        chunks_size_axes = chunk_size
 
     out_grp.create_dataset(
         data=data,
@@ -292,12 +306,365 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
                  "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
                            if ax in "ZYX" else 1.0
                            for ax in source_axes]
-                }],
+                 }],
             "path": str(s)
         })
 
     root = zarr.open(Path(filename) / data_group, mode="a")
     write_multiscales_metadata(root, datasets, axes=list(source_axes.lower()))
+
+
+class ImageGroup:
+    def __init__(self, layers, layer_types="images", channels=0,
+                 source_axes="TCZYX",
+                 position=None,
+                 axes_order=None,
+                 group_name=None):
+        if not isinstance(layers, list):
+            layers = [layers]
+
+        if not isinstance(source_axes, list):
+            source_axes = [source_axes]
+
+        if not isinstance(layer_types, list):
+            layer_types = [layer_types]
+
+        if not isinstance(channels, list):
+            channels = [channels]
+
+        self.layers = self.group_layers_per_type(layers, layer_types,
+                                                 channels,
+                                                 source_axes)
+
+        self._roi = None
+        self._position = position
+        self._axes_order = axes_order
+
+        self._displayed_axes = self.layers["images"]["source_axes"][0]
+        if "C" in self._displayed_axes:
+            self._displayed_axes.remove("C")
+
+        self._group_metadata = None
+
+        if not group_name:
+            group_name = get_basename(self.layers["images"]["layers"][0].name)
+
+            # Remove any invalid character from the name
+            for chr in [" ", ".", "/", "\\"]:
+                group_name = "-".join(group_name.split(chr))
+
+        self.group_name = group_name
+
+    @staticmethod
+    def group_layers_per_type(layers, layer_types, channels, source_axes):
+        unique_types = list(set(layer_types))
+
+        group_types = {}
+        for type in unique_types:
+            curr_type_layers = list(
+                zip(["channels", "layer_type", "layers", "source_axes"],
+                    zip(*sorted(filter(lambda layer_type: type in layer_type[1], zip(channels, layer_types, layers, source_axes)))))
+            )
+            group_types[type] = dict(curr_type_layers)
+            group_types[type].pop("layer_type")
+
+        return group_types
+
+    @staticmethod
+    def _get_source_data(layer):
+        input_filename = layer._source.path
+        data_group = ""
+
+        if input_filename:
+            input_filename = str(input_filename)
+            data_group = "/".join(input_filename.split(".")[-1].split("/")[1:])
+        else:
+            return layer.data
+
+        if data_group:
+            input_filename = input_filename[:-len(data_group) - 1]
+
+        if input_filename and isinstance(layer.data, MultiScaleData):
+            data_group += "/0"
+
+        if not data_group:
+            data_group = None
+
+        return input_filename, data_group
+
+    def _update_roi_from_position(self):
+        if self._position and self._axes_order:
+            roi_start = [0] * len(self._axes_order)
+            roi_length = [-1] * len(self._axes_order)
+
+            for ord in self._axes_order:
+                roi_start[ord] = int(self._position[ord])
+                roi_length[ord] = 1
+
+        else:
+            roi_start = [0] * len(self._displayed_axes)
+            roi_length = [-1] * len(self._displayed_axes)
+
+        self._roi = {
+            ax: slice(ax_start if ax_length > 0 else None,
+                    (ax_start + ax_length) if ax_length > 0 else None)
+            for ax, ax_start, ax_length in zip(self._displayed_axes, roi_start,
+                                               roi_length)
+        }
+
+    def _update_layer_metadata(self, layer_type):
+        if "source_data" not in self.layers[layer_type]:
+            source_data = list(map(self._get_source_data,
+                                   self.layers[layer_type]["layers"]))
+
+            data_group = None
+            if isinstance(source_data, tuple):
+                source_data, data_group = source_data
+            else:
+                source_data = np.stack(source_data, axis=0)
+                self.layers[layer_type]["source_axes"] = \
+                    "C" + self.layers[layer_type]["source_axes"]
+
+            self.layers[layer_type]["source_data"] = source_data
+            self.layers[layer_type]["data_group"] = data_group
+
+        layer_roi = tuple(
+            self._roi.get(ax, slice(None))
+            for ax in self.layers[layer_type]["source_axes"]
+        )
+
+        self.layers[layer_type]["roi"] = [layer_roi]
+
+    def _get_group_metadata(self, layer_types=None):
+        if layer_types is None:
+            layer_types = self.layers.keys()
+
+        self._update_roi_from_position()
+        self._group_metadata = {}
+
+        for type in layer_types:
+            self._update_layer_metadata(type)
+
+            self._group_metadata[type] = zds.DatasetSpecs(
+                modality=type,
+                filenames=self.layers[type]["source_data"],
+                data_group=self.layers[type]["data_group"],
+                source_axes=self.layers[type]["source_axes"],
+                axes="YXC",
+                roi=[self._image_roi],
+            )
+
+    @property
+    def dataset_metadata(self):
+        if self._group_metadata is None:
+            self._get_group_metadata()
+
+        return self._group_metadata
+
+    def save_mask(self, output_dir):
+        mask_source_data = self.layers["masks"]["source_data"]
+        if not isinstance(mask_source_data, str):
+            output_filename = output_dir / (self.group_name + ".zarr")
+            mask_data_group = "labels/sampling_mask"
+
+            save_zarr(output_filename, data=mask_source_data,
+                      shape=mask_source_data.shape,
+                      chunk_size=True,
+                      group_name=mask_data_group,
+                      dtype=bool)
+
+            mask_metadata = {
+                "name": mask_data_group,
+                "colors": [
+                    {
+                        "label-value": 0,
+                        "rgba": [0, 0, 0, 127]
+                    },
+                    {
+                        "label-value": 1,
+                        "rgba": [255, 255, 255, 127]
+                    }
+                ],
+                "properties": [
+                    {
+                        "label-value": 0,
+                        "class": "non sampleable"
+                    },
+                    {
+                        "label-value": 1,
+                        "class": "sampleable"
+                    },
+                ]
+            }
+
+            z_grp = zarr.open(output_filename, mode="a")
+            write_label_metadata(z_grp, **mask_metadata)
+
+
+class ImageGroupsManager(QWidget):
+    def __init__(self, viewer):
+        super().__init__()
+
+        self.viewer = viewer
+
+        self.image_groups = {}
+
+        self.image_groups_tw = QTreeWidget()
+        self.image_groups_tw.setColumnCount(3)
+        self.image_groups_tw.setHeaderLabels(["layer name", "channel",
+                                              "axes order",
+                                              "uuid",
+                                              "layer_type",
+                                              "layer_index"])
+        self.image_groups_tw.itemClicked.connect(self._get_item)
+
+        self.create_group_btn = QPushButton("Create group from selection")
+        self.create_group_btn.clicked.connect(self._create_group)
+
+        self.layer_name_lbl = QLabel("Layer name:")
+        self.display_name_lbl = QLabel("None selected")
+
+        self.layer_type_lbl = QLabel("Layer type:")
+        self.display_type_lbl = QLabel("None selected")
+
+        self.layer_axes_lbl = QLabel("Axes order:")
+        self.edit_axes_le = QLineEdit("None selected")
+
+        self.layer_channel_lbl = QLabel("Channel:")
+        self.edit_channel_spn = QSpinBox(minimum=0, maximum=0)
+        self.edit_channel_spn.setEnabled(False)
+
+        self.edit_channel_spn.editingFinished.connect(self.update_metadata)
+        self.edit_axes_le.editingFinished.connect(self.update_metadata)
+
+        self.edit_1_lyt = QHBoxLayout()
+        self.edit_1_lyt.addWidget(self.layer_name_lbl)
+        self.edit_1_lyt.addWidget(self.display_name_lbl)
+        self.edit_1_lyt.addWidget(self.layer_type_lbl)
+        self.edit_1_lyt.addWidget(self.display_type_lbl)
+
+        self.edit_2_lyt = QHBoxLayout()
+        self.edit_2_lyt.addWidget(self.layer_axes_lbl)
+        self.edit_2_lyt.addWidget(self.edit_axes_le)
+        self.edit_2_lyt.addWidget(self.layer_channel_lbl)
+        self.edit_2_lyt.addWidget(self.edit_channel_spn)
+
+        self.edit_lyt = QVBoxLayout()
+        self.edit_lyt.addLayout(self.edit_1_lyt)
+        self.edit_lyt.addLayout(self.edit_2_lyt)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.create_group_btn)
+        self.layout.addWidget(self.image_groups_tw)
+        self.layout.addLayout(self.edit_lyt)
+
+        self.setLayout(self.layout)
+
+        self._active_item = None
+        self._active_uuid = None
+        self._active_layer_type = None
+        self._active_layer_index = None
+
+    def _enable_edit_box(self):
+        curr_new_source_axes = self.image_groups[self._active_uuid].layers[self._active_layer_type]["source_axes"][self._active_layer_index]
+        curr_channel = self.image_groups[self._active_uuid].layers[self._active_layer_type]["channels"][self._active_layer_index]
+
+        self.display_name_lbl.setText(self.image_groups[self._active_uuid].layers[self._active_layer_type]["layers"][self._active_layer_index].name)
+        self.display_type_lbl.setText(self._active_layer_type)
+
+        self.edit_axes_le.setText(curr_new_source_axes)
+        self.edit_channel_spn.setValue(curr_channel)
+        self.edit_channel_spn.setMaximum(len(self.image_groups[self._active_uuid].layers[self._active_layer_type]["channels"]) - 1)
+        self.edit_channel_spn.setEnabled(True)
+
+    def _disable_edit_box(self):
+        self.display_name_lbl.setText("None selected")
+        self.display_type_lbl.setText("None selected")
+
+        self.edit_axes_le.setText("None selected")
+        self.edit_channel_spn.setValue(0)
+        self.edit_channel_spn.setMaximum(0)
+        self.edit_channel_spn.setEnabled(False)
+
+    def update_metadata(self):
+        new_source_axes = self.edit_axes_le.text()
+        new_channel = self.edit_channel_spn.value()
+
+        self.image_groups[self._active_uuid].layers[self._active_layer_type]["source_axes"][self._active_layer_index] = new_source_axes
+        self.image_groups[self._active_uuid].layers[self._active_layer_type]["channels"][self._active_layer_index] = new_channel
+        self._active_item.setText(1, str(new_channel))
+        self._active_item.setText(2, new_source_axes)
+
+        self._disable_edit_box()
+
+        self._active_item = None
+        self._active_uuid = None
+        self._active_layer_type = None
+        self._active_layer_index = None
+
+    def _create_group(self):
+        selected_layers = list(self.viewer.layers.selection)
+        if not selected_layers:
+            return
+
+        curr_uuid = str(uuid1())
+
+        layer_types = []
+        channels = []
+        source_axes = []
+        n_channels = 0
+        for curr_layer in selected_layers:
+            if isinstance(curr_layer, Image):
+                layer_types.append("images")
+                channels.append(n_channels)
+                n_channels += 1
+            else:
+                layer_types.append("masks")
+                channels.append(0)
+
+            source_axes.append("unset")
+            curr_layer.metadata["image_group_uuid"] = curr_uuid
+
+        curr_image_group = ImageGroup(
+            selected_layers,
+            layer_types=layer_types,
+            channels=channels,
+            source_axes=source_axes,
+            position=viewer.cursor.position,
+            axes_order=viewer.dims.order
+        )
+
+        group_item = QTreeWidgetItem(
+            self.image_groups_tw,
+            [curr_image_group.group_name, "", "", curr_uuid, "", ""]
+        )
+
+        for layer_type, layers_dict in curr_image_group.layers.items():
+            layer_type_item = QTreeWidgetItem(
+                group_item,
+                [layer_type, "", "", curr_uuid, "", ""]
+            )
+
+            for layer_idx, (layer, channel, source_axes) in enumerate(
+               zip(layers_dict["layers"], layers_dict["channels"],
+                   layers_dict["source_axes"])):
+                QTreeWidgetItem(
+                    layer_type_item,
+                    [layer.name, str(channel), source_axes, curr_uuid,
+                     layer_type,
+                     str(layer_idx)]
+                )
+
+        self.image_groups[curr_uuid] = curr_image_group
+
+    def _get_item(self, item, column):
+        self._active_uuid = item.text(3)
+        self._active_layer_type = item.text(4)
+        self._active_layer_index = int(item.text(5))
+        self._active_item = item
+
+        if item.child(0) is None:
+            self._enable_edit_box()
 
 
 class MaskGenerator(QWidget):
@@ -598,7 +965,8 @@ class LabelsManager(QWidget):
 
 
 class AcquisitionFunction(QWidget):
-    def __init__(self, viewer: napari.Viewer, labels_manager: LabelsManager):
+    def __init__(self, viewer: napari.Viewer, labels_manager: LabelsManager,
+                 image_groups_manager: ImageGroupsManager):
         super().__init__()
 
         self.viewer = viewer
@@ -662,169 +1030,18 @@ class AcquisitionFunction(QWidget):
         self.setLayout(self.layout)
 
         self.labels_manager = labels_manager
+        self.image_groups_manager = image_groups_manager
 
     def _update_output_dir(self, output_dir):
         self.output_dir_le.setText(output_dir)
 
-    def _compute_acquisition_fun_layer(self, image_layer, mask_layer=None):
-        patch_size = self.patch_size_spn.value()
-        MC_repetitions = self.MC_repetitions_spn.value()
-        max_samples = self.max_samples_spn.value()
-        output_dir = Path(self.output_dir_le.text())
-
-        output_name = image_layer.name
-
-        # Remove any invalid character from the name
-        for chr in [" ", ".", "/", "\\"]:
-            output_name = "-".join(output_name.split(chr))
-
-        if image_layer.metadata["splitted_channels"]:
-            displayed_source_axes = [
-                ax
-                for ax in image_layer.metadata["source_axes"]
-                if ax != "C"
-            ]
-
-            displayed_roi = [
-                ax_roi
-                for ax, ax_roi in zip(image_layer.metadata["source_axes"],
-                                      image_layer.metadata["roi"][0])
-                if ax != "C"
-            ]
-
-        else:
-            displayed_source_axes = image_layer.metadata["source_axes"]
-            displayed_roi = image_layer.metadata["roi"][0]
-
-        acquisition_fun_shape = [
-            ax_s
-            for ax, ax_s in zip(displayed_source_axes, image_layer.data.shape)
-            if ax in "ZYX" and ax_s > 1
-        ]
-
-        acquisition_fun_scale = [
-            ax_scl
-            for ax, ax_s, ax_scl in zip(displayed_source_axes,
-                                        image_layer.data.shape,
-                                        image_layer.scale)
-            if ax in "ZYX" and ax_s > 1
-        ]
-
-        acquisition_fun_chunk_size = [max(patch_size, 4096)]
-        acquisition_fun_chunk_size *= len(acquisition_fun_shape)
-
-        if image_layer.metadata["filenames"]:
-            source_data = image_layer.metadata["filenames"]
-
-        elif image_layer.metadata["splitted_channels"]:
-            splitted_layers = filter(
-                partial(compare_layers, ref_layer=image_layer,
-                        compare_type=True,
-                        compare_shape=True),
-                viewer.layers
-            )
-
-            splitted_layers_data = list(map(lambda curr_layer:
-                                            curr_layer.data,
-                                            splitted_layers))
-
-            source_data = np.stack(
-                splitted_layers_data,
-                axis=image_layer.metadata["source_axes"].index("C")
-            )
-
-        else:
-            source_data = image_layer.data
-
-        dataset_metadata = {
-            "images": zds.ImagesDatasetSpecs(
-                filenames=source_data,
-                data_group=image_layer.metadata["data_group"],
-                source_axes=image_layer.metadata["source_axes"],
-                axes=image_layer.metadata["axes"],
-                roi=image_layer.metadata["roi"],
-            ),
-        }
-
-        output_name = image_layer.name
-
-        # Remove any invalid character from the name
-        for chr in [" ", ".", "/", "\\"]:
-            output_name = "-".join(output_name.split(chr))
-
-        output_filename = output_dir / (output_name + ".zarr")
-        labels_metadata = []
-
-        if mask_layer:
-            mask_axes = "".join([
-                ax
-                for ax, ax_roi in zip(displayed_source_axes, displayed_roi)
-                if ax in "ZYX" and ax_roi.stop is None
-            ])
-
-            if mask_layer._source.path is None:
-                save_zarr(output_filename, data=mask_layer.data,
-                          shape=mask_layer.data.shape,
-                          chunk_size=max(1, int(patch_size ** 0.5)),
-                          group_name="labels/sampling_mask",
-                          dtype=bool)
-
-                mask_source_data = str(output_filename)
-                mask_data_group = "labels/sampling_mask"
-
-                labels_metadata.append({
-                    "name": "labels/sampling_mask",
-                    "colors": [
-                        {
-                            "label-value": 0,
-                            "rgba": [0, 0, 0, 127]
-                        },
-                        {
-                            "label-value": 1,
-                            "rgba": [255, 255, 255, 127]
-                        }
-                    ],
-                    "properties": [
-                        {
-                            "label-value": 0,
-                            "class": "non sampleable"
-                        },
-                        {
-                            "label-value": 1,
-                            "class": "sampleable"
-                        },
-                    ]
-                })
-
-            else:
-                mask_source_data = mask_layer.data
-                mask_data_group = None
-
-            dataset_metadata["masks"] = zds.MasksDatasetSpecs(
-                filenames=mask_source_data,
-                data_group=mask_data_group,
-                source_axes=mask_axes,
-                axes=mask_axes
-            )
-
-        save_zarr(output_filename, data=None,
-                  shape=acquisition_fun_shape,
-                  chunk_size=acquisition_fun_chunk_size,
-                  group_name="labels/acquisition_fun/0",
-                  dtype=np.float32)
-
-        save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
-                  chunk_size=acquisition_fun_chunk_size,
-                  group_name="labels/segmentation/0",
-                  dtype=np.int32)
-
-        acquisition_fun = zarr.open(str(output_filename)
-                                    + "/labels/acquisition_fun/0",
-                                    mode="a")
-        segmentation_out = zarr.open(str(output_filename)
-                                     + "/labels/segmentation/0",
-                                     mode="a")
-
+    @staticmethod
+    def compute_acquisition_fun(dataset_metadata,
+                                acquisition_fun,
+                                segmentation_out,
+                                MC_repetitions=30,
+                                max_samples=1000,
+                                patch_size=128):
         dl = datautils.get_dataloader(dataset_metadata, patch_size=patch_size,
                                       shuffle=True)
 
@@ -836,8 +1053,6 @@ class AcquisitionFunction(QWidget):
         n_samples = 0
         img_sampling_positions = []
 
-        self.patch_pb.setRange(0, max_samples)
-        self.patch_pb.reset()
         for pos, img, img_sp in dl:
             probs = []
             for _ in range(MC_repetitions):
@@ -865,106 +1080,116 @@ class AcquisitionFunction(QWidget):
 
             n_samples += 1
 
-            self.patch_pb.setValue(n_samples)
             if n_samples >= max_samples:
                 break
 
-        self.patch_pb.setValue(max_samples)
-        layer_name = image_layer.name + " segmentation output"
-        self.labels_manager.sampling_positions[layer_name] =\
-            img_sampling_positions
+    def compute_acquisition_layers(self):
+        MC_repetitions = self.MC_repetitions_spn.value()
+        max_samples = self.max_samples_spn.value()
+        output_dir = Path(self.output_dir_le.text())
+        patch_size = self.patch_size_spn.value()
 
-        # Downsample the acquisition function
-        downsample_image(
-            output_filename,
-            source_axes="YX",
-            data_group="labels/acquisition_fun/0",
-            scale=4,
-            num_scales=5,
-            reference_source_axes=displayed_source_axes,
-            reference_scale=image_layer.scale
-        )
-
-        viewer.open(
-            str(output_filename) + "/labels/acquisition_fun",
-            layer_type="image",
-            name=image_layer.name + " acquisition function",
-            multiscale=True,
-            opacity=0.8,
-            scale=acquisition_fun_scale,
-            blending="translucent_no_depth",
-            colormap="magma",
-            contrast_limits=(0, acquisition_fun_max)
-        )
-
-        # Downsample the segmentation output
-        downsample_image(
-            output_filename,
-            source_axes="YX",
-            data_group="labels/segmentation/0",
-            scale=4,
-            num_scales=5,
-            reference_source_axes=displayed_source_axes,
-            reference_scale=image_layer.scale,
-        )
-
-        viewer.open(
-            str(output_filename) + "/labels/segmentation",
-            layer_type="labels",
-            name=image_layer.name + " segmentation output",
-            multiscale=True,
-            scale=acquisition_fun_scale,
-            opacity=0.8
-        )
-
-        z_grp = zarr.open(output_filename, mode="a")
-        for lab_meta in labels_metadata:
-            write_label_metadata(z_grp, **lab_meta)
-
-    def compute_acquisition_fun(self):
-        selected_image_layers = list(filter(
-            lambda curr_layer: isinstance(curr_layer, Image),
-            self.viewer.layers.selection
-        ))
-
-        layers_masks = []
-
-        while selected_image_layers:
-            reference_layer = selected_image_layers.pop()
-
-            sibling_layers = list(filter(
-                partial(compare_layers, ref_layer=reference_layer,
-                        compare_type=False,
-                        compare_shape=True),
-                viewer.layers
-            ))
-
-            for curr_layer in sibling_layers:
-                if curr_layer in selected_image_layers:
-                    selected_image_layers.remove(curr_layer)
-
-            mask_layers = list(filter(
-                lambda curr_layer: isinstance(curr_layer, Labels),
-                sibling_layers
-            ))
-
-            image_layers = list(filter(
-                lambda curr_layer: isinstance(curr_layer, Image),
-                sibling_layers
-            ))
-
-            if len(mask_layers):
-                mask_layers = mask_layers[0]
-            else:
-                mask_layers = None
-
-            layers_masks.append((image_layers[0], mask_layers))
-
-        self.image_pb.setRange(0, len(layers_masks))
+        self.image_pb.setRange(0, len(self.image_groups_manager))
         self.image_pb.reset()
-        for n, (image_layer, mask_layer) in enumerate(layers_masks):
-            self._compute_acquisition_fun_layer(image_layer, mask_layer)
+
+        for n, image_group in enumerate(self.image_groups_manager):
+            output_filename = output_dir / (image_group.group_name + ".zarr")
+            labels_metadata = []
+
+            acquisition_fun_shape = [
+                ax_s
+                for ax, ax_s in zip(displayed_source_axes,
+                                    image_layer.data.shape)
+                if ax in "ZYX" and ax_s > 1
+            ]
+
+            acquisition_fun_scale = [
+                ax_scl
+                for ax, ax_s, ax_scl in zip(displayed_source_axes,
+                                            image_layer.data.shape,
+                                            image_layer.scale)
+                if ax in "ZYX" and ax_s > 1
+            ]
+
+            acquisition_fun_chunk_size = [max(patch_size, 4096)]
+            acquisition_fun_chunk_size *= len(acquisition_fun_shape)
+
+            save_zarr(output_filename, data=None,
+                    shape=acquisition_fun_shape,
+                    chunk_size=acquisition_fun_chunk_size,
+                    group_name="labels/acquisition_fun/0",
+                    dtype=np.float32)
+
+            save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
+                    chunk_size=acquisition_fun_chunk_size,
+                    group_name="labels/segmentation/0",
+                    dtype=np.int32)
+
+            acquisition_fun = zarr.open(str(output_filename)
+                                        + "/labels/acquisition_fun/0",
+                                        mode="a")
+            segmentation_out = zarr.open(str(output_filename)
+                                         + "/labels/segmentation/0",
+                                         mode="a")
+
+            self.compute_acquisition_fun(
+                image_group.get_group_metadata(),
+                acquisition_fun=acquisition_fun,
+                segmentation_out=segmentation_out,
+                MC_repetitions=MC_repetitions,
+                max_samples=max_samples,
+                patch_size=patch_size
+            )
             self.image_pb.setValue(n + 1)
+
+            # Downsample the acquisition function
+            downsample_image(
+                output_filename,
+                source_axes="YX",
+                data_group="labels/acquisition_fun/0",
+                scale=4,
+                num_scales=5,
+                reference_source_axes=displayed_source_axes,
+                reference_scale=image_layer.scale
+            )
+
+            viewer.open(
+                str(output_filename) + "/labels/acquisition_fun",
+                layer_type="image",
+                name=image_layer.name + " acquisition function",
+                multiscale=True,
+                opacity=0.8,
+                scale=acquisition_fun_scale,
+                blending="translucent_no_depth",
+                colormap="magma",
+                contrast_limits=(0, acquisition_fun_max),
+                metadata={"source_axes": "YX"}
+            )
+
+            # Downsample the segmentation output
+            downsample_image(
+                output_filename,
+                source_axes="YX",
+                data_group="labels/segmentation/0",
+                scale=4,
+                num_scales=5,
+                reference_source_axes=displayed_source_axes,
+                reference_scale=image_layer.scale,
+            )
+
+            viewer.open(
+                str(output_filename) + "/labels/segmentation",
+                layer_type="labels",
+                name=image_layer.name + " segmentation output",
+                multiscale=True,
+                scale=acquisition_fun_scale,
+                opacity=0.8,
+                metadata={"source_axes": "YX"}
+            )
+
+            z_grp = zarr.open(output_filename, mode="a")
+            for lab_meta in labels_metadata:
+                write_label_metadata(z_grp, **lab_meta)
 
 
 class MetadataManager(QWidget):
@@ -975,7 +1200,7 @@ class MetadataManager(QWidget):
         self.source_axes_lbl = QLabel("Axes order:")
 
         self.source_axes_le = QLineEdit("None selected")
-        self.source_axes_le.returnPressed.connect(self.update_metadata)
+        self.source_axes_le.editingFinished.connect(self.update_metadata)
 
         self.update_btn = QPushButton("udpdate")
         self.update_btn.clicked.connect(self.update_metadata)
@@ -1091,14 +1316,16 @@ class MetadataManager(QWidget):
 if __name__ == "__main__":
     viewer = napari.Viewer()
 
-    metadata_manager = MetadataManager(viewer)
-    mask_generator = MaskGenerator(viewer)
-    labels_manager_widget = LabelsManager(viewer)
-    acquisition_function = AcquisitionFunction(viewer, labels_manager_widget)
+    # metadata_manager = MetadataManager(viewer)
+    # mask_generator = MaskGenerator(viewer)
+    # labels_manager_widget = LabelsManager(viewer)
+    image_groups_manager = ImageGroupsManager(viewer)
+    # acquisition_function = AcquisitionFunction(viewer, labels_manager_widget, image_groups_manager)
 
-    viewer.window.add_dock_widget(metadata_manager)
-    viewer.window.add_dock_widget(mask_generator)
-    viewer.window.add_dock_widget(acquisition_function)
-    viewer.window.add_dock_widget(labels_manager_widget, area='right')
+    viewer.window.add_dock_widget(image_groups_manager)
+    # viewer.window.add_dock_widget(metadata_manager)
+    # viewer.window.add_dock_widget(mask_generator)
+    # viewer.window.add_dock_widget(acquisition_function)
+    # viewer.window.add_dock_widget(labels_manager_widget, area='right')
 
     napari.run()
