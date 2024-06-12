@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QLineEdit,
                             QLabel,
@@ -325,7 +325,7 @@ def get_source_data(layer):
         input_filename = str(input_filename)
         data_group = "/".join(input_filename.split(".")[-1].split("/")[1:])
     else:
-        return layer.data
+        return layer.data, None
 
     if data_group:
         input_filename = input_filename[:-len(data_group) - 1]
@@ -373,12 +373,12 @@ class LayerChannel(QTreeWidgetItem):
 
     def _update_source_data(self):
         self._source_data, self._data_group = get_source_data(self.layer)
-        if not self._source_data:
+        if self._source_data is None:
             self._source_data = self.layer.data
 
     @property
     def source_data(self):
-        if not self._source_data:
+        if self._source_data is None:
             self._update_source_data()
 
         return self._source_data
@@ -405,6 +405,11 @@ class LayerChannel(QTreeWidgetItem):
 
     @source_axes.setter
     def source_axes(self, source_axes: str):
+        if "C" in source_axes:
+            source_axes = list(source_axes)
+            source_axes.remove("C")
+            source_axes = "".join(source_axes)
+
         self._source_axes = source_axes
         self.setText(3, str(self._source_axes))
 
@@ -443,14 +448,20 @@ class LayerChannelGroup(QTreeWidgetItem):
         if not self._source_axes:
             return
 
-        if "C" not in self._source_axes and self.childCount() > 1:
-            self._source_axes = "C" + self._source_axes
-
-        self._source_axes_no_channels = list(self._source_axes)
-        if "C" in self._source_axes_no_channels:
+        if "C" in self._source_axes:
+            self._source_axes_no_channels = list(self._source_axes)
             self._source_axes_no_channels.remove("C")
+            self._source_axes_no_channels = "".join(
+                self._source_axes_no_channels
+            )
+        else:
+            self._source_axes_no_channels = self._source_axes
 
-        self._source_axes_no_channels = "".join(self._source_axes_no_channels)
+        if "C" in self._source_axes and not self.childCount():
+            self._source_axes = self._source_axes_no_channels
+
+        elif "C" not in self._source_axes and self.childCount() > 1:
+            self._source_axes = "C" + self._source_axes
 
         for idx in range(self.childCount()):
             self.child(idx).source_axes = self._source_axes_no_channels
@@ -476,7 +487,7 @@ class LayerChannelGroup(QTreeWidgetItem):
 
     @property
     def source_data(self):
-        if not self._source_data or self._updated:
+        if self._source_data is None or self._updated:
             self._update_source_data()
 
         return self._source_data
@@ -490,12 +501,12 @@ class LayerChannelGroup(QTreeWidgetItem):
 
     @property
     def metadata(self):
-        metadata = dict(
-            modality=self._layer_type,
-            filenames=self.source_data,
-            data_group=self.data_group,
-            source_axes=self._source_axes
-        )
+        metadata = {
+            "modality": self._layer_type,
+            "filenames": self.source_data,
+            "data_group": self.data_group,
+            "source_axes": self._source_axes
+        }
 
         return metadata
 
@@ -528,6 +539,33 @@ class LayerChannelGroup(QTreeWidgetItem):
 
         self.setText(3, self._source_axes)
 
+    @property
+    def shape(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            shape = [0] * n_channels
+
+        else:
+            shape = list(self.child(0).layer.data.shape)
+            if self.childCount() > 1:
+                shape.insert(0, self.childCount())
+
+        return shape
+
+    @property
+    def scale(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            scale = [1] * n_channels
+
+        else:
+            scale = list(self.child(0).layer.scale)
+            if self.childCount() > 1:
+                scale.insert(0, 1)
+            scale = tuple(scale)
+
+        return scale
+
     def add_layer(self, layer, channel: Union[int, None] = None,
                   source_axes: Union[str, None] = None):
         if channel is None:
@@ -541,14 +579,16 @@ class LayerChannelGroup(QTreeWidgetItem):
 
         new_layer_channel = LayerChannel(layer, channel=channel,
                                          source_axes=source_axes)
-        self.source_axes = source_axes
 
         self.addChild(new_layer_channel)
+
+        self.source_axes = source_axes
+
         self._updated = True
 
         return new_layer_channel
 
-    def _remove_layer(self, layer_channel: LayerChannel):
+    def remove_layer(self, layer_channel: LayerChannel):
         removed_channel = layer_channel.channel
 
         for idx in range(self.childCount()):
@@ -562,7 +602,7 @@ class LayerChannelGroup(QTreeWidgetItem):
 
     def takeChild(self, index: int):
         child = super(LayerChannelGroup, self).takeChild(index)
-        self._remove_layer(child)
+        self.remove_layer(child)
         return child
 
     def move_channel(self, from_channel: int, to_channel: int):
@@ -644,6 +684,12 @@ class ImageGroup(QTreeWidgetItem):
 
         self._updated_groups = set()
 
+        self._updated = False
+
+        self._group_shapes = {}
+        self._group_scales = {}
+        self._group_source_axes = {}
+
         super().__init__([group_name_str, "", "", ""])
 
     @property
@@ -654,6 +700,42 @@ class ImageGroup(QTreeWidgetItem):
     def group_name(self, group_name: str):
         self._group_name = group_name
         self.setText(0, self._group_name)
+
+    def _get_group_shapes(self):
+
+        self._group_shapes = {}
+        self._group_scales = {}
+        self._group_source_axes = {}
+
+        for idx in range(self.childCount()):
+            layer = self.child(idx)
+
+            self._group_shapes[layer.layer_type] = layer.shape
+            self._group_scales[layer.layer_type] = layer.scale
+            self._group_source_axes[layer.layer_type] = layer.source_axes
+
+        self._updated = False
+
+    @property
+    def shape(self):
+        if self._updated:
+            self._get_group_shapes()
+
+        return self._group_shapes
+
+    @property
+    def scale(self):
+        if self._updated:
+            self._get_group_shapes()
+
+        return self._group_scales
+
+    @property
+    def source_axes(self):
+        if self._updated:
+            self._get_group_shapes()
+
+        return self._group_source_axes
 
     def add_layer(self, layer_type, layer, channel: Union[int, None] = None,
                   source_axes: Union[str, None] = None):
@@ -681,6 +763,8 @@ class ImageGroup(QTreeWidgetItem):
                               source_axes=source_axes)
 
         self._updated_groups = self._updated_groups.union({layer_type})
+
+        self._updated = True
 
         return layer_group
 
@@ -711,7 +795,7 @@ class ImageGroup(QTreeWidgetItem):
 
         return new_layer_group
 
-    def _update_group_metadata(self):
+    def update_group_metadata(self):
         layer_groups = list(filter(
             lambda curr_layer_group:
             curr_layer_group.layer_type in self._updated_groups,
@@ -726,56 +810,38 @@ class ImageGroup(QTreeWidgetItem):
     @property
     def metadata(self):
         if self._group_metadata is None or self._updated_groups:
-            self._update_group_metadata()
+            self.update_group_metadata()
 
         return self._group_metadata
 
 
-class ImageGroupsManager(QWidget):
-    def __init__(self, viewer):
+class ImageGroupEditor(QWidget):
+
+    updated = Signal()
+
+    def __init__(self, viewer: napari.Viewer):
         super().__init__()
 
         self.viewer = viewer
 
-        self.image_groups_tw = QTreeWidget()
-        self.root_group = QTreeWidgetItem(["All image groups"])
-        self.image_groups_tw.addTopLevelItem(self.root_group)
-
-        self.image_groups_tw.setColumnCount(4)
-        self.image_groups_tw.setHeaderLabels(["Group name", "Layer type",
-                                              "Channels",
-                                              "Axes order"])
-
-        self.image_groups_tw.itemClicked.connect(self._get_active_item)
-
-        self.new_group_btn = QPushButton("New")
-        self.new_group_btn.setToolTip("Create a new group. If layers are "
-                                      "selected, add these to the new group.")
-        self.new_group_btn.clicked.connect(self._create_group)
-
-        self.add_group_btn = QPushButton("Add")
-        self.add_group_btn.setEnabled(False)
-        self.add_group_btn.setToolTip("Add selected layers to current group")
-        self.add_group_btn.clicked.connect(self._update_group)
-
-        self.remove_group_btn = QPushButton("Remove")
-        self.remove_group_btn.setEnabled(False)
-        self.remove_group_btn.setToolTip("Remove selected group. This will not"
-                                         " remove the layers from napari "
-                                         "viewer.")
-        self.remove_group_btn.clicked.connect(self._remove_group)
+        self.active_group = None
+        self.active_layer_group = None
+        self.active_layer = None
 
         self.group_name_lbl = QLabel("Group name:")
         self.group_name_le = QLineEdit("None selected")
+        self.group_name_le.setEnabled(False)
 
         self.layer_name_lbl = QLabel("Layer name:")
         self.display_name_lbl = QLabel("None selected")
 
         self.layer_type_lbl = QLabel("Layer type:")
         self.layer_type_le = QLineEdit("None selected")
+        self.layer_type_le.setEnabled(False)
 
         self.layer_axes_lbl = QLabel("Axes order:")
         self.edit_axes_le = QLineEdit("None selected")
+        self.edit_axes_le.setEnabled(False)
 
         self.layer_channel_lbl = QLabel("Channel:")
         self.edit_channel_spn = QSpinBox(minimum=0, maximum=0)
@@ -783,11 +849,11 @@ class ImageGroupsManager(QWidget):
 
         self.remove_layer_group_btn = QPushButton("Remove layer group")
         self.remove_layer_group_btn.setEnabled(False)
-        self.remove_layer_group_btn.clicked.connect(self._remove_layer_group)
+        self.remove_layer_group_btn.clicked.connect(self.remove_layer_group)
 
         self.remove_layer_btn = QPushButton("Remove layer")
         self.remove_layer_btn.setEnabled(False)
-        self.remove_layer_btn.clicked.connect(self._remove_layer)
+        self.remove_layer_btn.clicked.connect(self.remove_layer)
 
         self.layer_type_le.returnPressed.connect(self._update_metadata)
         self.group_name_le.returnPressed.connect(self._update_metadata)
@@ -820,88 +886,7 @@ class ImageGroupsManager(QWidget):
         self.edit_lyt.addLayout(self.edit_3_lyt)
         self.edit_lyt.addLayout(self.edit_4_lyt)
 
-        self.buttons_lyt = QHBoxLayout()
-        self.buttons_lyt.addWidget(self.new_group_btn)
-        self.buttons_lyt.addWidget(self.add_group_btn)
-        self.buttons_lyt.addWidget(self.remove_group_btn)
-
-        self.group_lyt = QVBoxLayout()
-        self.group_lyt.addLayout(self.buttons_lyt)
-        self.group_lyt.addLayout(self.edit_lyt)
-        self.group_lyt.addWidget(self.image_groups_tw)
-
-        self.setLayout(self.group_lyt)
-
-        self._active_group = None
-        self._active_layer_group = None
-        self._active_layer = None
-
-    def _update_roi_from_position(self):
-        if self._position and self._axes_order:
-            roi_start = [0] * len(self._axes_order)
-            roi_length = [-1] * len(self._axes_order)
-
-            for ord in self._axes_order:
-                roi_start[ord] = int(self._position[ord])
-                roi_length[ord] = 1
-
-        else:
-            roi_start = [0] * len(self._displayed_axes)
-            roi_length = [-1] * len(self._displayed_axes)
-
-        self._roi = {
-            ax: slice(ax_start if ax_length > 0 else None,
-                      (ax_start + ax_length) if ax_length > 0 else None)
-            for ax, ax_start, ax_length in zip(self._displayed_axes, roi_start,
-                                               roi_length)
-        }
-
-    def _update_edit_box(self):
-        self.group_name_le.setText(self._active_group.group_name)
-
-        if self._active_layer:
-            self.display_name_lbl.setText(self._active_layer.layer.name)
-            self.remove_layer_btn.setEnabled(True)
-        else:
-            self.display_name_lbl.setText("None selected")
-
-        if self._active_layer_group:
-            self.layer_type_le.setText(self._active_layer_group.layer_type)
-            self.remove_layer_group_btn.setEnabled(True)
-        else:
-            self.layer_type_le.setText("None selected")
-
-        if self._active_group:
-            self.remove_group_btn.setEnabled(True)
-            self.add_group_btn.setEnabled(True)
-
-        if self._active_layer:
-            self.edit_axes_le.setText(self._active_layer.source_axes)
-        elif self._active_layer_group:
-            self.edit_axes_le.setText(self._active_layer_group.source_axes)
-        else:
-            self.edit_axes_le.setText("None selected")
-
-        if self._active_layer:
-            self.edit_channel_spn.setMaximum(
-                self._active_layer_group.childCount() - 1
-            )
-            self.edit_channel_spn.setValue(self._active_layer.channel)
-            self.edit_channel_spn.setEnabled(True)
-
-    def _clear_edit_box(self):
-        self.group_name_le.setText("None selected")
-        self.display_name_lbl.setText("None selected")
-        self.layer_type_le.setText("None selected")
-        self.edit_axes_le.setText("None selected")
-        self.edit_channel_spn.setValue(0)
-        self.edit_channel_spn.setMaximum(0)
-        self.edit_channel_spn.setEnabled(False)
-
-        self.remove_layer_btn.setEnabled(False)
-        self.remove_layer_group_btn.setEnabled(False)
-        self.remove_group_btn.setEnabled(False)
-        self.add_group_btn.setEnabled(False)
+        self.setLayout(self.edit_lyt)
 
     def _update_metadata(self):
         new_group_name = self.group_name_le.text()
@@ -909,42 +894,313 @@ class ImageGroupsManager(QWidget):
         new_source_axes = self.edit_axes_le.text()
         new_channel = self.edit_channel_spn.value()
 
-        if self._active_layer:
-            if self._active_layer.source_axes != new_source_axes:
-                self._active_layer.source_axes = new_source_axes
+        display_source_axes = list(new_source_axes.lower())
+        if "c" in display_source_axes:
+            display_source_axes.remove("c")
+        display_source_axes = tuple(display_source_axes)
 
-            prev_channel = self._active_layer.channel
+        if display_source_axes != self.viewer.dims.axis_labels:
+            self.viewer.dims.axis_labels = display_source_axes
+
+        if self.active_layer:
+            if self.active_layer.source_axes != new_source_axes:
+                self.active_layer.source_axes = new_source_axes
+
+            prev_channel = self.active_layer.channel
             if prev_channel != new_channel:
-                self._active_layer_group.move_channel(prev_channel,
-                                                      new_channel)
+                self.active_layer_group.move_channel(prev_channel, new_channel)
 
-        if self._active_layer_group:
-            if self._active_layer_group.source_axes != new_source_axes:
-                self._active_layer_group.source_axes = new_source_axes
+        if self.active_layer_group:
+            if self.active_layer_group.source_axes != new_source_axes:
+                self.active_layer_group.source_axes = new_source_axes
 
-            if self._active_layer_group.layer_type != new_layer_type:
-                self._active_layer_group = self._active_group.move_layer(
+            if self.active_layer_group.layer_type != new_layer_type:
+                self.active_layer_group = self.active_group.move_layer(
                     new_layer_type,
-                    self._active_layer_group,
-                    layer_channel=self._active_layer
+                    self.active_layer_group,
+                    layer_channel=self.active_layer
                 )
 
-                self._active_layer = None
+                self.active_layer = None
 
-        if self._active_group:
-            if self._active_group.group_name != new_group_name:
-                self._active_group.group_name = new_group_name
+        if self.active_group:
+            if self.active_group.group_name != new_group_name:
+                self.active_group.group_name = new_group_name
 
-    def _update_group(self):
-        selected_layers = list(self.viewer.layers.selection)
-        if not selected_layers or not self._active_group:
+        self._update_edit_box()
+        self.updated.emit()
+
+    def _update_edit_box(self):
+        if self.active_group:
+            self.group_name_le.setText(self.active_group.group_name)
+            self.group_name_le.setEnabled(True)
+        else:
+            self.group_name_le.setText("None selected")
+            self.group_name_le.setEnabled(False)
+
+        if self.active_layer_group:
+            self.layer_type_le.setText(self.active_layer_group.layer_type)
+            self.edit_axes_le.setText(self.active_layer_group.source_axes)
+            self.remove_layer_group_btn.setEnabled(True)
+            self.layer_type_le.setEnabled(True)
+            self.edit_axes_le.setEnabled(True)
+        else:
+            self.layer_type_le.setText("None selected")
+            self.edit_axes_le.setText("None selected")
+            self.remove_layer_group_btn.setEnabled(False)
+            self.layer_type_le.setEnabled(False)
+            self.edit_axes_le.setEnabled(False)
+
+        if self.active_layer:
+            self.display_name_lbl.setText(self.active_layer.layer.name)
+            self.edit_axes_le.setText(self.active_layer.source_axes)
+            self.remove_layer_btn.setEnabled(True)
+            self.edit_axes_le.setEnabled(True)
+
+            self.edit_channel_spn.setMaximum(
+                self.active_layer_group.childCount() - 1
+            )
+            self.edit_channel_spn.setValue(self.active_layer.channel)
+            self.edit_channel_spn.setEnabled(True)
+
+        else:
+            self.display_name_lbl.setText("None selected")
+
+            self.edit_channel_spn.setValue(0)
+            self.edit_channel_spn.setMaximum(0)
+            self.edit_channel_spn.setEnabled(False)
+            self.remove_layer_btn.setEnabled(False)
+
+    def remove_layer_group(self):
+        if not self.active_layer_group:
             return
+
+        self.active_group.move_layer(None, self.active_layer_group,
+                                     layer_channel=None)
+        self._update_edit_box()
+
+    def remove_layer(self):
+        if not (self.active_layer_group and self.active_layer):
+            return
+
+        self.active_group.move_layer(None, self.active_layer_group,
+                                     layer_channel=self.active_layer)
+
+        self.active_layer = None
+        self._update_edit_box()
+
+    def setActiveLayerGroup(self, active_group: Union[ImageGroup, None] = None,
+                            active_layer_group: Union[LayerChannelGroup, None] = None,
+                            active_layer: Union[LayerChannel, None] = None):
+        self.active_group = active_group
+        self.active_layer_group = active_layer_group
+        self.active_layer = active_layer
+        self._update_edit_box()
+
+
+class MaskGenerator(QWidget):
+
+    mask_created = Signal()
+
+    def __init__(self, viewer: napari.Viewer):
+        super().__init__()
+
+        self.viewer = viewer
+        self.active_layer_group = None
+
+        self.patch_size_lbl = QLabel("Patch size")
+        self.patch_size_spn = QSpinBox(minimum=128, maximum=4096,
+                                       singleStep=16)
+        self.patch_size_spn.setEnabled(False)
+
+        self.generate_mask_btn = QPushButton("Create mask")
+        self.generate_mask_btn.setToolTip("Create a napari Label layer with a "
+                                          "blank mask at the scale selected "
+                                          "with `Patch size`")
+        self.generate_mask_btn.setEnabled(False)
+        self.generate_mask_btn.clicked.connect(self.generate_mask_layer)
+
+        self.create_mask_lyt = QHBoxLayout()
+        self.create_mask_lyt.addWidget(self.patch_size_lbl)
+        self.create_mask_lyt.addWidget(self.patch_size_spn)
+        self.create_mask_lyt.addWidget(self.generate_mask_btn)
+
+        self.setLayout(self.create_mask_lyt)
+
+    def setActiveLayerGroup(self, active_layer_group):
+        self.active_layer_group = active_layer_group
+
+        self.generate_mask_btn.setEnabled(self.active_layer_group is not None)
+        self.patch_size_spn.setEnabled(self.active_layer_group is not None)
+
+    def generate_mask_layer(self):
+        if (not self.active_layer_group
+           or not self.active_layer_group.source_axes):
+            return
+
+        patch_size = self.patch_size_spn.value()
+
+        source_axes = [
+            ax
+            for ax in self.active_layer_group.source_axes
+            if ax != "C"
+        ]
+
+        reference_layer = self.active_layer_group.child(0).layer
+        im_shape = reference_layer.data.shape
+        im_scale = reference_layer.scale
+        im_trans = reference_layer.translate
+
+        mask_axes = "".join([
+            ax
+            for ax in source_axes
+            if ax in "ZYX"
+        ])
+
+        mask_shape = [int(np.ceil(s / patch_size))
+                      for s, ax in zip(im_shape, source_axes)
+                      if ax in mask_axes]
+
+        mask_scale = tuple(
+            (ax_scl * patch_size) if ax_s // patch_size > 1 else ax_scl
+            for ax, ax_s, ax_scl in zip(source_axes, im_shape, im_scale)
+            if ax in mask_axes
+        )
+
+        mask_translate = tuple(
+            ax_trans
+            + ((ax_scl * (patch_size - 1) / 2)
+               if ax_s // patch_size > 1 else 0)
+            for ax, ax_s, ax_scl, ax_trans in zip(source_axes, im_shape,
+                                                  im_scale,
+                                                  im_trans)
+            if ax in mask_axes
+        )
+
+        new_mask_layer = self.viewer.add_labels(
+            data=np.zeros(mask_shape, dtype=np.uint8),
+            scale=mask_scale,
+            translate=mask_translate,
+            name=self.active_layer_group.layer_group_name + " sample-mask",
+        )
+
+        self.viewer.layers.selection.clear()
+        self.viewer.layers.selection.add(new_mask_layer)
+
+        self.mask_created.emit()
+
+
+class ImageGroupsManager(QWidget):
+    def __init__(self, viewer):
+        super().__init__()
+
+        self.viewer = viewer
+
+        self.active_group = None
+        self.active_layer_group = None
+        self.active_layer = None
+
+        self.image_groups_tw = QTreeWidget()
+
+        self.image_groups_tw.setColumnCount(4)
+        self.image_groups_tw.setHeaderLabels(["Group name", "Layer type",
+                                              "Channels",
+                                              "Axes order"])
+
+        self.image_groups_tw.itemSelectionChanged.connect(
+            self._get_active_item
+        )
+        self.root_group = QTreeWidgetItem(["All image groups"])
+        self.image_groups_tw.addTopLevelItem(self.root_group)
+
+        self.new_group_btn = QPushButton("New")
+        self.new_group_btn.setToolTip("Create a new group. If layers are "
+                                      "selected, add these to the new group.")
+        self.new_group_btn.clicked.connect(self.create_group)
+
+        self.add_group_btn = QPushButton("Add")
+        self.add_group_btn.setEnabled(False)
+        self.add_group_btn.setToolTip("Add selected layers to current group")
+        self.add_group_btn.clicked.connect(self.update_group)
+
+        self.remove_group_btn = QPushButton("Remove")
+        self.remove_group_btn.setEnabled(False)
+        self.remove_group_btn.setToolTip("Remove selected group. This will not"
+                                         " remove the layers from napari "
+                                         "viewer.")
+        self.remove_group_btn.clicked.connect(self.remove_group)
+
+        self.buttons_lyt = QHBoxLayout()
+        self.buttons_lyt.addWidget(self.new_group_btn)
+        self.buttons_lyt.addWidget(self.add_group_btn)
+        self.buttons_lyt.addWidget(self.remove_group_btn)
+
+        self.layers_editor = ImageGroupEditor(viewer)
+
+        self.mask_creator = MaskGenerator(viewer)
+        self.mask_creator.mask_created.connect(self.update_group)
+
+        self.group_lyt = QVBoxLayout()
+        self.group_lyt.addLayout(self.buttons_lyt)
+        self.group_lyt.addWidget(self.layers_editor)
+        self.group_lyt.addWidget(self.mask_creator)
+        self.group_lyt.addWidget(self.image_groups_tw)
+
+        self.setLayout(self.group_lyt)
+
+    def _get_active_item(self):
+        item = self.image_groups_tw.selectedItems()
+        if isinstance(item, list):
+            item = item[0]
+
+        self.active_layer = None
+        self.active_layer_group = None
+        self.active_group = None
+
+        if isinstance(item, LayerChannel):
+            self.active_layer = item
+            self.active_layer_group = item.parent()
+            self.active_group = item.parent().parent()
+
+        elif isinstance(item, LayerChannelGroup):
+            self.active_layer_group = item
+            self.active_group = item.parent()
+
+        elif isinstance(item, ImageGroup) and item != self.root_group:
+            self.active_group = item
+
+        self.mask_creator.setActiveLayerGroup(self.active_layer_group)
+        self.layers_editor.setActiveLayerGroup(
+            active_group=self.active_group,
+            active_layer_group=self.active_layer_group,
+            active_layer=self.active_layer
+        )
+
+        self.remove_group_btn.setEnabled(self.active_group is not None)
+        self.add_group_btn.setEnabled(self.active_group is not None)
+
+    def update_group(self):
+        self._updated = True
+
+        selected_layers = list(self.viewer.layers.selection)
+        if not selected_layers or not self.active_group:
+            return
+
+        active_source_axes = "".join(self.viewer.dims.axis_labels).upper()
+        if self.active_layer_group:
+            active_source_axes = self.active_layer_group.source_axes
+
+        if active_source_axes:
+            if "C" in active_source_axes:
+                active_source_axes = list(active_source_axes)
+                active_source_axes.remove("C")
+                active_source_axes = "".join(active_source_axes)
 
         channels_per_layer_type = {}
 
-        for idx in range(self._active_group.childCount()):
-            curr_num_channels = self._active_group.child(idx).childCount()
-            curr_layer_type = self._active_group.child(idx).layer_type
+        for idx in range(self.active_group.childCount()):
+            curr_num_channels = self.active_group.child(idx).childCount()
+            curr_layer_type = self.active_group.child(idx).layer_type
 
             channels_per_layer_type[curr_layer_type] = curr_num_channels
 
@@ -957,7 +1213,7 @@ class ImageGroupsManager(QWidget):
 
             num_channels = channels_per_layer_type.get(layer_type, 0)
 
-            source_axes.append(None)
+            source_axes.append(active_source_axes)
             channels.append(num_channels)
             layer_types.append(layer_type)
 
@@ -969,184 +1225,24 @@ class ImageGroupsManager(QWidget):
 
         for layer_type, layers_info in group_layers.items():
             for channel, layer, source_axes in zip(*layers_info.values()):
-                self._active_group.add_layer(
+                self.active_group.add_layer(
                     layer_type, layer, channel=channel, source_axes=source_axes
                 )
 
-    def _create_group(self):
-        self._active_group = ImageGroup()
-        self.root_group.addChild(self._active_group)
+    def create_group(self):
+        self.active_group = ImageGroup()
+        self.root_group.addChild(self.active_group)
 
-        self._update_group()
+        self.update_group()
 
-    def _remove_group(self):
-        self.root_group.removeChild(self._active_group)
+    def remove_group(self):
+        self.root_group.removeChild(self.active_group)
 
-        self._clear_edit_box()
+        self.active_layer = None
+        self.active_layer_group = None
+        self.active_group = None
 
-        self._active_layer = None
-        self._active_layer_group = None
-        self._active_group = None
-
-    def _remove_layer_group(self):
-        if not self._active_layer_group:
-            return
-
-        self._active_group.move_layer(None, self._active_layer_group,
-                                      layer_channel=None)
-
-        self._active_layer = None
-        self._active_layer_group = None
-
-        self._clear_edit_box()
-        self._update_edit_box()
-
-    def _remove_layer(self):
-        if not (self._active_layer_group and self._active_layer):
-            return
-
-        self._active_group.move_layer(None, self._active_layer_group,
-                                      layer_channel=self._active_layer)
-
-        self._active_layer = None
-
-        self._clear_edit_box()
-        self._update_edit_box()
-
-    def _get_active_item(self, item):
-        self._clear_edit_box()
-
-        if item == self.root_group:
-            return
-
-        self._active_layer = None
-        self._active_layer_group = None
-        self._active_group = None
-
-        if isinstance(item, LayerChannel):
-            self._active_layer = item
-            self._active_layer_group = item.parent()
-            self._active_group = item.parent().parent()
-
-        elif isinstance(item, LayerChannelGroup):
-            self._active_layer_group = item
-            self._active_group = item.parent()
-
-        elif isinstance(item, ImageGroup):
-            self._active_group = item
-
-        self._update_edit_box()
-
-
-class MaskGenerator(QWidget):
-    def __init__(self, viewer):
-        super().__init__()
-
-        self.viewer = viewer
-
-        self.patch_size_lbl = QLabel("Patch size")
-
-        self.patch_size_spn = QSpinBox(minimum=128, maximum=4096,
-                                       singleStep=16)
-
-        self.patch_size_lyt = QHBoxLayout()
-        self.patch_size_lyt.addWidget(self.patch_size_lbl)
-        self.patch_size_lyt.addWidget(self.patch_size_spn)
-
-        self.generate_mask_btn = QPushButton("Generate mask")
-        self.generate_mask_btn.clicked.connect(self.generate_masks)
-
-        self.layout = QVBoxLayout()
-        self.layout.addLayout(self.patch_size_lyt)
-        self.layout.addWidget(self.generate_mask_btn)
-
-        self.setLayout(self.layout)
-
-    def _generate_mask_layer(self, image_layer):
-        patch_size = self.patch_size_spn.value()
-
-        if image_layer.metadata["splitted_channels"]:
-            displayed_source_axes = [
-                ax
-                for ax in image_layer.metadata["source_axes"]
-                if ax != "C"
-            ]
-
-            displayed_roi = tuple(
-                ax_roi
-                for ax, ax_roi in zip(image_layer.metadata["source_axes"],
-                                      image_layer.metadata["roi"][0])
-                if ax != "C"
-            )
-
-        else:
-            displayed_source_axes = image_layer.metadata["source_axes"]
-            displayed_roi = image_layer.metadata["roi"][0]
-
-        im_shape = image_layer.data.shape
-        im_scale = image_layer.scale
-        im_trans = image_layer.translate
-
-        mask_axes = "".join([
-            ax
-            for ax, ax_roi in zip(displayed_source_axes, displayed_roi)
-            if ax in "ZYX" and ax_roi.stop is None
-        ])
-
-        mask_shape = [int(np.ceil(s / patch_size))
-                      for s, ax in zip(im_shape, displayed_source_axes)
-                      if ax in mask_axes]
-
-        mask_scale = tuple(
-            (ax_scl * patch_size) if ax_s // patch_size > 1 else ax_scl
-            for ax, ax_s, ax_scl in zip(displayed_source_axes, im_shape,
-                                        im_scale)
-            if ax in mask_axes
-        )
-
-        mask_translate = tuple(
-            ax_trans
-            + ((ax_scl * (patch_size - 1) / 2)
-               if ax_s // patch_size > 1 else 0)
-            for ax, ax_s, ax_scl, ax_trans in zip(displayed_source_axes,
-                                                  im_shape,
-                                                  im_scale,
-                                                  im_trans)
-            if ax in mask_axes
-        )
-
-        self.viewer.add_labels(data=np.zeros(mask_shape, dtype=np.uint8),
-                               scale=mask_scale,
-                               translate=mask_translate,
-                               name=image_layer.name + " sample-mask",
-                               metadata={"source_axes": mask_axes})
-
-    def generate_masks(self):
-        selected_image_layers = list(filter(
-            lambda curr_layer: isinstance(curr_layer, Image),
-            self.viewer.layers.selection
-        ))
-
-        # Remove sibling layers
-        layers_to_mask = []
-        while selected_image_layers:
-            reference_layer = selected_image_layers.pop()
-
-            sibling_layers = list(filter(
-                partial(compare_layers, ref_layer=reference_layer,
-                        compare_type=True,
-                        compare_shape=True),
-                selected_image_layers
-            ))
-
-            for curr_layer in sibling_layers:
-                if curr_layer in selected_image_layers:
-                    selected_image_layers.remove(curr_layer)
-
-            layers_to_mask.append(reference_layer)
-
-        for curr_layer in layers_to_mask:
-            self._generate_mask_layer(curr_layer)
+        self._updated = True
 
 
 class LabelsManager(QWidget):
@@ -1376,7 +1472,7 @@ class AcquisitionFunction(QWidget):
         self.output_dir_dlg.directoryEntered.connect(self._update_output_dir)
 
         self.execute_btn = QPushButton("Run on selected layers")
-        self.execute_btn.clicked.connect(self.compute_acquisition_fun)
+        self.execute_btn.clicked.connect(self.compute_acquisition_layers)
 
         self.image_lbl = QLabel("Image queue:")
         self.image_pb = QProgressBar()
@@ -1405,6 +1501,24 @@ class AcquisitionFunction(QWidget):
 
     def _update_output_dir(self, output_dir):
         self.output_dir_le.setText(output_dir)
+
+    def _update_roi_from_position(self):
+        displayed_axes = "".join(self.viewer.dims.axis_labels).upper()
+        position = self.viewer.cursor.position
+        axes_order = self.viewer.dims.order
+
+        roi_start = [0] * len(axes_order)
+        roi_length = [-1] * len(axes_order)
+        for ord in axes_order[:-self.viewer.dims.ndisplay]:
+            roi_start[ord] = int(position[ord])
+            roi_length[ord] = 1
+
+        self._roi = {
+            ax: slice(ax_start if ax_length > 0 else None,
+                      (ax_start + ax_length) if ax_length > 0 else None)
+            for ax, ax_start, ax_length in zip(displayed_axes, roi_start,
+                                               roi_length)
+        }
 
     @staticmethod
     def compute_acquisition_fun(dataset_metadata,
@@ -1460,39 +1574,61 @@ class AcquisitionFunction(QWidget):
         output_dir = Path(self.output_dir_le.text())
         patch_size = self.patch_size_spn.value()
 
-        self.image_pb.setRange(0, len(self.image_groups_manager))
+        self._update_roi_from_position()
+
+        image_groups = list(map(
+            lambda idx: self.image_groups_manager.root_group.child(idx),
+            range(self.image_groups_manager.root_group.childCount())
+        ))
+
+        self.image_pb.setRange(0, len(image_groups))
         self.image_pb.reset()
 
-        for n, image_group in enumerate(self.image_groups_manager):
-            output_filename = output_dir / (image_group.group_name + ".zarr")
-            labels_metadata = []
+        group_names = set()
+
+        for n, image_group in enumerate(image_groups):
+            group_name = image_group.group_name
+
+            if group_name in group_names:
+                n_existing = sum(map(
+                    lambda exisitng_group_name:
+                    group_name in exisitng_group_name,
+                    group_names
+                ))
+
+                group_name = group_name + " (%i)" % n_existing
+
+            group_names = group_names.union({group_name})
+
+            output_filename = output_dir / (group_name + ".zarr")
+
+            displayed_source_axes = image_group.source_axes["images"]
+            displayed_shape = image_group.shape["images"]
+            displayed_scale = image_group.scale["images"]
 
             acquisition_fun_shape = [
                 ax_s
                 for ax, ax_s in zip(displayed_source_axes,
-                                    image_layer.data.shape)
+                                    displayed_shape)
                 if ax in "ZYX" and ax_s > 1
             ]
 
             acquisition_fun_scale = [
                 ax_scl
                 for ax, ax_s, ax_scl in zip(displayed_source_axes,
-                                            image_layer.data.shape,
-                                            image_layer.scale)
+                                            displayed_shape,
+                                            displayed_scale)
                 if ax in "ZYX" and ax_s > 1
             ]
 
-            acquisition_fun_chunk_size = [max(patch_size, 4096)]
-            acquisition_fun_chunk_size *= len(acquisition_fun_shape)
-
             save_zarr(output_filename, data=None,
                       shape=acquisition_fun_shape,
-                      chunk_size=acquisition_fun_chunk_size,
+                      chunk_size=True,
                       group_name="labels/acquisition_fun/0",
                       dtype=np.float32)
 
             save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
-                      chunk_size=acquisition_fun_chunk_size,
+                      chunk_size=True,
                       group_name="labels/segmentation/0",
                       dtype=np.int32)
 
@@ -1503,8 +1639,17 @@ class AcquisitionFunction(QWidget):
                                          + "/labels/segmentation/0",
                                          mode="a")
 
-            self.compute_acquisition_fun(
-                image_group.get_group_metadata(),
+            image_group_metadata = image_group.metadata
+            for layer_type in image_group_metadata.keys():
+                image_group_metadata[layer_type]["roi"] = [
+                    tuple(
+                        self._roi.get(ax, slice(None))
+                        for ax in image_group.source_axes[layer_type]
+                    )
+                ]
+
+            acquisition_fun_max = self.compute_acquisition_fun(
+                image_group_metadata,
                 acquisition_fun=acquisition_fun,
                 segmentation_out=segmentation_out,
                 MC_repetitions=MC_repetitions,
@@ -1521,13 +1666,13 @@ class AcquisitionFunction(QWidget):
                 scale=4,
                 num_scales=5,
                 reference_source_axes=displayed_source_axes,
-                reference_scale=image_layer.scale
+                reference_scale=displayed_scale
             )
 
             viewer.open(
                 str(output_filename) + "/labels/acquisition_fun",
                 layer_type="image",
-                name=image_layer.name + " acquisition function",
+                name=group_name + " acquisition function",
                 multiscale=True,
                 opacity=0.8,
                 scale=acquisition_fun_scale,
@@ -1545,143 +1690,18 @@ class AcquisitionFunction(QWidget):
                 scale=4,
                 num_scales=5,
                 reference_source_axes=displayed_source_axes,
-                reference_scale=image_layer.scale,
+                reference_scale=displayed_scale,
             )
 
             viewer.open(
                 str(output_filename) + "/labels/segmentation",
                 layer_type="labels",
-                name=image_layer.name + " segmentation output",
+                name=group_name + " segmentation output",
                 multiscale=True,
                 scale=acquisition_fun_scale,
                 opacity=0.8,
                 metadata={"source_axes": "YX"}
             )
-
-            z_grp = zarr.open(output_filename, mode="a")
-            for lab_meta in labels_metadata:
-                write_label_metadata(z_grp, **lab_meta)
-
-
-class MetadataManager(QWidget):
-    def __init__(self, viewer: napari.Viewer):
-        super().__init__()
-        self.viewer = viewer
-
-        self.source_axes_lbl = QLabel("Axes order:")
-
-        self.source_axes_le = QLineEdit("None selected")
-        self.source_axes_le.editingFinished.connect(self.update_metadata)
-
-        self.update_btn = QPushButton("udpdate")
-        self.update_btn.clicked.connect(self.update_metadata)
-
-        self.layout = QHBoxLayout()
-        self.layout.addWidget(self.source_axes_lbl)
-        self.layout.addWidget(self.source_axes_le)
-        self.layout.addWidget(self.update_btn)
-
-        self.setLayout(self.layout)
-
-        self.viewer.layers.selection.events.connect(self._show_source_axes)
-
-    def _show_source_axes(self, event):
-        if not len(event._sources) or not all(event._sources):
-            self.source_axes_le.setText("None selected")
-            return
-
-        selected_layer = next(iter(event._sources[0]))
-        source_axes = selected_layer.metadata.get("source_axes", "unset")
-
-        self.source_axes_le.setText(source_axes)
-
-    def _update_metadata_layer(self, layer):
-        source_axes = self.source_axes_le.text()
-
-        input_filename = layer._source.path
-        data_group = ""
-
-        if input_filename:
-            input_filename = str(input_filename)
-            data_group = "/".join(input_filename.split(".")[-1].split("/")[1:])
-
-        if data_group:
-            input_filename = input_filename[:-len(data_group) - 1]
-
-        if isinstance(layer.data, MultiScaleData):
-            data_group += "/0"
-
-        if not data_group:
-            data_group = None
-
-        # Determine if the current layer was generated by splitting the
-        # channels of an image.
-        splitted_layers = list(filter(
-            partial(compare_layers, ref_layer=layer, compare_type=True,
-                    compare_shape=True),
-            self.viewer.layers
-        ))
-
-        is_splitted = len(splitted_layers) > 1
-
-        # Generate the current ROI for images with non-channel, non-spatial
-        # axes.
-        if is_splitted:
-            displayed_source_axes = [ax for ax in source_axes if ax != "C"]
-        else:
-            displayed_source_axes = source_axes
-
-        roi_start = [0] * len(displayed_source_axes)
-        roi_length = [-1] * len(displayed_source_axes)
-
-        for ord in viewer.dims.order[:-viewer.dims.ndisplay]:
-            roi_start[ord] = int(viewer.cursor.position[ord])
-            roi_length[ord] = 1
-
-        if is_splitted and "C" in source_axes:
-            roi_start.insert(source_axes.index("C"), 0)
-            roi_length.insert(source_axes.index("C"), -1)
-
-        axes = ["Y", "X", "C"]
-        if "C" not in source_axes:
-            axes.remove("C")
-        axes = "".join(axes)
-
-        roi = [
-            tuple(slice(ax_start if ax_length > 0 else None,
-                        (ax_start + ax_length) if ax_length > 0 else None)
-                  for ax_start, ax_length in zip(roi_start, roi_length))
-        ]
-
-        # Apply to all layers added from this same input file that might have
-        # been splitted into channels.
-        for curr_layer in splitted_layers:
-            curr_layer.metadata["splitted_channels"] = is_splitted
-            curr_layer.metadata["filenames"] = input_filename
-            curr_layer.metadata["data_group"] = data_group
-            curr_layer.metadata["source_axes"] = source_axes
-            curr_layer.metadata["axes"] = axes
-            curr_layer.metadata["roi"] = roi
-
-    def update_metadata(self):
-        selected_image_layers = list(self.viewer.layers.selection)
-
-        # Add sibling layers
-        while selected_image_layers:
-            reference_layer = selected_image_layers.pop()
-
-            sibling_layers = list(filter(
-                partial(compare_layers, ref_layer=reference_layer,
-                        compare_type=True,
-                        compare_shape=True),
-                self.viewer.layers
-            ))
-
-            for curr_layer in sibling_layers:
-                if curr_layer in selected_image_layers:
-                    selected_image_layers.remove(curr_layer)
-
-                self._update_metadata_layer(curr_layer)
 
 
 if __name__ == "__main__":
@@ -1693,19 +1713,13 @@ if __name__ == "__main__":
     viewer.add_image(img[..., 1], blending="additive", colormap="green")
     viewer.add_image(img[..., 2], blending="additive", colormap="blue")
 
-    image_group_manager = ImageGroupsManager(viewer)
-    viewer.window.add_dock_widget(image_group_manager)
+    image_groups_manager = ImageGroupsManager(viewer)
+    viewer.window.add_dock_widget(image_groups_manager, area='right')
 
-    # metadata_manager = MetadataManager(viewer)
-    # mask_generator = MaskGenerator(viewer)
-    # labels_manager_widget = LabelsManager(viewer)
-    # image_groups_manager = ImageGroupsManager(viewer)
-    # acquisition_function = AcquisitionFunction(viewer, labels_manager_widget, image_groups_manager)
-
-    # viewer.window.add_dock_widget(image_groups_manager)
-    # viewer.window.add_dock_widget(metadata_manager)
-    # viewer.window.add_dock_widget(mask_generator)
-    # viewer.window.add_dock_widget(acquisition_function)
-    # viewer.window.add_dock_widget(labels_manager_widget, area='right')
+    labels_manager_widget = LabelsManager(viewer)
+    acquisition_function = AcquisitionFunction(viewer, labels_manager_widget,
+                                               image_groups_manager)
+    viewer.window.add_dock_widget(acquisition_function, area='right')
+    viewer.window.add_dock_widget(labels_manager_widget, area='right')
 
     napari.run()
