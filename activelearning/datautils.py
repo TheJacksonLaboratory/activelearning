@@ -71,15 +71,16 @@ def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
                    batch_size=1,
                    **superpixel_kwargs):
 
-    dataset_metadata["superpixels"] = zds.ImagesDatasetSpecs(
-        filenames=dataset_metadata["images"]["filenames"],
-        data_group=dataset_metadata["images"]["data_group"],
-        source_axes=dataset_metadata["images"]["source_axes"],
-        axes=dataset_metadata["images"]["axes"],
-        roi=dataset_metadata["images"]["roi"],
-        image_loader_func=SuperPixelGenerator(**superpixel_kwargs),
-        modality="superpixels"
-    )
+    if "superpixels" not in dataset_metadata:
+        dataset_metadata["superpixels"] = zds.ImagesDatasetSpecs(
+            filenames=dataset_metadata["images"]["filenames"],
+            data_group=dataset_metadata["images"]["data_group"],
+            source_axes=dataset_metadata["images"]["source_axes"],
+            axes=dataset_metadata["images"]["axes"],
+            roi=dataset_metadata["images"]["roi"],
+            image_loader_func=SuperPixelGenerator(**superpixel_kwargs),
+            modality="superpixels"
+        )
 
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),

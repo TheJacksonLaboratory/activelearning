@@ -217,9 +217,17 @@ def compare_layers(layer, ref_layer=None, compare_type=True,
 
 
 def save_zarr(output_filename, data, shape, chunk_size, group_name, dtype):
-    out_grp = zarr.open(output_filename, mode="a")
+    if output_filename is None:
+        out_grp = zarr.group()
+    elif isinstance(output_filename, (Path, str)):
+        out_grp = zarr.open(output_filename, mode="a")
+    elif isinstance(output_filename, zarr.Group):
+        out_grp = output_filename
+    else:
+        raise ValueError(f"Output filename of type {type(output_filename)} is"
+                         f" not supported")
 
-    if chunk_size is not bool and isinstance(chunk_size, int):
+    if not isinstance(chunk_size, bool) and isinstance(chunk_size, int):
         chunk_size = [chunk_size] * len(shape)
 
     if isinstance(chunk_size, list):
@@ -238,12 +246,19 @@ def save_zarr(output_filename, data, shape, chunk_size, group_name, dtype):
         overwrite=True
     )
 
+    return out_grp
 
-def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
+
+def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                      reference_source_axes=None,
                      reference_scale=None,
                      reference_units=None):
-    source_arr = da.from_zarr(filename, component=data_group)
+    if isinstance(z_root, (Path, str)):
+        source_arr = da.from_zarr(z_root, component=data_group)
+    else:
+        source_arr = da.from_zarr(z_root[data_group])
+
+    z_ms = [source_arr]
 
     data_group = "/".join(data_group.split("/")[:-1])
     root_group = data_group + "/%i"
@@ -294,27 +309,35 @@ def downsample_image(filename, source_axes, data_group, scale=4, num_scales=5,
             )
         )
 
-        target_arr.to_zarr(filename,
-                           component=root_group % s,
-                           compressor=zarr.Blosc(clevel=9),
-                           write_empty_chunks=False,
-                           overwrite=True)
+        if isinstance(z_root, (Path, str)):
+            target_arr.to_zarr(z_root,
+                               component=root_group % s,
+                               compressor=zarr.Blosc(clevel=9),
+                               write_empty_chunks=False,
+                               overwrite=True)
 
-        source_arr = da.from_zarr(filename,
-                                  component=root_group % s)
+            source_arr = da.from_zarr(z_root, component=root_group % s)
 
-        datasets.append({
-            "coordinateTransformations": [
-                {"type": "scale",
-                 "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
-                           if ax in "ZYX" else 1.0
-                           for ax in source_axes]
-                 }],
-            "path": str(s)
-        })
+            datasets.append({
+                "coordinateTransformations": [
+                    {"type": "scale",
+                     "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
+                               if ax in "ZYX" else 1.0
+                               for ax in source_axes]
+                     }],
+                "path": str(s)
+            })
+        else:
+            z_ms.append(target_arr)
+            source_arr = target_arr
 
-    root = zarr.open(Path(filename) / data_group, mode="a")
-    write_multiscales_metadata(root, datasets, axes=list(source_axes.lower()))
+    if isinstance(z_root, Path):
+        z_grp = zarr.open(z_root / data_group, mode="a")
+        write_multiscales_metadata(z_grp, datasets,
+                                   axes=list(source_axes.lower()))
+        z_ms = z_root / data_group
+
+    return z_ms
 
 
 def get_source_data(layer):
@@ -340,24 +363,6 @@ def get_source_data(layer):
         data_group = None
 
     return input_filename, data_group
-
-
-def group_layers_per_type(layers, layer_types, channels, source_axes):
-    unique_types = list(set(layer_types))
-
-    group_layers = {}
-    for layer_type in unique_types:
-        curr_type_layers = (
-            zip(["channels", "layer_type", "layers", "source_axes"],
-                zip(*sorted(filter(lambda layer_info:
-                                   layer_type in layer_info[1],
-                                   zip(channels, layer_types, layers,
-                                       source_axes)))))
-        )
-        group_layers[layer_type] = dict(curr_type_layers)
-        group_layers[layer_type].pop("layer_type")
-
-    return group_layers
 
 
 class LayerChannel(QTreeWidgetItem):
@@ -505,7 +510,8 @@ class LayerChannelGroup(QTreeWidgetItem):
             "modality": self._layer_type,
             "filenames": self.source_data,
             "data_group": self.data_group,
-            "source_axes": self._source_axes
+            "source_axes": self._source_axes,
+            "add_to_output": self._layer_type in ("images", )
         }
 
         return metadata
@@ -623,7 +629,6 @@ class LayerChannelGroup(QTreeWidgetItem):
         self.sortChildren(2, Qt.SortOrder.AscendingOrder)
 
 
-
 class SamplingMaskGroup(LayerChannelGroup):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -672,25 +677,32 @@ class SamplingMaskGroup(LayerChannelGroup):
 
 
 class ImageGroup(QTreeWidgetItem):
-    def __init__(self, group_name: Union[str, None] = None):
+    def __init__(self, group_name: Union[str, None] = None,
+                 group_dir: Union[Path, str, None] = None):
         self._group_metadata = {}
 
         self._group_name = group_name
+        self._group_dir = group_dir
 
         group_name_str = group_name
+        group_dir_str = group_dir
 
         if not group_name:
             group_name_str = "Unset"
+
+        if not group_dir:
+            group_dir_str = "Unset"
 
         self._updated_groups = set()
 
         self._updated = False
 
+        self._layer_types = []
         self._group_shapes = {}
         self._group_scales = {}
         self._group_source_axes = {}
 
-        super().__init__([group_name_str, "", "", ""])
+        super().__init__([group_name_str, "", "", "", group_dir_str])
 
     @property
     def group_name(self):
@@ -701,8 +713,19 @@ class ImageGroup(QTreeWidgetItem):
         self._group_name = group_name
         self.setText(0, self._group_name)
 
-    def _get_group_shapes(self):
+    @property
+    def group_dir(self):
+        return self._group_dir
 
+    @group_dir.setter
+    def group_dir(self, group_dir: Union[Path, str]):
+        if isinstance(group_dir, str):
+            group_dir = Path(group_dir)
+
+        self._group_dir = group_dir
+        self.setText(4, str(self._group_dir))
+
+    def _get_group_shapes(self):
         self._group_shapes = {}
         self._group_scales = {}
         self._group_source_axes = {}
@@ -715,6 +738,13 @@ class ImageGroup(QTreeWidgetItem):
             self._group_source_axes[layer.layer_type] = layer.source_axes
 
         self._updated = False
+
+    @property
+    def layer_type(self):
+        if self._updated:
+            self._get_group_shapes()
+
+        return list(self._group_shapes.keys())
 
     @property
     def shape(self):
@@ -849,16 +879,29 @@ class ImageGroupEditor(QWidget):
 
         self.remove_layer_group_btn = QPushButton("Remove layer group")
         self.remove_layer_group_btn.setEnabled(False)
-        self.remove_layer_group_btn.clicked.connect(self.remove_layer_group)
 
         self.remove_layer_btn = QPushButton("Remove layer")
         self.remove_layer_btn.setEnabled(False)
+
+        self.output_dir_lbl = QLabel("Output directory:")
+        self.output_dir_le = QLineEdit("Unset")
+        self.output_dir_dlg = QFileDialog(fileMode=QFileDialog.Directory)
+        self.output_dir_btn = QPushButton("...")
+        self.output_dir_le.setEnabled(False)
+        self.output_dir_btn.setEnabled(False)
+
+        self.remove_layer_group_btn.clicked.connect(self.remove_layer_group)
         self.remove_layer_btn.clicked.connect(self.remove_layer)
+
+        self.output_dir_btn.clicked.connect(self.output_dir_dlg.show)
+        self.output_dir_dlg.directoryEntered.connect(self._update_output_dir)
 
         self.layer_type_le.returnPressed.connect(self._update_metadata)
         self.group_name_le.returnPressed.connect(self._update_metadata)
         self.edit_channel_spn.editingFinished.connect(self._update_metadata)
+        self.edit_channel_spn.valueChanged.connect(self._update_metadata)
         self.edit_axes_le.returnPressed.connect(self._update_metadata)
+        self.output_dir_le.returnPressed.connect(self._update_metadata)
 
         self.edit_1_lyt = QHBoxLayout()
         self.edit_1_lyt.addWidget(self.group_name_lbl)
@@ -877,22 +920,37 @@ class ImageGroupEditor(QWidget):
         self.edit_3_lyt.addWidget(self.edit_channel_spn)
 
         self.edit_4_lyt = QHBoxLayout()
-        self.edit_4_lyt.addWidget(self.remove_layer_btn)
-        self.edit_4_lyt.addWidget(self.remove_layer_group_btn)
+        self.edit_4_lyt.addWidget(self.output_dir_lbl)
+        self.edit_4_lyt.addWidget(self.output_dir_le)
+        self.edit_4_lyt.addWidget(self.output_dir_btn)
+
+        self.edit_5_lyt = QHBoxLayout()
+        self.edit_5_lyt.addWidget(self.remove_layer_btn)
+        self.edit_5_lyt.addWidget(self.remove_layer_group_btn)
 
         self.edit_lyt = QVBoxLayout()
         self.edit_lyt.addLayout(self.edit_1_lyt)
         self.edit_lyt.addLayout(self.edit_2_lyt)
         self.edit_lyt.addLayout(self.edit_3_lyt)
         self.edit_lyt.addLayout(self.edit_4_lyt)
+        self.edit_lyt.addLayout(self.edit_5_lyt)
 
         self.setLayout(self.edit_lyt)
+
+    def _update_output_dir(self, output_dir):
+        self.output_dir_le.setText(output_dir)
+
+        self._update_metadata()
 
     def _update_metadata(self):
         new_group_name = self.group_name_le.text()
         new_layer_type = self.layer_type_le.text()
         new_source_axes = self.edit_axes_le.text()
         new_channel = self.edit_channel_spn.value()
+        new_output_dir = self.output_dir_le.text()
+
+        if new_output_dir.lower() in ("unset", "none", ""):
+            new_output_dir = None
 
         display_source_axes = list(new_source_axes.lower())
         if "c" in display_source_axes:
@@ -927,15 +985,26 @@ class ImageGroupEditor(QWidget):
             if self.active_group.group_name != new_group_name:
                 self.active_group.group_name = new_group_name
 
+            if self.active_group.group_dir != new_output_dir:
+                self.active_group.group_dir = new_output_dir
+
         self._update_edit_box()
         self.updated.emit()
 
     def _update_edit_box(self):
         if self.active_group:
+            self.output_dir_le.setText(str(self.active_group.group_dir))
             self.group_name_le.setText(self.active_group.group_name)
+
+            self.output_dir_btn.setEnabled(True)
+            self.output_dir_le.setEnabled(True)
             self.group_name_le.setEnabled(True)
         else:
+            self.output_dir_le.setText("None selected")
             self.group_name_le.setText("None selected")
+
+            self.output_dir_btn.setEnabled(False)
+            self.output_dir_le.setEnabled(False)
             self.group_name_le.setEnabled(False)
 
         if self.active_layer_group:
@@ -1182,7 +1251,10 @@ class ImageGroupsManager(QWidget):
     def update_group(self):
         self._updated = True
 
-        selected_layers = list(self.viewer.layers.selection)
+        selected_layers = list(sorted(
+            map(lambda layer: (layer.name, layer),
+                self.viewer.layers.selection)
+        ))
         if not selected_layers or not self.active_group:
             return
 
@@ -1196,38 +1268,26 @@ class ImageGroupsManager(QWidget):
                 active_source_axes.remove("C")
                 active_source_axes = "".join(active_source_axes)
 
-        channels_per_layer_type = {}
+        group_names = set()
 
-        for idx in range(self.active_group.childCount()):
-            curr_num_channels = self.active_group.child(idx).childCount()
-            curr_layer_type = self.active_group.child(idx).layer_type
+        for layer_name, layer in selected_layers:
+            if not self.active_group.group_name:
+                if layer_name in group_names:
+                    n_existing = sum(map(
+                        lambda exisitng_group_name:
+                        layer_name in exisitng_group_name,
+                        group_names
+                    ))
 
-            channels_per_layer_type[curr_layer_type] = curr_num_channels
+                    layer_name = layer_name + " (%i)" % n_existing
 
-        channels = []
-        layer_types = []
-        source_axes = []
+                group_names = group_names.union({layer_name})
+                self.active_group.group_name = layer_name
 
-        for layer in selected_layers:
             layer_type = "images" if isinstance(layer, Image) else "masks"
-
-            num_channels = channels_per_layer_type.get(layer_type, 0)
-
-            source_axes.append(active_source_axes)
-            channels.append(num_channels)
-            layer_types.append(layer_type)
-
-            channels_per_layer_type[layer_type] = num_channels + 1
-
-        group_layers = group_layers_per_type(selected_layers, layer_types,
-                                             channels,
-                                             source_axes)
-
-        for layer_type, layers_info in group_layers.items():
-            for channel, layer, source_axes in zip(*layers_info.values()):
-                self.active_group.add_layer(
-                    layer_type, layer, channel=channel, source_axes=source_axes
-                )
+            self.active_group.add_layer(
+                layer_type, layer, channel=None, source_axes=active_source_axes
+            )
 
     def create_group(self):
         self.active_group = ImageGroup()
@@ -1459,18 +1519,6 @@ class AcquisitionFunction(QWidget):
         self.MC_repetitions_lyt.addWidget(self.MC_repetitions_lbl)
         self.MC_repetitions_lyt.addWidget(self.MC_repetitions_spn)
 
-        self.output_dir_lbl = QLabel("Output directory:")
-        self.output_dir_le = QLineEdit(".")
-        self.output_dir_dlg = QFileDialog(fileMode=QFileDialog.Directory)
-        self.output_dir_btn = QPushButton("...")
-        self.output_dir_lyt = QHBoxLayout()
-        self.output_dir_lyt.addWidget(self.output_dir_lbl)
-        self.output_dir_lyt.addWidget(self.output_dir_le)
-        self.output_dir_lyt.addWidget(self.output_dir_btn)
-
-        self.output_dir_btn.clicked.connect(self.output_dir_dlg.show)
-        self.output_dir_dlg.directoryEntered.connect(self._update_output_dir)
-
         self.execute_btn = QPushButton("Run on selected layers")
         self.execute_btn.clicked.connect(self.compute_acquisition_layers)
 
@@ -1486,21 +1534,17 @@ class AcquisitionFunction(QWidget):
         self.patch_lyt.addWidget(self.patch_lbl)
         self.patch_lyt.addWidget(self.patch_pb)
 
-        self.layout = QVBoxLayout()
-        self.layout.addLayout(self.patch_size_lyt)
-        self.layout.addLayout(self.max_samples_lyt)
-        self.layout.addLayout(self.MC_repetitions_lyt)
-        self.layout.addLayout(self.output_dir_lyt)
-        self.layout.addWidget(self.execute_btn)
-        self.layout.addLayout(self.image_lyt)
-        self.layout.addLayout(self.patch_lyt)
-        self.setLayout(self.layout)
+        self.acquisition_lyt = QVBoxLayout()
+        self.acquisition_lyt.addLayout(self.patch_size_lyt)
+        self.acquisition_lyt.addLayout(self.max_samples_lyt)
+        self.acquisition_lyt.addLayout(self.MC_repetitions_lyt)
+        self.acquisition_lyt.addWidget(self.execute_btn)
+        self.acquisition_lyt.addLayout(self.image_lyt)
+        self.acquisition_lyt.addLayout(self.patch_lyt)
+        self.setLayout(self.acquisition_lyt)
 
         self.labels_manager = labels_manager
         self.image_groups_manager = image_groups_manager
-
-    def _update_output_dir(self, output_dir):
-        self.output_dir_le.setText(output_dir)
 
     def _update_roi_from_position(self):
         displayed_axes = "".join(self.viewer.dims.axis_labels).upper()
@@ -1568,10 +1612,11 @@ class AcquisitionFunction(QWidget):
             if n_samples >= max_samples:
                 break
 
+        return acquisition_fun_max
+
     def compute_acquisition_layers(self):
         MC_repetitions = self.MC_repetitions_spn.value()
         max_samples = self.max_samples_spn.value()
-        output_dir = Path(self.output_dir_le.text())
         patch_size = self.patch_size_spn.value()
 
         self._update_roi_from_position()
@@ -1584,23 +1629,13 @@ class AcquisitionFunction(QWidget):
         self.image_pb.setRange(0, len(image_groups))
         self.image_pb.reset()
 
-        group_names = set()
-
         for n, image_group in enumerate(image_groups):
             group_name = image_group.group_name
-
-            if group_name in group_names:
-                n_existing = sum(map(
-                    lambda exisitng_group_name:
-                    group_name in exisitng_group_name,
-                    group_names
-                ))
-
-                group_name = group_name + " (%i)" % n_existing
-
-            group_names = group_names.union({group_name})
-
-            output_filename = output_dir / (group_name + ".zarr")
+            if image_group.group_dir:
+                output_filename = image_group.group_dir / (group_name
+                                                           + ".zarr")
+            else:
+                output_filename = None
 
             displayed_source_axes = image_group.source_axes["images"]
             displayed_shape = image_group.shape["images"]
@@ -1621,46 +1656,63 @@ class AcquisitionFunction(QWidget):
                 if ax in "ZYX" and ax_s > 1
             ]
 
-            save_zarr(output_filename, data=None,
-                      shape=acquisition_fun_shape,
-                      chunk_size=True,
-                      group_name="labels/acquisition_fun/0",
-                      dtype=np.float32)
+            acquisition_root = save_zarr(
+                output_filename,
+                data=None,
+                shape=acquisition_fun_shape,
+                chunk_size=True,
+                group_name="labels/acquisition_fun/0",
+                dtype=np.float32
+            )
 
-            save_zarr(output_filename, data=None, shape=acquisition_fun_shape,
-                      chunk_size=True,
-                      group_name="labels/segmentation/0",
-                      dtype=np.int32)
-
-            acquisition_fun = zarr.open(str(output_filename)
-                                        + "/labels/acquisition_fun/0",
-                                        mode="a")
-            segmentation_out = zarr.open(str(output_filename)
-                                         + "/labels/segmentation/0",
-                                         mode="a")
+            segmentation_root = save_zarr(
+                output_filename,
+                data=None,
+                shape=acquisition_fun_shape,
+                chunk_size=True,
+                group_name="labels/segmentation/0",
+                dtype=np.int32
+            )
 
             image_group_metadata = image_group.metadata
-            for layer_type in image_group_metadata.keys():
+            for layer_type in image_group.layer_type:
+                layer_source_axes = image_group.source_axes[layer_type]
                 image_group_metadata[layer_type]["roi"] = [
                     tuple(
                         self._roi.get(ax, slice(None))
-                        for ax in image_group.source_axes[layer_type]
+                        for ax in layer_source_axes
                     )
                 ]
 
+                spaial_axes = "".join([
+                    ax for ax in layer_source_axes
+                    if ax in "ZYX"
+                ])
+
+                if "images" in layer_type:
+                    if "C" in displayed_source_axes:
+                        spaial_axes += "C"
+
+                image_group_metadata[layer_type]["axes"] = spaial_axes
+
             acquisition_fun_max = self.compute_acquisition_fun(
                 image_group_metadata,
-                acquisition_fun=acquisition_fun,
-                segmentation_out=segmentation_out,
+                acquisition_fun=acquisition_root["labels/acquisition_fun/0"],
+                segmentation_out=segmentation_root["labels/segmentation/0"],
                 MC_repetitions=MC_repetitions,
                 max_samples=max_samples,
                 patch_size=patch_size
             )
             self.image_pb.setValue(n + 1)
 
+            if output_filename:
+                acquisition_root = output_filename
+                segmentation_root = output_filename
+
+
             # Downsample the acquisition function
-            downsample_image(
-                output_filename,
+            acquisition_fun_ms = downsample_image(
+                acquisition_root,
                 source_axes="YX",
                 data_group="labels/acquisition_fun/0",
                 scale=4,
@@ -1669,22 +1721,9 @@ class AcquisitionFunction(QWidget):
                 reference_scale=displayed_scale
             )
 
-            viewer.open(
-                str(output_filename) + "/labels/acquisition_fun",
-                layer_type="image",
-                name=group_name + " acquisition function",
-                multiscale=True,
-                opacity=0.8,
-                scale=acquisition_fun_scale,
-                blending="translucent_no_depth",
-                colormap="magma",
-                contrast_limits=(0, acquisition_fun_max),
-                metadata={"source_axes": "YX"}
-            )
-
             # Downsample the segmentation output
-            downsample_image(
-                output_filename,
+            segmentation_ms = downsample_image(
+                segmentation_root,
                 source_axes="YX",
                 data_group="labels/segmentation/0",
                 scale=4,
@@ -1693,15 +1732,43 @@ class AcquisitionFunction(QWidget):
                 reference_scale=displayed_scale,
             )
 
-            viewer.open(
-                str(output_filename) + "/labels/segmentation",
-                layer_type="labels",
-                name=group_name + " segmentation output",
+            acquisition_fun_ms_kwargs = dict(
+                name=group_name + " acquisition function",
                 multiscale=True,
-                scale=acquisition_fun_scale,
                 opacity=0.8,
-                metadata={"source_axes": "YX"}
+                scale=acquisition_fun_scale,
+                blending="translucent_no_depth",
+                colormap="magma",
+                contrast_limits=(0, acquisition_fun_max),
             )
+
+            segmentation_ms_kwargs = dict(
+                name=group_name + " acquisition function",
+                multiscale=True,
+                opacity=0.8,
+                scale=acquisition_fun_scale,
+                blending="translucent_no_depth",
+            )
+
+            if output_filename:
+                acquisition_loader = viewer.open
+                segmentation_loader = viewer.open
+
+                acquisition_fun_ms_kwargs["layer_type"] = "image"
+                segmentation_ms_kwargs["layer_type"] = "labels"
+
+            else:
+                acquisition_loader = viewer.add_image
+                segmentation_loader = viewer.add_labels
+
+            new_acquisition_layer = acquisition_loader(acquisition_fun_ms, **acquisition_fun_ms_kwargs)
+            new_segmentation_layer = segmentation_loader(segmentation_ms, **segmentation_ms_kwargs)
+
+            self.viewer.layers.selection.clear()
+            self.viewer.layers.selection.add(new_acquisition_layer)
+            self.viewer.layers.selection.add(new_segmentation_layer)
+
+            image_groups_manager.update_group()
 
 
 if __name__ == "__main__":
