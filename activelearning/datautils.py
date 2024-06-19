@@ -36,7 +36,7 @@ class SuperPixelGenerator(zds.MaskGenerator):
 
     def _compute_transform(self, image):
         if image.ndim > 2:
-            image_channels = image.shape[2]
+            image_channels = image.shape[-1]
         else:
             image_channels = 1
 
@@ -82,12 +82,18 @@ def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
             modality="superpixels"
         )
 
+    if "masks" in dataset_metadata:
+        spatial_axes = dataset_metadata["masks"]["axes"]
+
+    else:
+        spatial_axes = "YX"
+
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),
         return_positions=True,
         draw_same_chunk=False,
         patch_sampler=zds.PatchSampler(patch_size=patch_size,
-                                       spatial_axes="YX",
+                                       spatial_axes=spatial_axes,
                                        min_area=0.25),
         shuffle=shuffle
     )
@@ -101,75 +107,3 @@ def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
     )
 
     return train_dataloader
-
-
-def parse_dataset_metadata(filenames):
-    if isinstance(filenames, list):
-        if len(filenames) == 1:
-            filenames = filenames[0]
-
-    if isinstance(filenames, str):
-        if filenames.lower().endswith(".txt"):
-            with open(filenames, "r") as fp:
-                filenames = fp.readlines()
-        else:
-            filenames = [filenames]
-
-    dataset_metadata = map(partial(zds.parse_metadata,
-                                   default_source_axes="TCZYX"),
-                           filenames)
-    dataset_metadata = reduce(lambda l1, l2: l1 + l2, dataset_metadata)
-    for metadata in dataset_metadata:
-        metadata["filenames"] = metadata.pop("filename")
-
-    dataset_metadata = list(map(lambda metadata:
-                                zds.ImagesDatasetSpecs(**metadata),
-                                dataset_metadata))
-    return dataset_metadata
-
-
-def prepare_output_zarr(output_array_name, output_dir, filenames, source_axes,
-                        data_group=None,
-                        roi=None,
-                        axes=None,
-                        scale=1.0,
-                        output_axes=None,
-                        output_dtype=None,
-                        output_modality=None,
-                        data=None,
-                        **kwargs):
-    output_basename = ".".join(os.path.basename(filenames).split(".")[:-1])
-    output_basename += ".zarr"
-    output_filename = os.path.join(output_dir, output_basename)
-
-    # Load the metadata from the input image to define the size of the output
-    # zarr arrays.
-    image_loader = zds.ImageLoader(
-        filename=filenames,
-        source_axes=source_axes,
-        data_group=data_group,
-        roi=roi,
-        axes=axes
-    )
-
-    if output_dtype is None:
-        output_dtype = image_loader.arr.dtype
-
-    if output_axes is None:
-        output_axes = image_loader.axes
-
-    output_shape = [
-        max(1, round(image_loader.shape[image_loader.axes.index(ax)]
-                     * scale))
-        for ax in output_axes
-        if ax in image_loader.axes
-    ]
-
-    output_chunks = [
-        max(1, round(image_loader.chunk_size[image_loader.axes.index(ax)]
-                     * scale))
-        if ax in "ZYX" else 1
-        for ax in output_axes
-    ]
-
-    return output_metadata
