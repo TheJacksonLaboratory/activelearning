@@ -2227,7 +2227,8 @@ class LabelsManager(QWidget):
             segmentation_channel_layer.refresh()
             segmentation_channel_layer.visible = True
 
-        if self._active_edit_layer:
+        if (self._active_edit_layer
+           and self._active_edit_layer in self.viewer.layers):
             self.viewer.layers.remove(self._active_edit_layer)
 
         self._transaction = None
