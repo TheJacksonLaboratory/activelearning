@@ -293,10 +293,21 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                      reference_units=None):
     if isinstance(z_root, (Path, str)):
         source_arr = da.from_zarr(z_root, component=data_group)
+
+        spec = {
+            'driver': 'zarr',
+            'kvstore': {
+                'driver': 'file',
+                'path': str(Path(z_root) / data_group),
+            },
+        }
+
+        ts_array = ts.open(spec).result()
+        z_ms = [ts_array]
+
     else:
         source_arr = da.from_zarr(z_root[data_group])
-
-    z_ms = [source_arr]
+        z_ms = [source_arr]
 
     data_group = "/".join(data_group.split("/")[:-1])
     groups_root = data_group + "/%i"
@@ -343,6 +354,8 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         target_arr = target_arr.rechunk()
 
         if isinstance(z_root, (Path, str)):
+            z_ms.append(z_ms[-1][downscale_selection])
+
             target_arr.to_zarr(z_root,
                                component=groups_root % s,
                                compressor=zarr.Blosc(clevel=9),
@@ -369,7 +382,6 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         z_grp = zarr.open(z_root / data_group, mode="a")
         write_multiscales_metadata(z_grp, datasets,
                                    axes=list(source_axes.lower()))
-        z_ms = z_root / data_group
 
     return z_ms
 
@@ -2504,18 +2516,6 @@ class AcquisitionFunction(QWidget):
                 reference_source_axes=displayed_source_axes,
                 reference_scale=displayed_scale,
             )
-
-            acquisition_fun_ms_kwargs = dict(
-                name=group_name + " acquisition function",
-                multiscale=True,
-                opacity=0.8,
-                scale=acquisition_fun_scale,
-                blending="translucent_no_depth",
-                colormap="magma",
-                contrast_limits=(0,
-                                 max(img_sampling_positions).acquisition_val),
-            )
-
             segmentation_ms_kwargs = dict(
                 name=group_name + " segmentation",
                 multiscale=True,
@@ -2524,26 +2524,22 @@ class AcquisitionFunction(QWidget):
                 blending="translucent_no_depth",
             )
 
-            if output_filename:
-                acquisition_loader = viewer.open
-                segmentation_loader = viewer.open
-
-                acquisition_fun_ms_kwargs["layer_type"] = "image"
-                segmentation_ms_kwargs["layer_type"] = "labels"
-
-            else:
-                acquisition_loader = viewer.add_image
-                segmentation_loader = viewer.add_labels
-
-            new_acquisition_layer = acquisition_loader(
+            new_acquisition_layer = viewer.add_image(
                 acquisition_fun_ms,
-                **acquisition_fun_ms_kwargs
+                name=group_name + " acquisition function",
+                multiscale=True,
+                opacity=0.8,
+                scale=acquisition_fun_scale,
+                blending="translucent_no_depth",
+                colormap="magma",
+                contrast_limits=(0, 
+                                 max(img_sampling_positions).acquisition_val),
             )
 
             if isinstance(new_acquisition_layer, list):
                 new_acquisition_layer = new_acquisition_layer[0]
 
-            new_segmentation_layer = segmentation_loader(
+            new_segmentation_layer = viewer.add_labels(
                 segmentation_ms,
                 **segmentation_ms_kwargs
             )
