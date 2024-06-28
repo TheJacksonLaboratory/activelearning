@@ -1,0 +1,3 @@
+tensorstore==0.1.59
+ome-zarr==0.9.0
+qtpy==2.4.1

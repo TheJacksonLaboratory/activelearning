@@ -1,4 +1,5 @@
 from typing import List, Iterable, Union, Optional
+import json
 
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -27,7 +28,6 @@ from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 
 import dask.array as da
 import datautils
-
 
 from cellpose import models, transforms
 
@@ -841,11 +841,9 @@ class ImageGroup(QTreeWidgetItem):
     def __init__(self, group_name: Optional[str] = None,
                  group_dir: Optional[Union[Path, str]] = None):
         self._group_metadata = {}
-
         self._group_name = None
         self._group_dir = None
 
-        self._updated_groups = set()
         self.layers_groups_names = set()
 
         super().__init__()
@@ -883,8 +881,7 @@ class ImageGroup(QTreeWidgetItem):
 
     @property
     def metadata(self):
-        if self._group_metadata is None or self._updated_groups:
-            self.update_group_metadata()
+        self.update_group_metadata()
 
         return self._group_metadata
 
@@ -1046,17 +1043,12 @@ class ImageGroup(QTreeWidgetItem):
         return dst_layers_group
 
     def update_group_metadata(self):
-        layers_groups = list(filter(
-            lambda curr_layers_group:
-            curr_layers_group.layers_group_name in self._updated_groups,
-            map(lambda idx: self.child(idx), range(self.childCount()))
-        ))
+        self._group_metadata = {}
 
-        for layers_group in layers_groups:
+        for layers_group in map(lambda idx: self.child(idx),
+                                range(self.childCount())):
             self._group_metadata[layers_group.layers_group_name] =\
                  layers_group.metadata
-
-        self._updated_groups.clear()
 
 
 class ImageGroupRoot(QTreeWidgetItem):
@@ -1566,11 +1558,15 @@ class ImageGroupsManager(QWidget):
         self.remove_layer_btn = QPushButton("Remove layer")
         self.remove_layer_btn.setEnabled(False)
 
+        self.save_metadata_btn = QPushButton("Save metadata")
+        self.save_metadata_btn.setEnabled(False)
+
         self.new_layers_group_btn.clicked.connect(self.create_layers_group)
         self.remove_layers_group_btn.clicked.connect(self.remove_layers_group)
         self.save_layers_group_btn.clicked.connect(self.save_layers_group)
         self.add_layer_btn.clicked.connect(self.add_layers_to_group)
         self.remove_layer_btn.clicked.connect(self.remove_layer)
+        self.save_metadata_btn.clicked.connect(self.dump_dataset_specs)
 
         self.group_buttons_lyt = QHBoxLayout()
         self.group_buttons_lyt.addWidget(self.new_group_btn)
@@ -1585,6 +1581,7 @@ class ImageGroupsManager(QWidget):
         self.layer_buttons_lyt = QHBoxLayout()
         self.layer_buttons_lyt.addWidget(self.add_layer_btn)
         self.layer_buttons_lyt.addWidget(self.remove_layer_btn)
+        self.layer_buttons_lyt.addWidget(self.save_metadata_btn)
 
         self.show_editor_chk = QCheckBox("Edit group properties")
         self.show_editor_chk.setChecked(False)
@@ -1666,6 +1663,10 @@ class ImageGroupsManager(QWidget):
             self._active_layers_group is not None
             and not isinstance(self._active_layers_group.source_data,
                                (str, Path))
+        )
+        self.save_metadata_btn.setEnabled(
+            self._active_image_group is not None
+            and isinstance(self._active_image_group.group_dir, (str, Path))
         )
 
         self.layer_selected.emit(item)
@@ -1818,8 +1819,15 @@ class ImageGroupsManager(QWidget):
             return
 
         self._active_layers_group.save_group(
-            output_dir=self.active_image_group.group_dir
+            output_dir=self._active_image_group.group_dir
         )
+
+    def dump_dataset_specs(self):
+        if self._active_image_group.group_dir:
+            with open(self._active_image_group.group_dir
+                      / (self._active_image_group.group_name
+                         + "_metadata.json"), "w") as fp:
+                fp.write(json.dumps(self._active_image_group.metadata))
 
 
 class LabelItem(QTreeWidgetItem):
@@ -2533,7 +2541,7 @@ class AcquisitionFunction(QWidget):
                 scale=acquisition_fun_scale,
                 blending="translucent_no_depth",
                 colormap="magma",
-                contrast_limits=(0, 
+                contrast_limits=(0,
                                  max(img_sampling_positions).acquisition_val),
             )
 
@@ -2560,7 +2568,9 @@ class AcquisitionFunction(QWidget):
                     use_as_sampling_mask=False
                 )
 
-            acquisition_layers_group.add_layer(new_acquisition_layer)
+            acquisition_channel = acquisition_layers_group.add_layer(
+                new_acquisition_layer
+            )
 
             segmentation_layers_group = image_group.getLayersGroup(
                 "segmentation"
@@ -2582,6 +2592,13 @@ class AcquisitionFunction(QWidget):
                 segmentation_channel,
                 img_sampling_positions
             )
+
+            if output_filename:
+                acquisition_channel._source_data = str(output_filename)
+                acquisition_channel._data_group = "labels/acquisition_fun"
+
+                segmentation_channel._source_data = str(output_filename)
+                segmentation_channel._data_group = "labels/segmentation"
 
 
 class MaskGenerator(QWidget):
