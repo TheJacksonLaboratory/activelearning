@@ -27,9 +27,10 @@ import zarr
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 
 import dask.array as da
-import datautils
+from models import train_cellpose
+from datautils import get_dataloader
 
-from cellpose import models, transforms
+from cellpose import core, models, transforms
 
 
 class DropoutEvalOverrider(torch.nn.Module):
@@ -117,7 +118,7 @@ def cellpose_model_init(use_dropout=False):
     model.net.mkldnn = False
 
     if use_dropout:
-        model.net.load_model(model.pretrained_model[0], device=model.device)
+        model.net.load_model(model.pretrained_model, device=model.device)
         model.net.eval()
         add_dropout(model.net)
 
@@ -125,20 +126,12 @@ def cellpose_model_init(use_dropout=False):
 
 
 def cellpose_probs(img, model):
-    x = transforms.convert_image(img, None, normalize=False, invert=False,
-                                 nchan=img.shape[-1])
-    x = transforms.normalize_img(x, invert=False)
-
-    x = torch.from_numpy(np.moveaxis(x, -1, 0))[None, ...]
-
-    if x.shape[1] > 2:
-        x = x[:, :2, ...]
-    elif x.shape[1] < 2:
-        x = torch.cat((x, x), dim=1)
+    x = transforms.convert_image(img, channel_axis=2, channels=[0, 0])
+    x = transforms.normalize_img(x, invert=False, axis=2)
 
     with torch.no_grad():
-        y, _ = model.net(x)
-        cellprob = y[0, 2, ...].detach().cpu()
+        y, _ = core.run_net(model.net, x)
+        cellprob = torch.from_numpy(y[:, :, 2])
         probs = cellprob.sigmoid().numpy()
 
     return probs
@@ -1298,9 +1291,9 @@ class ImageGroupEditor(QWidget):
 
     def update_output_dir(self, output_dir: Optional[Union[Path, str]] = None):
         if output_dir:
-            self.output_dir_le.setText(output_dir)
+            self.output_dir_le.setText(str(output_dir))
         else:
-            self.output_dir_le.setText(self._active_image_group.group_dir)
+            self.output_dir_le.setText(str(self._active_image_group.group_dir))
 
         if not self._active_image_group:
             return
@@ -2297,6 +2290,11 @@ class AcquisitionFunction(QWidget):
         self.patch_lyt.addWidget(self.patch_lbl)
         self.patch_lyt.addWidget(self.patch_pb)
 
+        self.fine_tune_btn = QPushButton("Fine tune model")
+        self.fine_tune_btn.clicked.connect(
+            partial(self.fine_tune)
+        )
+
         self.execute_lyt = QHBoxLayout()
         self.execute_lyt.addWidget(self.execute_selected_btn)
         self.execute_lyt.addWidget(self.execute_all_btn)
@@ -2308,6 +2306,7 @@ class AcquisitionFunction(QWidget):
         self.acquisition_lyt.addLayout(self.execute_lyt)
         self.acquisition_lyt.addLayout(self.image_lyt)
         self.acquisition_lyt.addLayout(self.patch_lyt)
+        self.acquisition_lyt.addWidget(self.fine_tune_btn)
         self.setLayout(self.acquisition_lyt)
 
         self.image_groups_manager = image_groups_manager
@@ -2336,8 +2335,8 @@ class AcquisitionFunction(QWidget):
                             MC_repetitions=30,
                             max_samples=1000,
                             patch_size=128):
-        dl = datautils.get_dataloader(dataset_metadata, patch_size=patch_size,
-                                      shuffle=True)
+        dl = get_dataloader(dataset_metadata, patch_size=patch_size,
+                            shuffle=True)
 
         model_dropout = cellpose_model_init(use_dropout=True)
         model = cellpose_model_init(use_dropout=False)
@@ -2486,6 +2485,7 @@ class AcquisitionFunction(QWidget):
                         spatial_axes += "C"
 
                 dataset_metadata[layer_type]["axes"] = spatial_axes
+                dataset_metadata[layer_type]["modality"] = layer_type
 
             img_sampling_positions = self.compute_acquisition(
                 dataset_metadata,
@@ -2599,6 +2599,72 @@ class AcquisitionFunction(QWidget):
 
                 segmentation_channel._source_data = str(output_filename)
                 segmentation_channel._data_group = "labels/segmentation"
+
+    def fine_tune(self):
+        image_groups: List[ImageGroup] = list(filter(
+            lambda item:
+            isinstance(item, ImageGroup),
+            self.image_groups_manager.image_groups_tw.selectedItems()
+        ))
+
+        if not image_groups:
+            return
+
+        patch_size = self.patch_size_spn.value()
+
+        model = cellpose_model_init()
+
+        for image_group in image_groups:
+            image_group.setSelected(True)
+
+            input_layers_group_idx = image_group.input_layers_group
+            segmentation_layers_group = image_group.getLayersGroup(
+                layers_group_name="segmentation"
+            )
+
+            if (input_layers_group_idx is None
+               or segmentation_layers_group is None):
+                continue
+
+            input_layers_group = image_group.child(input_layers_group_idx)
+
+            displayed_source_axes = input_layers_group.source_axes
+
+            dataset_metadata = {}
+
+            for layers_group, layer_type in [
+               (input_layers_group, "images"),
+               (segmentation_layers_group, "labels"),
+               (segmentation_layers_group, "masks")
+               ]:
+                dataset_metadata[layer_type] = layers_group.metadata
+                dataset_metadata[layer_type]["roi"] = [
+                    tuple(
+                        self._roi.get(ax, slice(None))
+                        for ax in layers_group.source_axes
+                    )
+                ]
+
+                spatial_axes = "".join([
+                    ax for ax in layers_group.source_axes
+                    if ax in displayed_source_axes[-self.viewer.dims.ndisplay:]
+                ])
+
+                if "images" in layer_type:
+                    if "C" in displayed_source_axes:
+                        spatial_axes += "C"
+
+                dataset_metadata[layer_type]["axes"] = spatial_axes
+                dataset_metadata[layer_type]["modality"] = layer_type
+
+            mask_data_group = segmentation_layers_group.data_group
+            dataset_metadata["masks"]["data_group"] = mask_data_group + "/2"
+            dataset_metadata["masks"]["add_to_output"] = False
+            dataset_metadata["labels"]["data_group"] = mask_data_group + "/0"
+            dataset_metadata["labels"]["add_to_output"] = True
+
+            train_cellpose(model, dataset_metadata, patch_size=patch_size,
+                           n_epochs=500)
 
 
 class MaskGenerator(QWidget):
