@@ -1,25 +1,37 @@
-from cellpose import train, transforms
-from torch.utils.data import DataLoader
+from typing import Iterable
+from cellpose import train, transforms, models
+from torch.utils.data import DataLoader, ChainDataset
 import random
 import zarrdataset as zds
 
 
-def train_cellpose(model, dataset_metadata, train_data_proportion: float = 0.8,
+def train_cellpose(model, dataset_metadata_list: Iterable[dict],
+                   train_data_proportion: float = 0.8,
                    patch_size: int = 256,
                    spatial_axes="ZYX",
                    **kwargs):
-    dataset = zds.ZarrDataset(
-        list(dataset_metadata.values()),
-        return_positions=False,
-        draw_same_chunk=True,
-        patch_sampler=zds.PatchSampler(patch_size=patch_size,
-                                       spatial_axes=spatial_axes,
-                                       min_area=1),
-        shuffle=True
-    )
 
-    dataloader = DataLoader(dataset, num_workers=kwargs.get("num_workers", 0),
-                            worker_init_fn=zds.zarrdataset_worker_init_fn)
+    datasets = [
+        zds.ZarrDataset(
+            list(dataset_metadata.values()),
+            return_positions=False,
+            draw_same_chunk=True,
+            patch_sampler=zds.PatchSampler(
+                patch_size=patch_size,
+                spatial_axes=dataset_metadata["masks"]["axes"],
+                min_area=1),
+            shuffle=True
+        )
+        for dataset_metadata in dataset_metadata_list
+    ]
+
+    chained_datasets = ChainDataset(datasets)
+
+    dataloader = DataLoader(
+        chained_datasets,
+        num_workers=kwargs.get("num_workers", 0),
+        worker_init_fn=zds.chained_zarrdataset_worker_init_fn
+    )
 
     train_data = []
     test_data = []
@@ -59,6 +71,6 @@ def train_cellpose(model, dataset_metadata, train_data_proportion: float = 0.8,
         **kwargs
     )
 
-    model = model.CellposeModel(model_path)
+    model = models.CellposeModel(pretrained_model=model_path)
 
     return model
