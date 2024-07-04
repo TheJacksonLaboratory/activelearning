@@ -1,4 +1,6 @@
+from typing import Optional, Union, Iterable
 import os
+import math
 import napari
 import tensorstore as ts
 import zarr
@@ -66,7 +68,138 @@ class SuperPixelGenerator(zds.MaskGenerator):
         return labels
 
 
-def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
+class StaticPatchSampler(zds.PatchSampler):
+    """Static patch sampler that retrieves patches pre-defined positions.
+
+    Parameters
+    ----------
+    patch_size : int, iterable, dict
+        Size in pixels of the patches extracted. Only squared patches are
+        supported by now.
+    top_lefts : Iterable[Iterable[int]]
+        A list of top-left postions to sample.
+    """
+    def __init__(self, patch_size: Union[int, Iterable[int], dict],
+                 top_lefts: Iterable[Iterable[int]],
+                 **kwargs):
+        super(StaticPatchSampler, self).__init__(patch_size, **kwargs)
+        self._top_lefts = np.array(top_lefts)
+
+    def compute_chunks(self, image_collection: zds.ImageCollection
+                       ) -> Iterable[dict]:
+        image = image_collection.collection["images"]
+
+        spatial_chunk_sizes = {
+            ax: (self._stride[ax]
+                 * max(1, math.ceil(chk / self._stride[ax])))
+            for ax, chk in zip(image.axes, image.chunk_size)
+            if ax in self.spatial_axes
+        }
+
+        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+
+        self._max_chunk_size = {
+            ax: (min(max(self._max_chunk_size[ax],
+                         spatial_chunk_sizes[ax]),
+                     image_size[ax]))
+            if ax in image.axes else 1
+            for ax in self.spatial_axes
+        }
+
+        valid_mask_toplefts = np.array([
+            [ax_tl // spatial_chunk_sizes.get(ax, 1)
+             for ax_tl, ax in zip(tl, self.spatial_axes)]
+            for tl in self._top_lefts
+        ])
+
+        num_blocks = [
+            image_size.get(ax, 1) // spatial_chunk_sizes.get(ax, 1)
+            for ax in self.spatial_axes
+        ]
+
+        valid_mask_toplefts = np.ravel_multi_index(
+            np.split(valid_mask_toplefts, 2),
+            num_blocks
+        )
+        valid_mask_toplefts = np.unique(valid_mask_toplefts)
+        valid_mask_toplefts = np.unravel_index(valid_mask_toplefts, num_blocks)
+        valid_mask_toplefts = tuple(
+            indices.reshape(-1, 1)
+            for indices in valid_mask_toplefts
+        )
+        valid_mask_toplefts = np.hstack(valid_mask_toplefts)
+
+        spatial_chunk_sizes_arr = np.array([[
+            spatial_chunk_sizes.get(ax, 1)
+            for ax in self.spatial_axes
+        ]])
+
+        valid_mask_toplefts = valid_mask_toplefts * spatial_chunk_sizes_arr
+
+        chunk_tlbr = {ax: slice(None) for ax in self.spatial_axes}
+
+        chunks_slices = self._compute_toplefts_slices(
+            chunk_tlbr,
+            valid_mask_toplefts=valid_mask_toplefts,
+            patch_size=self._max_chunk_size
+        )
+
+        return chunks_slices
+
+    def compute_patches(self, image_collection: zds.ImageCollection,
+                        chunk_tlbr: dict) -> Iterable[dict]:
+        image = image_collection.collection[image_collection.reference_mode]
+
+        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+
+        patch_size = {
+            ax: self._patch_size.get(ax, 1) if image_size.get(ax, 1) > 1 else 1
+            for ax in self.spatial_axes
+        }
+
+        pad = {
+            ax: self._pad.get(ax, 0) if image_size.get(ax, 1) > 1 else 0
+            for ax in self.spatial_axes
+        }
+
+        min_area = self._min_area
+        if min_area < 1:
+            min_area *= np.prod(list(patch_size.values()))
+
+        chunk_tl_limit = np.array(list(
+            map(lambda chk_slice:
+                chk_slice.start if chk_slice.start is not None else 0,
+                [chunk_tlbr.get(ax, slice(None)) for ax in self.spatial_axes])
+        ))
+
+        chunk_br_limit = np.array(list(
+            map(lambda chk_slice:
+                chk_slice.stop if chk_slice.stop is not None else float("inf"),
+                [chunk_tlbr.get(ax, slice(None)) for ax in self.spatial_axes])
+        ))
+
+        valid_mask_toplefts_idx = np.bitwise_and(
+            self._top_lefts >= chunk_tl_limit[None, ...],
+            self._top_lefts < chunk_br_limit[None, ...]
+        )
+        valid_mask_toplefts_idx = np.all(valid_mask_toplefts_idx, axis=0)
+
+        valid_mask_toplefts = self._top_lefts[valid_mask_toplefts_idx]
+
+        patches_slices = self._compute_toplefts_slices(
+            chunk_tlbr,
+            valid_mask_toplefts=valid_mask_toplefts,
+            patch_size=patch_size,
+            pad=pad
+        )
+
+        return patches_slices
+
+
+
+def get_dataloader(dataset_metadata, patch_size=512,
+                   sampling_positions_dict=None,
+                   shuffle=True,
                    num_workers=0,
                    batch_size=1,
                    **superpixel_kwargs):
@@ -88,13 +221,20 @@ def get_dataloader(dataset_metadata, patch_size=512, shuffle=True,
     else:
         spatial_axes = "YX"
 
+    if sampling_positions_dict:
+        patch_sampler = StaticPatchSampler(patch_size=patch_size,
+                                           top_lefts=sampling_positions_dict,
+                                           spatial_axes=spatial_axes)
+    else:
+        patch_sampler = zds.PatchSampler(patch_size=patch_size,
+                                         spatial_axes=spatial_axes,
+                                         min_area=0.25)
+
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),
         return_positions=True,
         draw_same_chunk=False,
-        patch_sampler=zds.PatchSampler(patch_size=patch_size,
-                                       spatial_axes=spatial_axes,
-                                       min_area=0.25),
+        patch_sampler=patch_sampler,
         shuffle=shuffle
     )
 

@@ -321,6 +321,9 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         ts_array = ts.open(spec).result()
         z_ms = [ts_array]
 
+    elif isinstance(z_root, np.ndarray):
+        source_arr = da.from_array(z_root)
+
     else:
         source_arr = da.from_zarr(z_root[data_group])
         z_ms = [source_arr]
@@ -703,6 +706,20 @@ class LayersGroup(QTreeWidgetItem):
         return scale
 
     @property
+    def translate(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            translate = [0] * n_channels
+
+        else:
+            translate = list(self.child(0).layer.translate)
+            if self.childCount() > 1:
+                translate.insert(0, 0)
+            translate = tuple(translate)
+
+        return translate
+
+    @property
     def visible(self):
         is_visible = False
         for idx in range(self.childCount()):
@@ -877,6 +894,8 @@ class ImageGroup(QTreeWidgetItem):
         self._group_name = None
         self._group_dir = None
 
+        self._labels_group = None
+
         self.layers_groups_names = set()
 
         super().__init__()
@@ -995,6 +1014,14 @@ class ImageGroup(QTreeWidgetItem):
 
         if sampling_mask_idx is not None:
             self.child(sampling_mask_idx).use_as_sampling_mask = True
+
+    @property
+    def labels_group(self):
+        return self._labels_group
+
+    @labels_group.setter
+    def labels_group(self, labels_group: Labels):
+        self._labels_group = labels_group
 
     def getLayersGroup(self, layers_group_name: str):
         layers_group = list(filter(
@@ -1665,7 +1692,6 @@ class ImageGroupsManager(QWidget):
             self._active_image_group = self._active_layers_group.parent()
 
         self.mask_creator.active_image_group = self._active_image_group
-        self.mask_creator.active_layers_group = self._active_layers_group
 
         self.layers_editor.active_image_group = self._active_image_group
         self.layers_editor.active_layers_group = self._active_layers_group
@@ -2013,10 +2039,6 @@ class LabelsManager(QWidget):
 
         self.labels_group_root.setExpanded(True)
 
-        self.viewer.layers.events.removed.connect(
-            self.labels_group_root.remove_managed_layer
-        )
-
         self.prev_img_btn = QPushButton('<<')
         self.prev_img_btn.setEnabled(False)
         self.prev_img_btn.clicked.connect(partial(
@@ -2077,6 +2099,10 @@ class LabelsManager(QWidget):
 
         self._requires_commit = False
 
+        viewer.layers.events.removed.connect(
+            self.labels_group_root.remove_managed_layer
+        )
+
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
         new_label_group = LabelGroup(layer_channel)
@@ -2086,6 +2112,8 @@ class LabelsManager(QWidget):
 
         new_label_group.setExpanded(False)
         new_label_group.sortChildren(0, Qt.SortOrder.DescendingOrder)
+
+        return new_label_group
 
     def navigate(self, delta_patch_index=0, delta_image_index=0):
         if self._requires_commit:
@@ -2397,13 +2425,14 @@ class AcquisitionFunction(QWidget):
 
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
-                            sampled_pos=None,
+                            sampling_positions_dict=None,
                             MC_repetitions=30,
                             max_samples=1000,
                             patch_size=128,
                             model=None,
                             model_drop=None):
         dl = get_dataloader(dataset_metadata, patch_size=patch_size,
+                            sampling_positions_dict=sampling_positions_dict,
                             shuffle=True)
         segmentation_max = 0
         n_samples = 0
@@ -2414,12 +2443,6 @@ class AcquisitionFunction(QWidget):
         for pos, img, img_sp in dl:
             pos_u_lab = (slice(pos[0, 0, 0].item(), pos[0, 0, 1].item()),
                          slice(pos[0, 1, 0].item(), pos[0, 1, 1].item()))
-            sampled_pos_u_lab = (
-                slice(pos[0, 0, 0].item() // patch_size,
-                      pos[0, 0, 1].item() // patch_size),
-                slice(pos[0, 1, 0].item() // patch_size,
-                      pos[0, 1, 1].item() // patch_size)
-            )
 
             if model_drop:
                 u_sp_lab = self._compute_acquisition_fun(
@@ -2442,9 +2465,6 @@ class AcquisitionFunction(QWidget):
                 segmentation_out[pos_u_lab] = seg_out
                 segmentation_max = max(segmentation_max, seg_out.max())
 
-            if sampled_pos is not None:
-                sampled_pos[sampled_pos_u_lab] = True
-
             img_sampling_positions.append(
                 LabelItem(acquisition_val, position=pos_u_lab)
             )
@@ -2457,10 +2477,14 @@ class AcquisitionFunction(QWidget):
         self.patch_pb.setValue(max_samples)
         return img_sampling_positions
 
-    def compute_acquisition_layers(self, run_all: bool = False,
-                                   model: Optional[CellposeModel] = None,
-                                   model_drop: Optional[CellposeModel] = None
-                                   ):
+    def compute_acquisition_layers(
+            self,
+            run_all: bool = False,
+            model: Optional[CellposeModel] = None,
+            model_drop: Optional[CellposeModel] = None,
+            segmentation_group_name: Optional[str] = "segmentation",
+            sampling_positions_dict: Optional[dict] = None
+            ):
         if run_all:
             for idx in range(self.image_groups_manager.groups_root.childCount()
                              ):
@@ -2499,9 +2523,11 @@ class AcquisitionFunction(QWidget):
                 continue
 
             input_layers_group = image_group.child(input_layers_group_idx)
-            sampled_positions_layers_group = image_group.getLayersGroup(
-                "sampled-positions"
-            )
+            sampling_mask_layers_group = None
+            if image_group.sampling_mask_layers_group is not None:
+                sampling_mask_layers_group = image_group.child(
+                    image_group.sampling_mask_layers_group
+                )
 
             displayed_source_axes = input_layers_group.source_axes
             displayed_shape = input_layers_group.shape
@@ -2527,8 +2553,8 @@ class AcquisitionFunction(QWidget):
                     is_multiscale=True
                 )
 
-                acquisition_fun_grp =\
-                    acquisition_root["labels/acquisition_fun/0"]
+                acquisition_fun_grp = acquisition_root["labels/"
+                                                       "acquisition_fun/0"]
             else:
                 acquisition_fun_grp = None
 
@@ -2538,52 +2564,17 @@ class AcquisitionFunction(QWidget):
                     data=None,
                     shape=acquisition_fun_shape,
                     chunk_size=True,
-                    name="segmentation",
+                    name=segmentation_group_name,
                     dtype=np.int32,
                     is_label=True,
                     is_multiscale=True
                 )
 
-                segmentation_grp = segmentation_root["labels/segmentation/0"]
+                segmentation_grp = segmentation_root[
+                    f"labels/{segmentation_group_name}/0"
+                ]
             else:
                 segmentation_grp = None
-
-            if sampled_positions_layers_group:
-                sampled_pos_grp = None
-                sampling_mask_layers_group = sampled_positions_layers_group
-            else:
-                if image_group.sampling_mask_layers_group is not None:
-                    sampling_mask_layers_group = image_group.child(
-                        image_group.sampling_mask_layers_group
-                    )
-                else:
-                    sampling_mask_layers_group = None
-
-                (sampled_pos_shape,
-                 sampled_pos_scale,
-                 sampled_pos_translate) = list(zip(*[
-                     (ax_s // patch_size,
-                      ax_scl * patch_size,
-                      ((ax_scl * (patch_size - 1) / 2)
-                       if ax_s // patch_size >= 1 else 0))
-                     for ax, ax_s, ax_scl in zip(displayed_source_axes,
-                                                 displayed_shape,
-                                                 displayed_scale)
-                     if ax in "ZYX" and ax_s > 1]))
-
-                sampled_pos_root = save_zarr(
-                    output_filename,
-                    data=None,
-                    shape=sampled_pos_shape,
-                    chunk_size=True,
-                    name="sampled_positions",
-                    dtype=bool,
-                    is_label=True,
-                    is_multiscale=True
-                )
-
-                sampled_pos_grp = sampled_pos_root["labels"
-                                                   "/sampled_positions/0"]
 
             dataset_metadata = {}
 
@@ -2624,7 +2615,7 @@ class AcquisitionFunction(QWidget):
                 dataset_metadata,
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
-                sampled_pos=sampled_pos_grp,
+                sampling_positions_dict=sampling_positions_dict,
                 MC_repetitions=MC_repetitions,
                 max_samples=max_samples,
                 patch_size=patch_size,
@@ -2651,7 +2642,7 @@ class AcquisitionFunction(QWidget):
                     reference_scale=displayed_scale
                 )
 
-                new_acquisition_layer = viewer.add_image(
+                new_acquisition_layer = self.viewer.add_image(
                     acquisition_fun_ms,
                     name=group_name + " acquisition function",
                     multiscale=True,
@@ -2686,7 +2677,7 @@ class AcquisitionFunction(QWidget):
 
                 if output_filename:
                     acquisition_channel.source_data = str(output_filename)
-                    acquisition_channel.data_group = "labels/acquisition_fun"
+                    acquisition_channel.data_group = "labels/acquisition_fun/0"
 
             if model:
                 if output_filename:
@@ -2696,36 +2687,32 @@ class AcquisitionFunction(QWidget):
                 segmentation_ms = downsample_image(
                     segmentation_root,
                     source_axes="YX",
-                    data_group="labels/segmentation/0",
+                    data_group=f"labels/{segmentation_group_name}/0",
                     scale=4,
                     num_scales=5,
                     reference_source_axes=displayed_source_axes,
                     reference_scale=displayed_scale,
                 )
 
-                segmentation_ms_kwargs = dict(
-                    name=group_name + " segmentation",
+                new_segmentation_layer = self.viewer.add_labels(
+                    segmentation_ms,
+                    name=group_name + f" {segmentation_group_name}",
                     multiscale=True,
                     opacity=0.8,
                     scale=acquisition_fun_scale,
-                    blending="translucent_no_depth",
-                )
-
-                new_segmentation_layer = viewer.add_labels(
-                    segmentation_ms,
-                    **segmentation_ms_kwargs
+                    blending="translucent_no_depth"
                 )
 
                 if isinstance(new_segmentation_layer, list):
                     new_segmentation_layer = new_segmentation_layer[0]
 
                 segmentation_layers_group = image_group.getLayersGroup(
-                    "segmentation"
+                    segmentation_group_name
                 )
 
                 if segmentation_layers_group is None:
                     segmentation_layers_group = image_group.add_layers_group(
-                        "segmentation",
+                        segmentation_group_name,
                         source_axes="YX",
                         use_as_input_image=False,
                         use_as_sampling_mask=False
@@ -2736,69 +2723,17 @@ class AcquisitionFunction(QWidget):
                 )
 
                 if model_drop:
-                    self.labels_manager.add_labels(
+                    new_label_group = self.labels_manager.add_labels(
                         segmentation_channel,
                         img_sampling_positions
                     )
 
+                    image_group.labels_group = new_label_group
+
                 if output_filename:
                     segmentation_channel.source_data = str(output_filename)
-                    segmentation_channel.data_group = "labels/segmentation"
-
-            if sampled_pos_grp:
-                if output_filename:
-                    sampled_pos_root = output_filename
-
-                # Downsample the segmentation output
-                sampled_pos_ms = downsample_image(
-                    sampled_pos_root,
-                    source_axes="YX",
-                    data_group="labels/sampled_positions/0",
-                    scale=4,
-                    num_scales=0,
-                    reference_source_axes=displayed_source_axes,
-                    reference_scale=displayed_scale,
-                )
-
-                sampled_pos_kwargs = dict(
-                    name=group_name + " sampled positions",
-                    multiscale=True,
-                    opacity=0.8,
-                    translate=sampled_pos_translate,
-                    scale=sampled_pos_scale,
-                    blending="translucent_no_depth",
-                )
-
-                new_sampled_pos_layer = viewer.add_labels(
-                    np.array(sampled_pos_ms),
-                    **sampled_pos_kwargs
-                )
-
-                if isinstance(new_sampled_pos_layer, list):
-                    new_sampled_pos_layer = new_sampled_pos_layer[0]
-
-                sampled_pos_layers_group = image_group.getLayersGroup(
-                    "sampled-positions"
-                )
-
-                if sampled_pos_layers_group is None:
-                    sampled_pos_layers_group = image_group.add_layers_group(
-                        "sampled-positions",
-                        source_axes="YX",
-                        use_as_input_image=False,
-                        use_as_sampling_mask=True
-                    )
-
-                sampled_pos_channel = sampled_pos_layers_group.add_layer(
-                    new_sampled_pos_layer
-                )
-
-                if output_filename:
-                    sampled_pos_channel.source_data = \
-                        napari.layers._source.Source(
-                            path=str(output_filename
-                                     / "labels/sampled_positions")
-                        )
+                    segmentation_channel.data_group =\
+                        f"labels/{segmentation_group_name}/0"
 
     def fine_tune(self):
         image_groups: List[ImageGroup] = list(filter(
@@ -2817,21 +2752,19 @@ class AcquisitionFunction(QWidget):
         model = cellpose_model_init()
 
         dataset_metadata_list = []
+        sampling_positions_dict = {}
 
         for image_group in image_groups:
             image_group.setSelected(True)
 
             input_layers_group_idx = image_group.input_layers_group
+
             segmentation_layers_group = image_group.getLayersGroup(
                 layers_group_name="segmentation"
             )
-            sampled_pos_layers_group = image_group.getLayersGroup(
-                layers_group_name="sampled-positions"
-            )
 
             if (input_layers_group_idx is None
-               or segmentation_layers_group is None
-               or sampled_pos_layers_group is None):
+               or segmentation_layers_group is None):
                 continue
 
             input_layers_group = image_group.child(input_layers_group_idx)
@@ -2842,8 +2775,7 @@ class AcquisitionFunction(QWidget):
 
             for layers_group, layer_type in [
                (input_layers_group, "images"),
-               (segmentation_layers_group, "labels"),
-               (sampled_pos_layers_group, "masks")
+               (segmentation_layers_group, "labels")
                ]:
                 dataset_metadata[layer_type] = layers_group.metadata
                 dataset_metadata[layer_type]["roi"] = [
@@ -2875,14 +2807,28 @@ class AcquisitionFunction(QWidget):
                 dataset_metadata[layer_type]["axes"] = spatial_axes
                 dataset_metadata[layer_type]["modality"] = layer_type
 
-            dataset_metadata_list.append(dataset_metadata)
+            sampling_positions = list(
+                map(lambda child: [ax_pos.start for ax_pos in child.position],
+                    map(lambda idx: image_group.labels_group.child(idx),
+                        range(image_group.labels_group.childCount())
+                    )
+                )
+            )
+
+            dataset_metadata_list.append((dataset_metadata,
+                                          sampling_positions))
 
         model = train_cellpose(model, dataset_metadata_list,
                                patch_size=patch_size,
                                spatial_axes=spatial_axes,
                                n_epochs=10)
 
-        self.compute_acquisition_layers(run_all=True, model=model)
+        self.compute_acquisition_layers(
+            run_all=True,
+            model=model,
+            segmentation_group_name="fine_tunned_segmentation",
+            sampling_positions_dict=sampling_positions_dict
+        )
 
 
 class MaskGenerator(QWidget):
@@ -2892,7 +2838,6 @@ class MaskGenerator(QWidget):
         self.viewer = viewer
 
         self._active_image_group: Union[None, ImageGroup] = None
-        self._active_layers_group: Union[None, LayersGroup] = None
 
         self.patch_size_lbl = QLabel("Patch size")
 
@@ -2920,27 +2865,6 @@ class MaskGenerator(QWidget):
         self.setLayout(self.create_mask_lyt)
 
     @property
-    def active_layers_group(self):
-        return self._active_layers_group
-
-    @active_layers_group.setter
-    def active_layers_group(self, active_layers_group: LayersGroup):
-        self._active_layers_group = active_layers_group
-
-        self.generate_mask_btn.setEnabled(
-            self._active_image_group is not None
-            and self._active_layers_group is not None
-        )
-        self.patch_size_le.setEnabled(
-            self._active_image_group is not None
-            and self._active_layers_group is not None
-        )
-        self.patch_size_spn.setEnabled(
-            self._active_image_group is not None
-            and self._active_layers_group is not None
-        )
-
-    @property
     def active_image_group(self):
         return self._active_image_group
 
@@ -2950,15 +2874,12 @@ class MaskGenerator(QWidget):
 
         self.generate_mask_btn.setEnabled(
             self._active_image_group is not None
-            and self._active_layers_group is not None
         )
         self.patch_size_le.setEnabled(
             self._active_image_group is not None
-            and self._active_layers_group is not None
         )
         self.patch_size_spn.setEnabled(
             self._active_image_group is not None
-            and self._active_layers_group is not None
         )
 
     def set_patch_size(self, new_value: int):
@@ -2966,24 +2887,32 @@ class MaskGenerator(QWidget):
 
     def generate_mask_layer(self):
         if (not self._active_image_group
-           or not self._active_layers_group
-           or not self._active_layers_group.childCount()
-           or not self._active_layers_group.source_axes):
+           or not self._active_image_group.input_layers_group):
             return
+
+        masks_group_name = "mask"
 
         # patch_size = self.patch_size_spn.value()
         patch_size = int(self.patch_size_le.text())
 
+        layers_group = self._active_image_group.child(
+            self._active_image_group.input_layers_group
+        )
+
         source_axes = [
             ax
-            for ax in self._active_layers_group.source_axes
+            for ax in layers_group.source_axes
             if ax != "C"
         ]
 
-        reference_layer = self._active_layers_group.child(0).layer
+        if (not layers_group or not layers_group.childCount()
+           or not layers_group.source_axes):
+            return
+
+        reference_layer = layers_group.child(0).layer
         im_shape = reference_layer.data.shape
         im_scale = reference_layer.scale
-        im_trans = reference_layer.translate
+        im_translate = reference_layer.translate
 
         mask_axes = "".join([
             ax
@@ -3004,36 +2933,49 @@ class MaskGenerator(QWidget):
         mask_translate = tuple(
             ax_trans
             + ((ax_scl * (patch_size - 1) / 2)
-               if ax_s // patch_size >= 1 else 0)
+                if ax_s // patch_size >= 1 else 0)
             for ax, ax_s, ax_scl, ax_trans in zip(source_axes, im_shape,
                                                   im_scale,
-                                                  im_trans)
+                                                  im_translate)
             if ax in mask_axes
         )
 
-        new_mask_layer = self.viewer.add_labels(
-            data=np.zeros(mask_shape, dtype=np.uint8),
+        if self._active_image_group.group_dir:
+            mask_root = save_zarr(
+                self._active_image_group.group_dir,
+                data=None,
+                shape=mask_shape,
+                chunk_size=True,
+                name=masks_group_name,
+                dtype=np.uint8,
+                is_label=True,
+                is_multiscale=True
+            )
+
+            mask_grp = mask_root[f"labels/{masks_group_name}/0"]
+        else:
+            mask_grp = np.zeros(mask_shape, dtype=np.uint8)
+
+        new_mask_layer = viewer.add_labels(
+            data=mask_grp,
             scale=mask_scale,
             translate=mask_translate,
-            name=self._active_layers_group.layers_group_name + " sampling mask",
+            name=layers_group.layers_group_name + " " + masks_group_name
         )
 
-        masks_layers_group = self._active_image_group.getLayersGroup("masks")
+        masks_layers_group = self._active_image_group.getLayersGroup(
+            masks_group_name
+        )
         if masks_layers_group is None:
             masks_layers_group = self._active_image_group.add_layers_group(
-                "masks",
+                masks_group_name,
                 source_axes=mask_axes,
                 use_as_sampling_mask=True
             )
 
-        masks_layers_group_index = self._active_image_group.indexOfChild(
-            masks_layers_group
-        )
-
-        self._active_image_group.sampling_mask_layers_group =\
-            masks_layers_group_index
-
         masks_layers_group.add_layer(new_mask_layer)
+
+        return new_mask_layer
 
 
 if __name__ == "__main__":
@@ -3048,7 +2990,7 @@ if __name__ == "__main__":
     model = cellpose_model_init(use_dropout=False)
 
     acquisition_function = AcquisitionFunction(viewer, image_groups_manager,
-                                               labels_manager=labels_manager,
+                                               labels_manager,
                                                model=model,
                                                model_drop=model_drop)
     viewer.window.add_dock_widget(acquisition_function, area='right')
