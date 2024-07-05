@@ -35,7 +35,6 @@ def train_cellpose(model,
                 spatial_axes=spatial_axes
             ),
             shuffle=True,
-            progress_bar=True
         )
         for dataset_metadata, top_lefts in dataset_metadata_list
     ]

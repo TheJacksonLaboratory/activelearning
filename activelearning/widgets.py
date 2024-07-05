@@ -2113,6 +2113,10 @@ class LabelsManager(QWidget):
         new_label_group.setExpanded(False)
         new_label_group.sortChildren(0, Qt.SortOrder.DescendingOrder)
 
+        layer_channel.layer.mouse_double_click_callbacks.append(
+            self.focus_region_double_click
+        )
+
         return new_label_group
 
     def navigate(self, delta_patch_index=0, delta_image_index=0):
@@ -2162,7 +2166,8 @@ class LabelsManager(QWidget):
         self._active_label = self._active_label_group.child(patch_index)
         self._active_label.setSelected(True)
 
-    def focus_region(self, label: Optional[QTreeWidgetItem] = None):
+    def focus_region(self, label: Optional[QTreeWidgetItem] = None,
+                     edit_focused_label: bool = False):
         if not label:
             label = self.labels_table_tw.selectedItems()
 
@@ -2171,7 +2176,7 @@ class LabelsManager(QWidget):
 
         if isinstance(label, list) and len(label):
             label = label[0]
-        else:
+        elif not isinstance(label, LabelItem):
             label = None
 
         if not isinstance(label, LabelItem):
@@ -2217,6 +2222,38 @@ class LabelsManager(QWidget):
         self.next_patch_btn.setEnabled(True)
         self.next_img_btn.setEnabled(True)
         self.edit_labels_btn.setEnabled(True)
+
+        if edit_focused_label:
+            self.edit_labels()
+
+    def focus_region_double_click(self, layer, event):
+        clicked_label = None
+        curr_pos = layer.world_to_data(event.position)
+
+        for label_group in self.labels_group_root.managed_layers.get(layer,
+                                                                     []):
+            for label in map(lambda idx: label_group.child(idx),
+                             range(label_group.childCount())):
+                if all(ax_pos.start <= ax_coord <= ax_pos.stop
+                       for ax_pos, ax_coord in zip(label.position, curr_pos)):
+                    clicked_label = label
+                    break
+
+            else:
+                continue
+
+            break
+
+        else:
+            return
+
+        self.labels_group_root.setSelected(False)
+        for label in map(lambda idx: self.labels_group_root.child(idx),
+                         range(self.labels_group_root.childCount())):
+            label.setSelected(False)
+
+        clicked_label.setSelected(True)
+        self.focus_region(clicked_label, edit_focused_label=True)
 
     def edit_labels(self):
         if (not self._active_layers_group or not self._active_label
@@ -2302,6 +2339,7 @@ class LabelsManager(QWidget):
 
         self._requires_commit = False
         self.commit_btn.setEnabled(False)
+        self.viewer.layers.selection.add(segmentation_channel_layer)
 
 
 class AcquisitionFunction(QWidget):
@@ -2425,14 +2463,14 @@ class AcquisitionFunction(QWidget):
 
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
-                            sampling_positions_dict=None,
+                            sampling_positions=None,
                             MC_repetitions=30,
                             max_samples=1000,
                             patch_size=128,
                             model=None,
                             model_drop=None):
         dl = get_dataloader(dataset_metadata, patch_size=patch_size,
-                            sampling_positions_dict=sampling_positions_dict,
+                            sampling_positions=sampling_positions,
                             shuffle=True)
         segmentation_max = 0
         n_samples = 0
@@ -2483,7 +2521,6 @@ class AcquisitionFunction(QWidget):
             model: Optional[CellposeModel] = None,
             model_drop: Optional[CellposeModel] = None,
             segmentation_group_name: Optional[str] = "segmentation",
-            sampling_positions_dict: Optional[dict] = None
             ):
         if run_all:
             for idx in range(self.image_groups_manager.groups_root.childCount()
@@ -2610,12 +2647,22 @@ class AcquisitionFunction(QWidget):
                 dataset_metadata[layer_type]["axes"] = spatial_axes
                 dataset_metadata[layer_type]["modality"] = layer_type
 
+            if image_group.labels_group:
+                sampling_positions = list(
+                    map(lambda child:
+                        [ax_pos.start for ax_pos in child.position],
+                        map(lambda idx: image_group.labels_group.child(idx),
+                            range(image_group.labels_group.childCount())))
+                )
+            else:
+                sampling_positions = None
+
             # Compute acquisition function of the current image
             img_sampling_positions = self.compute_acquisition(
                 dataset_metadata,
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
-                sampling_positions_dict=sampling_positions_dict,
+                sampling_positions=sampling_positions,
                 MC_repetitions=MC_repetitions,
                 max_samples=max_samples,
                 patch_size=patch_size,
@@ -2744,7 +2791,8 @@ class AcquisitionFunction(QWidget):
                 range(self.image_groups_manager.groups_root.childCount()))
         ))
 
-        if not image_groups:
+        if (not image_groups
+           or not self.labels_manager.labels_group_root.childCount()):
             return
 
         patch_size = self.patch_size_spn.value()
@@ -2752,7 +2800,6 @@ class AcquisitionFunction(QWidget):
         model = cellpose_model_init()
 
         dataset_metadata_list = []
-        sampling_positions_dict = {}
 
         for image_group in image_groups:
             image_group.setSelected(True)
@@ -2810,9 +2857,7 @@ class AcquisitionFunction(QWidget):
             sampling_positions = list(
                 map(lambda child: [ax_pos.start for ax_pos in child.position],
                     map(lambda idx: image_group.labels_group.child(idx),
-                        range(image_group.labels_group.childCount())
-                    )
-                )
+                        range(image_group.labels_group.childCount())))
             )
 
             dataset_metadata_list.append((dataset_metadata,
@@ -2826,8 +2871,7 @@ class AcquisitionFunction(QWidget):
         self.compute_acquisition_layers(
             run_all=True,
             model=model,
-            segmentation_group_name="fine_tunned_segmentation",
-            sampling_positions_dict=sampling_positions_dict
+            segmentation_group_name="fine_tunned_segmentation"
         )
 
 
@@ -2887,7 +2931,7 @@ class MaskGenerator(QWidget):
 
     def generate_mask_layer(self):
         if (not self._active_image_group
-           or not self._active_image_group.input_layers_group):
+           or self._active_image_group.input_layers_group is None):
             return
 
         masks_group_name = "mask"

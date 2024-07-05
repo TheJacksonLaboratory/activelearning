@@ -118,7 +118,7 @@ class StaticPatchSampler(zds.PatchSampler):
         ]
 
         valid_mask_toplefts = np.ravel_multi_index(
-            np.split(valid_mask_toplefts, 2),
+            np.split(valid_mask_toplefts, 2, axis=1),
             num_blocks
         )
         valid_mask_toplefts = np.unique(valid_mask_toplefts)
@@ -182,9 +182,10 @@ class StaticPatchSampler(zds.PatchSampler):
             self._top_lefts >= chunk_tl_limit[None, ...],
             self._top_lefts < chunk_br_limit[None, ...]
         )
-        valid_mask_toplefts_idx = np.all(valid_mask_toplefts_idx, axis=0)
+        valid_mask_toplefts_idx = np.all(valid_mask_toplefts_idx, axis=1)
 
         valid_mask_toplefts = self._top_lefts[valid_mask_toplefts_idx]
+        valid_mask_toplefts = valid_mask_toplefts - chunk_tl_limit[None, ...]
 
         patches_slices = self._compute_toplefts_slices(
             chunk_tlbr,
@@ -196,9 +197,8 @@ class StaticPatchSampler(zds.PatchSampler):
         return patches_slices
 
 
-
 def get_dataloader(dataset_metadata, patch_size=512,
-                   sampling_positions_dict=None,
+                   sampling_positions=None,
                    shuffle=True,
                    num_workers=0,
                    batch_size=1,
@@ -221,9 +221,9 @@ def get_dataloader(dataset_metadata, patch_size=512,
     else:
         spatial_axes = "YX"
 
-    if sampling_positions_dict:
+    if sampling_positions:
         patch_sampler = StaticPatchSampler(patch_size=patch_size,
-                                           top_lefts=sampling_positions_dict,
+                                           top_lefts=sampling_positions,
                                            spatial_axes=spatial_axes)
     else:
         patch_sampler = zds.PatchSampler(patch_size=patch_size,
