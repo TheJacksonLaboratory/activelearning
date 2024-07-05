@@ -1180,10 +1180,8 @@ class ImageGroupRoot(QTreeWidgetItem):
 
 
 class ImageGroupEditor(QWidget):
-    def __init__(self, viewer: napari.Viewer):
+    def __init__(self):
         super().__init__()
-
-        self.viewer = viewer
 
         self._active_image_group: Union[None, ImageGroup] = None
         self._active_layers_group: Union[None, LayersGroup] = None
@@ -1420,8 +1418,9 @@ class ImageGroupEditor(QWidget):
             display_source_axes.remove("c")
         display_source_axes = tuple(display_source_axes)
 
-        if display_source_axes != self.viewer.dims.axis_labels:
-            self.viewer.dims.axis_labels = display_source_axes
+        viewer = napari.current_viewer()
+        if display_source_axes != viewer.dims.axis_labels:
+            viewer.dims.axis_labels = display_source_axes
 
     def update_layer_type(self, layers_group_name: Optional[str] = None):
         if not self._active_layers_group or not self._active_image_group:
@@ -1533,13 +1532,12 @@ class ImageGroupsManager(QWidget):
 
     layer_selected = Signal(QTreeWidgetItem)
 
-    def __init__(self, viewer: napari.Viewer,
-                 default_axis_labels: str = "TZYX"):
+    def __init__(self, default_axis_labels: str = "TZYX"):
         super().__init__()
 
-        self.viewer = viewer
+        viewer = napari.current_viewer()
 
-        ndims = self.viewer.dims.ndisplay
+        ndims = viewer.dims.ndisplay
         extra_dims = ndims - len(default_axis_labels)
         if extra_dims <= 0:
             axis_labels = default_axis_labels[extra_dims:]
@@ -1548,7 +1546,7 @@ class ImageGroupsManager(QWidget):
                                                   ndims)))
                            + default_axis_labels)
 
-        self.viewer.dims.axis_labels = list(axis_labels)
+        viewer.dims.axis_labels = list(axis_labels)
 
         self._active_layer_channel: Union[None, LayerChannel] = None
         self._active_layers_group: Union[None, LayersGroup] = None
@@ -1738,8 +1736,9 @@ class ImageGroupsManager(QWidget):
         if not item:
             return
 
-        self.viewer.layers.selection.clear()
-        for layer in self.viewer.layers:
+        viewer = napari.current_viewer()
+        viewer.layers.selection.clear()
+        for layer in viewer.layers:
             layer.visible = False
 
         if isinstance(item, (LayerChannel, LayersGroup, ImageGroup)):
@@ -1749,7 +1748,8 @@ class ImageGroupsManager(QWidget):
             item.setExpanded(True)
 
     def update_group(self):
-        selected_layers = self.viewer.layers.selection
+        viewer = napari.current_viewer()
+        selected_layers = viewer.layers.selection
 
         if not selected_layers or not self._active_image_group:
             return
@@ -1782,8 +1782,9 @@ class ImageGroupsManager(QWidget):
             if self._active_layers_group is None:
                 self.create_layers_group()
 
-            self.viewer.layers.selection.clear()
-            self.viewer.layers.selection = self.viewer.layers.selection.union(
+            viewer = napari.current_viewer()
+            viewer.layers.selection.clear()
+            viewer.layers.selection = viewer.layers.selection.union(
                 layers_set
             )
 
@@ -1807,7 +1808,8 @@ class ImageGroupsManager(QWidget):
         if self._active_image_group is None:
             return
 
-        active_source_axes = "".join(self.viewer.dims.axis_labels).upper()
+        viewer = napari.current_viewer()
+        active_source_axes = "".join(viewer.dims.axis_labels).upper()
 
         self._active_layers_group = self._active_image_group.add_layers_group(
             source_axes=active_source_axes
@@ -1818,9 +1820,10 @@ class ImageGroupsManager(QWidget):
         self._active_layers_group.setSelected(True)
 
     def add_layers_to_group(self):
+        viewer = napari.current_viewer()
         selected_layers = sorted(
             map(lambda layer: (layer.name, layer),
-                self.viewer.layers.selection)
+                viewer.layers.selection)
         )
 
         selected_layers = list(zip(*selected_layers))[1]
@@ -2019,10 +2022,8 @@ class LabelGroupRoot(QTreeWidgetItem):
 
 
 class LabelsManager(QWidget):
-    def __init__(self, viewer: napari.Viewer):
+    def __init__(self):
         super().__init__()
-
-        self.viewer = viewer
 
         self.labels_table_tw = QTreeWidget()
         self.labels_table_tw.setColumnCount(4)
@@ -2203,16 +2204,17 @@ class LabelsManager(QWidget):
                                    self._active_layer_channel.layer.scale)
         ]
 
-        self.viewer.dims.order = tuple(range(self.viewer.dims.ndim))
-        self.viewer.camera.center = (
-            *self.viewer.camera.center[:-self.viewer.dims.ndisplay],
+        viewer = napari.current_viewer()
+        viewer.dims.order = tuple(range(viewer.dims.ndim))
+        viewer.camera.center = (
+            *viewer.camera.center[:-viewer.dims.ndisplay],
             *current_center
         )
-        self.viewer.camera.zoom = 4 / min(
+        viewer.camera.zoom = 4 / min(
             self._active_layer_channel.layer.scale
         )
 
-        for layer in self.viewer.layers:
+        for layer in viewer.layers:
             layer.visible = False
 
         self._active_group.visible = True
@@ -2285,7 +2287,8 @@ class LabelsManager(QWidget):
         else:
             lazy_data = np.array(input_filename[self._active_label.position])
 
-        self._active_edit_layer = self.viewer.add_labels(
+        viewer = napari.current_viewer()
+        self._active_edit_layer = viewer.add_labels(
             lazy_data,
             name="Labels edit",
             blending="translucent_no_depth",
@@ -2299,7 +2302,7 @@ class LabelsManager(QWidget):
             ],
             scale=self._active_layer_channel.layer.scale
         )
-        self.viewer.layers["Labels edit"].bounding_box.visible = True
+        viewer.layers["Labels edit"].bounding_box.visible = True
         self._active_layer_channel.layer.visible = False
 
         self._requires_commit = True
@@ -2330,27 +2333,25 @@ class LabelsManager(QWidget):
             segmentation_channel_layer.refresh()
             segmentation_channel_layer.visible = True
 
+        viewer = napari.current_viewer()
         if (self._active_edit_layer
-           and self._active_edit_layer in self.viewer.layers):
-            self.viewer.layers.remove(self._active_edit_layer)
+           and self._active_edit_layer in viewer.layers):
+            viewer.layers.remove(self._active_edit_layer)
 
         self._transaction = None
         self._active_edit_layer = None
 
         self._requires_commit = False
         self.commit_btn.setEnabled(False)
-        self.viewer.layers.selection.add(segmentation_channel_layer)
+        viewer.layers.selection.add(segmentation_channel_layer)
 
 
 class AcquisitionFunction(QWidget):
-    def __init__(self, viewer: napari.Viewer,
-                 image_groups_manager: ImageGroupsManager,
+    def __init__(self, image_groups_manager: ImageGroupsManager,
                  labels_manager: LabelsManager,
                  model: Optional[CellposeModel] = None,
                  model_drop: Optional[CellposeModel] = None):
         super().__init__()
-
-        self.viewer = viewer
 
         self.model = model
         self.model_drop = model_drop
@@ -2425,13 +2426,14 @@ class AcquisitionFunction(QWidget):
         self.labels_manager = labels_manager
 
     def _update_roi_from_position(self):
-        displayed_axes = "".join(self.viewer.dims.axis_labels).upper()
-        position = self.viewer.cursor.position
-        axes_order = self.viewer.dims.order
+        viewer = napari.current_viewer()
+        displayed_axes = "".join(viewer.dims.axis_labels).upper()
+        position = viewer.cursor.position
+        axes_order = viewer.dims.order
 
         roi_start = [0] * len(axes_order)
         roi_length = [-1] * len(axes_order)
-        for ord in axes_order[:-self.viewer.dims.ndisplay]:
+        for ord in axes_order[:-viewer.dims.ndisplay]:
             roi_start[ord] = int(position[ord])
             roi_length[ord] = 1
 
@@ -2546,6 +2548,8 @@ class AcquisitionFunction(QWidget):
         self.image_pb.setRange(0, len(image_groups))
         self.image_pb.reset()
 
+        viewer = napari.current_viewer()
+
         for n, image_group in enumerate(image_groups):
             image_group.setSelected(True)
             group_name = image_group.group_name
@@ -2632,7 +2636,7 @@ class AcquisitionFunction(QWidget):
 
                 spatial_axes = "".join([
                     ax for ax in layers_group.source_axes
-                    if ax in displayed_source_axes[-self.viewer.dims.ndisplay:]
+                    if ax in displayed_source_axes[-viewer.dims.ndisplay:]
                 ])
 
                 if "images" in layer_type:
@@ -2689,7 +2693,7 @@ class AcquisitionFunction(QWidget):
                     reference_scale=displayed_scale
                 )
 
-                new_acquisition_layer = self.viewer.add_image(
+                new_acquisition_layer = viewer.add_image(
                     acquisition_fun_ms,
                     name=group_name + " acquisition function",
                     multiscale=True,
@@ -2741,7 +2745,7 @@ class AcquisitionFunction(QWidget):
                     reference_scale=displayed_scale,
                 )
 
-                new_segmentation_layer = self.viewer.add_labels(
+                new_segmentation_layer = viewer.add_labels(
                     segmentation_ms,
                     name=group_name + f" {segmentation_group_name}",
                     multiscale=True,
@@ -2801,6 +2805,7 @@ class AcquisitionFunction(QWidget):
 
         dataset_metadata_list = []
 
+        viewer = napari.current_viewer()
         for image_group in image_groups:
             image_group.setSelected(True)
 
@@ -2834,7 +2839,7 @@ class AcquisitionFunction(QWidget):
 
                 spatial_axes = "".join([
                     ax for ax in layers_group.source_axes
-                    if ax in displayed_source_axes[-self.viewer.dims.ndisplay:]
+                    if ax in displayed_source_axes[-viewer.dims.ndisplay:]
                 ])
 
                 if "images" in layer_type:
@@ -2876,10 +2881,8 @@ class AcquisitionFunction(QWidget):
 
 
 class MaskGenerator(QWidget):
-    def __init__(self, viewer: napari.Viewer):
+    def __init__(self):
         super().__init__()
-
-        self.viewer = viewer
 
         self._active_image_group: Union[None, ImageGroup] = None
 
@@ -3000,6 +3003,7 @@ class MaskGenerator(QWidget):
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
 
+        viewer = napari.current_viewer()
         new_mask_layer = viewer.add_labels(
             data=mask_grp,
             scale=mask_scale,
