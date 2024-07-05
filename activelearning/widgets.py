@@ -3027,15 +3027,15 @@ class MaskGenerator(QWidget):
 
 
 def active_learning_plugin(viewer: napari.Viewer):
-    image_groups_manager = ImageGroupsManager(viewer)
+    image_groups_manager = ImageGroupsManager()
     viewer.window.add_dock_widget(image_groups_manager, area='right')
 
-    labels_manager = LabelsManager(viewer)
+    labels_manager = LabelsManager()
 
     model_drop = cellpose_model_init(use_dropout=True)
     model = cellpose_model_init(use_dropout=False)
 
-    acquisition_function = AcquisitionFunction(viewer, image_groups_manager,
+    acquisition_function = AcquisitionFunction(image_groups_manager,
                                                labels_manager,
                                                model=model,
                                                model_drop=model_drop)
