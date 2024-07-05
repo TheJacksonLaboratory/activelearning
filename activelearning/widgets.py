@@ -29,8 +29,8 @@ import zarr
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 
 import dask.array as da
-from models import train_cellpose
-from datautils import get_dataloader
+from .models import train_cellpose
+from .datautils import get_dataloader
 
 from cellpose import core, transforms
 from cellpose.models import CellposeModel
@@ -1572,7 +1572,7 @@ class ImageGroupsManager(QWidget):
         self.image_groups_tw.itemSelectionChanged.connect(
             self._get_active_item
         )
-        self.image_groups_tw.setExpandsOnDoubleClick(False)       
+        self.image_groups_tw.setExpandsOnDoubleClick(False)
 
         self.groups_root = ImageGroupRoot()
         viewer.layers.events.removed.connect(
@@ -1642,9 +1642,9 @@ class ImageGroupsManager(QWidget):
         self.show_editor_chk.setChecked(False)
         self.show_editor_chk.toggled.connect(self._show_editor)
 
-        self.layers_editor = ImageGroupEditor(viewer)
+        self.layers_editor = ImageGroupEditor()
         self.layers_editor.setVisible(False)
-        self.mask_creator = MaskGenerator(viewer)
+        self.mask_creator = MaskGenerator()
         self.mask_creator.setVisible(False)
 
         self.group_lyt = QVBoxLayout()
@@ -2100,6 +2100,7 @@ class LabelsManager(QWidget):
 
         self._requires_commit = False
 
+        viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
             self.labels_group_root.remove_managed_layer
         )

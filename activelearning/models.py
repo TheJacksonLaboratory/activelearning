@@ -15,7 +15,8 @@ import random
 import zarrdataset as zds
 import logging
 
-from datautils import StaticPatchSampler
+from .datautils import StaticPatchSampler
+
 
 def train_cellpose(model,
                    dataset_metadata_list: Iterable[Tuple[dict, Iterable[Iterable[int]]]],
