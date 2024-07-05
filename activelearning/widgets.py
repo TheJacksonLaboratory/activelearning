@@ -3022,9 +3022,7 @@ class MaskGenerator(QWidget):
         return new_mask_layer
 
 
-if __name__ == "__main__":
-    viewer = napari.Viewer()
-
+def active_learning_plugin(viewer: napari.Viewer):
     image_groups_manager = ImageGroupsManager(viewer)
     viewer.window.add_dock_widget(image_groups_manager, area='right')
 
@@ -3040,5 +3038,11 @@ if __name__ == "__main__":
     viewer.window.add_dock_widget(acquisition_function, area='right')
 
     viewer.window.add_dock_widget(labels_manager, area='right')
+
+
+if __name__ == "__main__":
+    viewer = napari.Viewer()
+
+    active_learning_plugin(viewer)
 
     napari.run()
