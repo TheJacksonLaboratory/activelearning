@@ -7,6 +7,7 @@ from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QComboBox,
                             QLabel,
                             QFileDialog,
+                            QAbstractSpinBox,
                             QSpinBox,
                             QDoubleSpinBox,
                             QCheckBox,
@@ -253,35 +254,45 @@ class LayerScaleEditorWidget(LayerScaleEditor, QWidget):
     def __init__(self):
         super().__init__()
 
-        self.edit_scale_lyt = QVBoxLayout()
-        self.edit_scale_lyt.addWidget(QLabel("Channel(s) scale(s):"))
+        self.edit_scale_lyt = QGridLayout()
+        self.edit_scale_lyt.addWidget(QLabel("Channel(s) scale(s):"), 0, 0)
+        self._curr_labels_list = []
         self._curr_scale_spn_list = []
 
         self.setLayout(self.edit_scale_lyt)
 
     def _clear_layer_channel(self):
         while self._curr_scale_spn_list:
-            edit_scale_spn = self._curr_scale_spn_list.pop()
-            self.edit_scale_lyt.removeWidget(edit_scale_spn)
+            item = self._curr_scale_spn_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
 
-        self._curr_scale_spn_list.clear()
+        while self._curr_labels_list:
+            item = self._curr_labels_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
 
     def _fill_layer(self):
         self._clear_layer_channel()
 
         if self._active_layer_channel:
             scales = self._active_layer_channel.scale
+            source_axes = self._active_layer_channel.source_axes
 
-            for s in scales:
+            for ax_idx, (ax_scl, ax) in enumerate(zip(scales, source_axes)):
                 edit_scale_spn = QDoubleSpinBox(minimum=1e-12, maximum=1e12,
                                                 singleStep=1e-7,
                                                 decimals=7)
-                edit_scale_spn.setValue(s)
+                edit_scale_spn.setValue(ax_scl)
                 edit_scale_spn.lineEdit().returnPressed.connect(
                     self.update_scale
                 )
-                self.edit_scale_lyt.addWidget(edit_scale_spn)
+                self._curr_labels_list.append(QLabel(ax))
+                self.edit_scale_lyt.addWidget(self._curr_labels_list[-1],
+                                              ax_idx + 1,
+                                              0)
                 self._curr_scale_spn_list.append(edit_scale_spn)
+                self.edit_scale_lyt.addWidget(self._curr_scale_spn_list[-1],
+                                              ax_idx + 1,
+                                              1)
 
     def update_scale(self):
         new_scale = [
@@ -306,18 +317,6 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
     def __init__(self):
         super().__init__()
 
-        self.patch_size_lbl = QLabel("Patch size")
-
-        self.patch_size_le = QLineEdit("128")
-        self.patch_size_le.setValidator(QIntValidator(0, 2**16))
-        self.patch_size_le.returnPressed.connect(self._set_patch_size)
-
-        self.patch_size_spn = QSpinBox(minimum=0, maximum=16, singleStep=1)
-        self.patch_size_spn.setValue(7)
-        self.patch_size_spn.lineEdit().hide()
-        self.patch_size_spn.setEnabled(False)
-        self.patch_size_spn.valueChanged.connect(self._modify_patch_size)
-
         self.generate_mask_btn = QPushButton("Create mask")
         self.generate_mask_btn.setToolTip("Create a napari Label layer with a "
                                           "blank mask at the scale selected "
@@ -325,20 +324,73 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         self.generate_mask_btn.setEnabled(False)
         self.generate_mask_btn.clicked.connect(self.generate_mask_layer)
 
-        self.create_mask_lyt = QHBoxLayout()
-        self.create_mask_lyt.addWidget(self.patch_size_lbl)
-        self.create_mask_lyt.addWidget(self.patch_size_le)
-        self.create_mask_lyt.addWidget(self.patch_size_spn)
-        self.create_mask_lyt.addWidget(self.generate_mask_btn)
+        self.edit_scale_lyt = QGridLayout()
+        self.edit_scale_lyt.addWidget(self.generate_mask_btn, 0, 0, 0, 2)
+        self.setLayout(self.edit_scale_lyt)
 
-        self.setLayout(self.create_mask_lyt)
+        self._curr_power_spn_list = []
+        self._curr_scale_le_list = []
+        self._curr_labels_list = []
 
-    def _modify_patch_size(self, scale: int):
-        self.patch_size_le.setText(str(2 ** scale))
-        self._set_patch_size()
+    def _clear_layer_channel(self):
+        while self._curr_scale_le_list:
+            item = self._curr_scale_le_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
 
-    def _set_patch_size(self):
-        super().set_patch_size(int(self.patch_size_le.text()))
+        while self._curr_labels_list:
+            item = self._curr_labels_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
+
+        while self._curr_power_spn_list:
+            item = self._curr_power_spn_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
+
+    def _fill_layer(self):
+        self._clear_layer_channel()
+
+        if self._active_layer_channel:
+            patch_sizes = self._patch_sizes
+            source_axes = self._mask_axes
+
+            for ax_idx, (ax_ps, ax) in enumerate(zip(patch_sizes,
+                                                     source_axes)):
+                power_spn = QSpinBox(
+                    minimum=0, maximum=16,
+                    buttonSymbols=QAbstractSpinBox.UpDownArrows
+                )
+                power_spn.lineEdit().hide()
+
+                scale_le = QLineEdit()
+                scale_le.setValidator(QIntValidator(0, 2**16))
+                scale_le.returnPressed.connect(
+                    partial(self._set_patch_size, ax_idx=ax_idx)
+                )
+                scale_le.setEnabled(False)
+
+                power_spn.valueChanged.connect(
+                    partial(self._modify_patch_size, ax_idx=ax_idx)
+                )
+                power_spn.setValue(7)
+
+                self._curr_labels_list.append(QLabel(ax))
+                self.edit_scale_lyt.addWidget(self._curr_labels_list[-1],
+                                              ax_idx + 1,
+                                              0)
+                self._curr_scale_le_list.append(scale_le)
+                self.edit_scale_lyt.addWidget(self._curr_scale_le_list[-1],
+                                              ax_idx + 1,
+                                              1)
+                self._curr_power_spn_list.append(power_spn)
+                self.edit_scale_lyt.addWidget(self._curr_power_spn_list[-1],
+                                              ax_idx + 1,
+                                              2)
+
+    def _modify_patch_size(self, scale: int, ax_idx: int = 0):
+        self._curr_scale_le_list[ax_idx].setText(str(2 ** scale))
+        self._set_patch_size(ax_idx)
+
+    def _set_patch_size(self, ax_idx: int = 0):
+        super().set_patch_size(int(self._curr_scale_le_list[ax_idx].text()))
 
     @property
     def active_image_group(self):
