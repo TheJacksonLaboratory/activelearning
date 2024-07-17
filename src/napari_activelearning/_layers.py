@@ -1038,7 +1038,6 @@ class MaskGenerator(PropertiesEditor):
         )))
 
         mask_shape = [
-            # int(np.ceil(ax_s / self._patch_size))
             max(1, ax_s // self._patch_size)
             for ax_s, ax in zip(im_shape, source_axes)
             if ax in mask_axes
@@ -1046,7 +1045,7 @@ class MaskGenerator(PropertiesEditor):
 
         mask_translate = tuple(map(
             lambda mk_s, ax_s, ax_scl, ax_trans:
-            ax_trans + ((ax_scl * ((ax_s / mk_s - 1.0) / 2.0))
+            ax_trans + ((ax_scl * self._patch_size / 2.0)
                         if ax_s // self._patch_size >= 1 else 0),
             mask_shape, ref_shape, ref_scale, ref_translate
         ))
@@ -1070,7 +1069,7 @@ class MaskGenerator(PropertiesEditor):
 
         mask_scale = tuple(map(
             lambda mk_s, ax_s, ax_scl:
-            (ax_scl * ax_s / mk_s)
+            (ax_scl * self._patch_size)
             if ax_s // self._patch_size >= 1 else ax_scl,
             mask_shape, ref_shape, ref_scale
         ))
