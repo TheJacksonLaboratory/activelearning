@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 from pathlib import Path
 from magicgui import magicgui
-from qtpy.QtWidgets import QWidget, QVBoxLayout, QCheckBox
+from qtpy.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QCheckBox
 
 from functools import partial
 
@@ -132,25 +132,19 @@ if USING_CELLPOSE:
                 "model_name"
             ]
 
-            self.advanced_segmentation_options_lyt = QVBoxLayout()
+
             self.advanced_segmentation_options_chk = QCheckBox(
                 "Advanced segmentation parameters"
             )
-            self.advanced_segmentation_options_lyt.addWidget(
-                self.advanced_segmentation_options_chk
-            )
+
 
             self.advanced_segmentation_options_chk.setChecked(False)
             self.advanced_segmentation_options_chk.toggled.connect(
                 self._show_segmentation_parameters
             )
 
-            self.advanced_finetuning_options_lyt = QVBoxLayout()
             self.advanced_finetuning_options_chk = QCheckBox(
                 "Advanced fine tuning parameters"
-            )
-            self.advanced_finetuning_options_lyt.addWidget(
-                self.advanced_finetuning_options_chk
             )
 
             self.advanced_finetuning_options_chk.setChecked(False)
@@ -163,20 +157,12 @@ if USING_CELLPOSE:
 
             self._segmentation_parameters_widget =\
                 cellpose_segmentation_parameters.native
-            self.advanced_segmentation_options_lyt.addWidget(
-                self._segmentation_parameters_widget
-            )
-            self._segmentation_parameters_widget.setVisible(False)
 
             cellpose_finetuning_parameters =\
                 cellpose_finetuning_parameters_widget()
 
             self._finetuning_parameters_widget =\
                 cellpose_finetuning_parameters.native
-            self.advanced_finetuning_options_lyt.addWidget(
-                self._finetuning_parameters_widget
-            )
-            self._finetuning_parameters_widget.setVisible(False)
 
             for par_name in segmentation_parameter_names:
                 cellpose_segmentation_parameters.__getattr__(par_name).changed\
@@ -190,11 +176,23 @@ if USING_CELLPOSE:
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
-            self.parameters = QVBoxLayout()
-            self.parameters.addLayout(self.advanced_segmentation_options_lyt)
-            self.parameters.addLayout(self.advanced_finetuning_options_lyt)
+            self.parameters_lyt = QGridLayout()
+            self.parameters_lyt.addWidget(
+                self.advanced_segmentation_options_chk, 0, 0
+            )
+            self.parameters_lyt.addWidget(
+                self.advanced_finetuning_options_chk, 2, 0
+            )
+            self.parameters_lyt.addWidget(
+                self._segmentation_parameters_widget, 1, 0, 1, 2
+            )
+            self.parameters_lyt.addWidget(
+                self._finetuning_parameters_widget, 3, 0, 1, 2
+            )
+            self.setLayout(self.parameters_lyt)
 
-            self.setLayout(self.parameters)
+            self._segmentation_parameters_widget.hide()
+            self._finetuning_parameters_widget.hide()
 
         def _set_parameter(self, parameter_val, parameter_key=None):
             if ((isinstance(parameter_val, (str, Path)) and not parameter_val)

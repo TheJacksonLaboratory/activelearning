@@ -994,73 +994,77 @@ class MaskGenerator(PropertiesEditor):
         super().__init__()
         self._patch_sizes = None
         self._mask_axes = None
+        self._im_shape = None
+        self._im_scale = None
+        self._im_translate = None
+        self._im_source_axes = None
 
-    def generate_mask_layer(self):
-        if (not self._active_image_group
-           or self._active_image_group.input_layers_group is None):
-            self._clear_layer_info()
+    def _update_reference_info(self):
+        if (self._active_image_group is None
+           or self._active_image_group.input_layers_group is None
+           or not self._active_image_group.child(
+               self._active_image_group.input_layers_group).childCount()):
             return
 
         self._active_layers_group = self._active_image_group.child(
             self._active_image_group.input_layers_group
         )
 
-        if (not self._active_layers_group
-           or not self._active_layers_group.childCount()
-           or not self._active_layers_group.source_axes):
-            self._clear_layer_info()
-            return
-
         self._active_layer_channel = self._active_layers_group.child(0)
 
         im_shape = self._active_layer_channel.shape
         im_scale = self._active_layer_channel.scale
         im_translate = self._active_layer_channel.translate
+        im_source_axes = self._active_layers_group.source_axes
 
-        source_axes = [
+        self._im_source_axes = [
             ax
-            for ax in self._active_layers_group.source_axes
-            if ax != "C"
-            or len(im_shape) == len(self._active_layers_group.source_axes)
+            for ax in im_source_axes
+            if ax != "C" or (len(im_shape) == len(im_source_axes))
         ]
 
         self._mask_axes = "".join([
             ax
-            for ax in source_axes
+            for ax in self._im_source_axes
             if ax in "ZYX"
         ])
 
-        masks_group_name = "mask"
+        (self._im_source_axes,
+         self._im_shape,
+         self._im_scale,
+         self._im_translate) = list(zip(*filter(
+             lambda ax_props: ax_props[0] in self._mask_axes,
+             zip(self._im_source_axes, im_shape, im_scale, im_translate)
+             )))
 
-        _, ref_shape, ref_scale, ref_translate = list(zip(*filter(
-            lambda ax_props: ax_props[0] in self._mask_axes,
-            zip(source_axes, im_shape, im_scale, im_translate)
-        )))
-
-        if self._patch_sizes is None:
-            self._patch_sizes = [
+        self._patch_sizes = [
                 min(128, ax_s)
-                for ax_s in ref_shape
+                for ax_s in self._im_shape
             ]
 
+    def generate_mask_layer(self):
+        masks_group_name = "mask"
+
         mask_shape = [
-            max(1, ax_s // self._patch_size)
-            for ax_s, ax in zip(im_shape, source_axes)
+            max(1, ax_s // ax_ps)
+            for ax_ps, ax_s, ax in zip(self._patch_sizes, self._im_shape,
+                                       self._im_source_axes)
             if ax in self._mask_axes
         ]
 
         mask_translate = tuple(map(
-            lambda ax_s, ax_scl, ax_trans:
-            ax_trans + ((ax_scl * self._patch_size / 2.0)
-                        if ax_s // self._patch_size >= 1 else 0),
-            ref_shape, ref_scale, ref_translate
+            lambda ax_ps, ax_s, ax_scl, ax_trans:
+            ax_trans + ((ax_scl * (ax_ps - 1) / 2.0)
+                        if ax_s // ax_ps >= 1 else 0),
+            self._patch_sizes, self._im_shape, self._im_scale,
+            self._im_translate
         ))
 
         mask_scale = tuple(map(
-            lambda ax_s, ax_scl:
-            (ax_scl * self._patch_sizes)
-            if ax_s // self._patch_sizes >= 1 else ax_scl,
-            self._ref_shape, self._ref_scale
+            lambda ax_ps, ax_s, ax_scl:
+            (ax_scl * ax_ps)
+            if ax_s // ax_ps >= 1 else ax_scl,
+            self._patch_sizes, self._im_shape, self._im_scale
         ))
 
         if self._active_image_group.group_dir:
@@ -1094,7 +1098,7 @@ class MaskGenerator(PropertiesEditor):
         )
         if masks_layers_group is None:
             masks_layers_group = self._active_image_group.add_layers_group(
-                self._masks_group_name,
+                masks_group_name,
                 source_axes=self._mask_axes,
                 use_as_sampling_mask=True
             )
@@ -1119,40 +1123,19 @@ class MaskGenerator(PropertiesEditor):
 
     @active_image_group.setter
     def active_image_group(self, active_image_group: Union[ImageGroup, None]):
-        super(PropertiesEditor, type(self)).active_image_group\
-                                           .fset(self, active_image_group)
-        self._mask_axes = None
-        self._patch_sizes = None
+        if (active_image_group != self._active_image_group):
+            self._patch_sizes = None
+            self._mask_axes = None
+            self._im_shape = None
+            self._im_scale = None
+            self._im_translate = None
+            self._im_source_axes = None
 
-        if (not self._active_image_group
-           or self._active_image_group.input_layers_group is None):
-            return
+        super(MaskGenerator, type(self)).active_image_group\
+                                        .fset(self, active_image_group)
 
-        self._active_layers_group = self._active_image_group.child(
-            self._active_image_group.input_layers_group
-        )
-
-        if (not self._active_layers_group
-           or not self._active_layers_group.childCount()
-           or not self._active_layers_group.source_axes):
-            return
-
-        self._active_layer_channel = self._active_layers_group.child(0)
-
-        im_shape = self._active_layer_channel.shape
-
-        source_axes = [
-            ax
-            for ax in self._active_layers_group.source_axes
-            if ax != "C"
-            or len(im_shape) == len(self._active_layers_group.source_axes)
-        ]
-
-        self._mask_axes = "".join([
-            ax
-            for ax in source_axes
-            if ax in "ZYX"
-        ])
+        if self._patch_sizes is None:
+            self._update_reference_info()
 
 
 class ImageGroupsManager:
@@ -1220,6 +1203,9 @@ class ImageGroupsManager:
             self._active_image_group = self._active_layers_group.parent()
 
         self.mask_generator.active_image_group = self._active_image_group
+        self.mask_generator.active_layers_group = self._active_layers_group
+        self.mask_generator.active_layer_channel = self._active_layer_channel
+
         self.image_groups_editor.active_image_group =\
             self._active_image_group
 

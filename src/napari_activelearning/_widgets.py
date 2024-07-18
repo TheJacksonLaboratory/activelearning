@@ -1,7 +1,4 @@
-from ._interface import (ImageGroupEditorWidget,
-                         ImageGroupsManagerWidget,
-                         LayerScaleEditorWidget,
-                         MaskGeneratorWidget,
+from ._interface import (ImageGroupsManagerWidget,
                          LabelsManagerWidget,
                          AcquisitionFunctionWidget,
                          TunableMethodWidget)
@@ -56,6 +53,8 @@ def get_acquisition_function_widget():
 
 
 def get_active_learning_widget():
-    return [get_image_groups_manager_widget(),
-            get_label_groups_manager_widget(),
-            get_acquisition_function_widget()]
+    return [
+        get_image_groups_manager_widget(),
+        get_acquisition_function_widget(),
+        get_label_groups_manager_widget()
+    ]

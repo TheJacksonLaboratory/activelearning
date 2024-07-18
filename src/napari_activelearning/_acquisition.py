@@ -292,6 +292,8 @@ class AcquisitionFunction:
             else:
                 img_sp = img_sp[..., 0]
 
+
+            # TODO: Add the current selected slice from _update_roi_from_position
             pos_u_lab = (slice(pos[0, 0], pos[0, 1]),
                          slice(pos[1, 0], pos[1, 1]))
 
