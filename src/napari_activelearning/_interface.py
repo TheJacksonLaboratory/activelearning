@@ -195,15 +195,6 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
     def update_source_axes(self):
         super().update_source_axes(self.edit_axes_le.text())
 
-        display_source_axes = list(self._edit_axes.lower())
-        if "c" in display_source_axes:
-            display_source_axes.remove("c")
-        display_source_axes = tuple(display_source_axes)
-
-        viewer = napari.current_viewer()
-        if display_source_axes != viewer.dims.axis_labels:
-            viewer.dims.axis_labels = display_source_axes
-
     def update_layers_group_name(self):
         if super().update_layers_group_name(
           self.layers_group_name_cmb.lineEdit().text()):
@@ -345,6 +336,8 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         while self._curr_power_spn_list:
             item = self._curr_power_spn_list.pop()
             self.edit_scale_lyt.removeWidget(item)
+
+        self.generate_mask_btn.setEnabled(False)
 
     def _update_reference_info(self):
         super()._update_reference_info()
@@ -716,16 +709,22 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
                          tunable_segmentation_method)
 
         self.patch_size_spn = QSpinBox(minimum=128, maximum=1024,
+                                       value=self._patch_size,
                                        singleStep=128)
         self.patch_size_spn.valueChanged.connect(self._set_patch_size)
 
-        self.max_samples_spn = QSpinBox(minimum=1, maximum=10000, value=100,
+        self.max_samples_spn = QSpinBox(minimum=1, maximum=10000,
+                                        value=self._max_samples,
                                         singleStep=10)
         self.max_samples_spn.valueChanged.connect(self._set_max_samples)
 
-        self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100, value=30,
+        self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100,
+                                           value=self._MC_repetitions,
                                            singleStep=10)
         self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
+
+        self.input_axes_le = QLineEdit(self._input_axes)
+        self.input_axes_le.editingFinished.connect(self._set_input_axes)
 
         self.execute_selected_btn = QPushButton("Run on selected image groups")
         self.execute_selected_btn.clicked.connect(
@@ -750,14 +749,16 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         acquisition_lyt.addWidget(self.max_samples_spn, 1, 1)
         acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 2, 0)
         acquisition_lyt.addWidget(self.MC_repetitions_spn, 2, 1)
-        acquisition_lyt.addWidget(self.tunable_segmentation_method, 3, 0, 1, 2)
-        acquisition_lyt.addWidget(self.execute_selected_btn, 4, 0)
-        acquisition_lyt.addWidget(self.execute_all_btn, 4, 1)
-        acquisition_lyt.addWidget(self.finetuning_btn, 5, 0, 1, 2)
-        acquisition_lyt.addWidget(QLabel("Image queue:"), 6, 0, 1, 1)
-        acquisition_lyt.addWidget(self.image_pb, 6, 1)
-        acquisition_lyt.addWidget(QLabel("Patch queue:"), 7, 0, 1, 1)
-        acquisition_lyt.addWidget(self.patch_pb, 7, 1)
+        acquisition_lyt.addWidget(QLabel("Input axes order"), 3, 0)
+        acquisition_lyt.addWidget(self.input_axes_le, 3, 1)
+        acquisition_lyt.addWidget(self.tunable_segmentation_method, 4, 0, 1, 2)
+        acquisition_lyt.addWidget(self.execute_selected_btn, 5, 0)
+        acquisition_lyt.addWidget(self.execute_all_btn, 5, 1)
+        acquisition_lyt.addWidget(self.finetuning_btn, 6, 0, 1, 2)
+        acquisition_lyt.addWidget(QLabel("Image queue:"), 7, 0, 1, 1)
+        acquisition_lyt.addWidget(self.image_pb, 7, 1)
+        acquisition_lyt.addWidget(QLabel("Patch queue:"), 8, 0, 1, 1)
+        acquisition_lyt.addWidget(self.patch_pb, 8, 1)
 
         self.setLayout(acquisition_lyt)
 
@@ -788,3 +789,6 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_max_samples(self):
         self._max_samples = self.max_samples_spn.value()
+
+    def _set_input_axes(self):
+        self._input_axes = self.input_axes_le.text()

@@ -201,18 +201,23 @@ class LayersGroup(QTreeWidgetItem):
             self._source_data = self.child(0).source_data
             self._data_group = self.child(0).data_group
 
-            if not isinstance(self._source_data, (str, Path)):
-                if "C" in self._source_axes:
-                    layers_channels = (
-                        (self.child(idx).channel, self.child(idx))
-                        for idx in range(self.childCount())
-                    )
+            if (not isinstance(self._source_data, (str, Path))
+               and self.childCount() > 1):
+                if len(self._source_axes) == self.child(0).ndim:
+                    merge_fun = np.concatenate
+                else:
+                    merge_fun = np.stack
 
-                    self._source_data = np.stack(
-                        [layer_channel.source_data
-                         for _, layer_channel in sorted(layers_channels)],
-                        axis=self._source_axes.index("C")
-                    )
+                layers_channels = (
+                    (self.child(idx).channel, self.child(idx))
+                    for idx in range(self.childCount())
+                )
+
+                self._source_data = merge_fun(
+                    [layer_channel.source_data
+                        for _, layer_channel in sorted(layers_channels)],
+                    axis=self._source_axes.index("C")
+                )
 
         else:
             self._source_data = None
@@ -289,8 +294,14 @@ class LayersGroup(QTreeWidgetItem):
 
         else:
             shape = list(self.child(0).shape)
-            if self.childCount() > 1:
-                shape.insert(0, self.childCount())
+
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if len(self._source_axes) == self.child(0).ndim:
+                    shape[channel_axis] = (shape[channel_axis]
+                                           * self.childCount())
+                else:
+                    shape.insert(channel_axis, self.childCount())
 
         return shape
 
@@ -302,8 +313,12 @@ class LayersGroup(QTreeWidgetItem):
 
         else:
             scale = list(self.child(0).scale)
-            if self.childCount() > 1:
-                scale.insert(0, 1)
+
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if len(self._source_axes) != self.child(0).ndim:
+                    scale.insert(channel_axis, 1)
+
             scale = tuple(scale)
 
         return scale
@@ -316,8 +331,11 @@ class LayersGroup(QTreeWidgetItem):
 
         else:
             translate = list(self.child(0).translate)
-            if self.childCount() > 1:
-                translate.insert(0, 0)
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if len(self._source_axes) != self.child(0).ndim:
+                    translate.insert(channel_axis, 0)
+
             translate = tuple(translate)
 
         return translate
@@ -894,14 +912,17 @@ class ImageGroupEditor(PropertiesEditor):
             if self._active_layer_channel.source_axes != self._edit_axes:
                 self._active_layer_channel.source_axes = self._edit_axes
 
-        display_source_axes = list(self._edit_axes.lower())
-        if "c" in display_source_axes:
-            display_source_axes.remove("c")
-        display_source_axes = tuple(display_source_axes)
+        display_source_axes = self._edit_axes.lower()
 
         viewer = napari.current_viewer()
-        if display_source_axes != viewer.dims.axis_labels:
-            viewer.dims.axis_labels = display_source_axes
+        if display_source_axes != "".join(viewer.dims.axis_labels).lower():
+            if ("c" in display_source_axes
+               and len(viewer.dims.axis_labels) != len(display_source_axes)):
+                display_source_axes = list(display_source_axes)
+                display_source_axes.remove("c")
+                display_source_axes = "".join(display_source_axes)
+
+            viewer.dims.axis_labels = tuple(display_source_axes)
 
     def update_layers_group_name(self,
                                  layers_group_name: Optional[str] = None):
@@ -1043,6 +1064,17 @@ class MaskGenerator(PropertiesEditor):
             ]
 
     def generate_mask_layer(self):
+        if (self._active_image_group is None
+           or self._active_image_group.input_layers_group is None
+           or not self._active_image_group.child(
+               self._active_image_group.input_layers_group).childCount()):
+            return
+
+        self._active_layers_group = self._active_image_group.child(
+            self._active_image_group.input_layers_group
+        )
+
+        self._active_layer_channel = self._active_layers_group.child(0)
         masks_group_name = "mask"
 
         mask_shape = [
@@ -1203,8 +1235,6 @@ class ImageGroupsManager:
             self._active_image_group = self._active_layers_group.parent()
 
         self.mask_generator.active_image_group = self._active_image_group
-        self.mask_generator.active_layers_group = self._active_layers_group
-        self.mask_generator.active_layer_channel = self._active_layer_channel
 
         self.image_groups_editor.active_image_group =\
             self._active_image_group

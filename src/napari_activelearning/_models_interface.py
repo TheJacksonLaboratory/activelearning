@@ -132,11 +132,9 @@ if USING_CELLPOSE:
                 "model_name"
             ]
 
-
             self.advanced_segmentation_options_chk = QCheckBox(
                 "Advanced segmentation parameters"
             )
-
 
             self.advanced_segmentation_options_chk.setChecked(False)
             self.advanced_segmentation_options_chk.toggled.connect(
