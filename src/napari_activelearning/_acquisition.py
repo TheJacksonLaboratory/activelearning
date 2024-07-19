@@ -283,15 +283,10 @@ class AcquisitionFunction:
         n_samples = 0
         img_sampling_positions = []
 
-        pred_spatial_axes = list(dataset_metadata["images"]["axes"])
-        if "C" in pred_spatial_axes:
-            pred_spatial_axes.remove("C")
-        pred_spatial_axes = "".join(pred_spatial_axes)
-
         if "masks" in dataset_metadata:
             mask_axes = dataset_metadata["masks"]["source_axes"]
         else:
-            mask_axes = pred_spatial_axes
+            mask_axes = spatial_axes
 
         pred_sel = tuple(
             slice(None) if ax in pred_spatial_axes else None
@@ -303,9 +298,9 @@ class AcquisitionFunction:
             if USING_TORCH:
                 pos = pos[0].numpy()
                 img = img[0].numpy()
-                img_sp = img_sp[0, ..., 0].numpy()
+                img_sp = img_sp.numpy().squeeze()
             else:
-                img_sp = img_sp[..., 0]
+                img_sp = img_sp.squeeze()
 
             pos = {
                 ax: slice(pos_ax[0], pos_ax[1])

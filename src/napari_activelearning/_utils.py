@@ -98,12 +98,11 @@ class SuperPixelGenerator(zds.MaskGenerator):
 
             labels_dim = np.arange(cols * rows).reshape(rows, cols)
             labels = resize(labels_dim,
-                            (image.shape[self.axes.index("Y")],
-                             image.shape[self.axes.index("X")]),
+                            (image.shape[self.ax_Y], image.shape[self.ax_X]),
                             order=0)
 
         if image_channels > 1:
-            labels = np.expand_dims(labels, self.axes.index("C"))
+            labels = np.expand_dims(labels, self._ax_C)
         else:
             labels = labels[..., None]
 
