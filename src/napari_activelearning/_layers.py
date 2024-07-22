@@ -55,7 +55,8 @@ class LayerChannel(QTreeWidgetItem):
             )
 
         self._source_data = source_data
-        self.parent().updated = True
+        if self.parent() is not None:
+            self.parent().updated = True
 
     @property
     def data_group(self):
@@ -67,7 +68,8 @@ class LayerChannel(QTreeWidgetItem):
     @data_group.setter
     def data_group(self, data_group):
         self._data_group = data_group
-        self.parent().updated = True
+        if self.parent() is not None:
+            self.parent().updated = True
 
     @property
     def channel(self):
@@ -84,7 +86,7 @@ class LayerChannel(QTreeWidgetItem):
 
     @source_axes.setter
     def source_axes(self, source_axes: str):
-        if "C" in source_axes and self.layer.ndim < 3:
+        if "C" in source_axes and self.layer.ndim != len(source_axes):
             source_axes = list(source_axes)
             source_axes.remove("C")
             source_axes = "".join(source_axes)
@@ -257,7 +259,7 @@ class LayersGroup(QTreeWidgetItem):
 
     @layers_group_name.setter
     def layers_group_name(self, layers_group_name: str):
-        if self.parent():
+        if self.parent() is not None:
             layers_group_name = validate_name(
                 self.parent().layers_groups_names,
                 self._layers_group_name,
@@ -465,7 +467,9 @@ class LayersGroup(QTreeWidgetItem):
         super(LayersGroup, self).removeChild(child)
 
     def addChild(self, child: QTreeWidgetItem):
-        if isinstance(child, LayerChannel):
+        if (isinstance(child, LayerChannel)
+           and self.parent() is not None
+           and self.parent().parent() is not None):
             self.parent().parent().add_managed_layer(child.layer, child)
 
         super(LayersGroup, self).addChild(child)
@@ -488,7 +492,7 @@ class LayersGroup(QTreeWidgetItem):
         self.sortChildren(2, Qt.SortOrder.AscendingOrder)
 
     def save_group(self, output_dir: Path, metadata: Optional[dict] = None):
-        if self.parent():
+        if self.parent() is not None:
             group_name = self.parent().group_name
         else:
             group_name = "unset"
@@ -545,7 +549,7 @@ class ImageGroup(QTreeWidgetItem):
 
     @group_name.setter
     def group_name(self, group_name: str):
-        if self.parent():
+        if self.parent() is not None:
             group_name = validate_name(
                 self.parent().group_names,
                 self._group_name,
