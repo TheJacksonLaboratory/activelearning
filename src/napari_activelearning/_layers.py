@@ -437,7 +437,8 @@ class LayersGroup(QTreeWidgetItem):
             if curr_layer_channel.channel > removed_channel:
                 curr_layer_channel.channel = curr_layer_channel.channel - 1
 
-        self.parent().parent().remove_layer_channel(layer_channel)
+        if self.parent() is not None and self.parent().parent() is not None:
+            self.parent().parent().remove_layer_channel(layer_channel)
 
         self._update_source_axes()
         self.updated = True
@@ -1087,18 +1088,17 @@ class MaskGenerator(PropertiesEditor):
         im_shape = self._active_layer_channel.shape
         im_scale = self._active_layer_channel.scale
         im_translate = self._active_layer_channel.translate
-        im_source_axes = self._active_layers_group.source_axes
-
-        self._im_source_axes = [
+        im_source_axes = "".join([
             ax
-            for ax in im_source_axes
-            if ax != "C" or (len(im_shape) == len(im_source_axes))
-        ]
+            for ax in self._active_layers_group.source_axes
+            if (ax != "C"
+                or len(self._active_layers_group.source_axes) == len(im_shape))
+        ])
 
         self._mask_axes = "".join([
             ax
-            for ax in self._im_source_axes
-            if ax != "C"
+            for ax, ax_s in zip(im_source_axes, im_shape)
+            if ax != "C" and ax_s > 1
         ])
 
         (self._im_source_axes,
@@ -1106,7 +1106,7 @@ class MaskGenerator(PropertiesEditor):
          self._im_scale,
          self._im_translate) = list(zip(*filter(
              lambda ax_props: ax_props[0] in self._mask_axes,
-             zip(self._im_source_axes, im_shape, im_scale, im_translate)
+             zip(im_source_axes, im_shape, im_scale, im_translate)
              )))
 
         self._patch_sizes = [

@@ -392,7 +392,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
 
     def _set_patch_size(self):
         patch_sizes = [
-            int(scale_le.text())
+            int(scale_le.text()) if scale_le.text() else 1
             for scale_le in self._curr_scale_le_list
         ]
 
