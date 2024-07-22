@@ -57,13 +57,14 @@ class SuperPixelGenerator(zds.MaskGenerator):
         if "C" in self.axes:
             self._ax_C = self.axes.index("C")
         else:
-            self._ax_C = None
+            self._ax_C = 0
 
     def _compute_transform(self, image):
         if image.ndim > 2:
             image_channels = image.shape[self._ax_C]
         else:
             image_channels = 1
+            image = image[None, ...]
 
         if CV_SUPERPIXELS:
             super_pixels = createSuperpixelSEEDS(
@@ -77,16 +78,11 @@ class SuperPixelGenerator(zds.MaskGenerator):
                 double_step=self._double_step
             )
 
-            norm_image = np.stack((image), axis=2)
-
-            norm_image = (
-                (np.copy(image) - image.min(axis=(self._ax_Y, self._ax_X),
-                                            keepdims=True))
-                / (image.max(axis=(self._ax_Y, self._ax_X), keepdims=True)
-                   - image.min(axis=(self._ax_Y, self._ax_X), keepdims=True))
-            )
-
-            norm_image = 255.0 * norm_image
+            reshaped_image = np.stack(
+                np.split(image, image_channels, axis=self._ax_C),
+                axis=-1
+            ).squeeze(axis=self._ax_C)
+            norm_image = 255.0 * reshaped_image
             norm_image = norm_image.astype(np.uint8)
 
             super_pixels.iterate(norm_image, self._iterations)
@@ -98,7 +94,7 @@ class SuperPixelGenerator(zds.MaskGenerator):
 
             labels_dim = np.arange(cols * rows).reshape(rows, cols)
             labels = resize(labels_dim,
-                            (image.shape[self.ax_Y], image.shape[self.ax_X]),
+                            (image.shape[self._ax_Y], image.shape[self._ax_X]),
                             order=0)
 
         if image_channels > 1:

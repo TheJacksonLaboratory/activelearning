@@ -377,7 +377,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
                                               0)
 
                 scale_le.returnPressed.connect(
-                    partial(self._set_patch_size, ax_idx=ax_idx)
+                    partial(self._set_patch_size)
                 )
                 power_spn.valueChanged.connect(
                     partial(self._modify_patch_size, ax_idx=ax_idx)

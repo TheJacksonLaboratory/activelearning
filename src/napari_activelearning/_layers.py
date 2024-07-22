@@ -437,16 +437,30 @@ class LayersGroup(QTreeWidgetItem):
             if curr_layer_channel.channel > removed_channel:
                 curr_layer_channel.channel = curr_layer_channel.channel - 1
 
+        self.parent().parent().remove_layer_channel(layer_channel)
+
         self._update_source_axes()
         self.updated = True
 
+    def takeChildren(self):
+        children = super(LayersGroup, self).takeChildren()
+        for child in children:
+            if isinstance(child, LayerChannel):
+                self.remove_layer(child)
+
+        return children
+
     def takeChild(self, index: int):
         child = super(LayersGroup, self).takeChild(index)
-        self.remove_layer(child)
+        if isinstance(child, LayerChannel):
+            self.remove_layer(child)
+
         return child
 
     def removeChild(self, child: QTreeWidgetItem):
-        self.remove_layer(child)
+        if isinstance(child, LayerChannel):
+            self.remove_layer(child)
+
         super(LayersGroup, self).removeChild(child)
 
     def addChild(self, child: QTreeWidgetItem):
@@ -658,6 +672,27 @@ class ImageGroup(QTreeWidgetItem):
 
         return layers_group
 
+    def remove_layers_group(self, layers_group: LayersGroup):
+        layers_group.takeChildren()
+
+    def takeChild(self, index: int):
+        child = super(ImageGroup, self).takeChild(index)
+        if isinstance(child, LayersGroup):
+            self.remove_layers_group(child)
+        return child
+
+    def takeChildren(self):
+        children = super(ImageGroup, self).takeChildren()
+        for child in children:
+            if isinstance(child, LayersGroup):
+                self.remove_layers_group(child)
+
+        return children
+
+    def removeChild(self, child: QTreeWidgetItem):
+        self.remove_layers_group(child)
+        super(ImageGroup, self).removeChild(child)
+
     def add_layers_group(self, layers_group_name: Optional[str] = None,
                          source_axes: Optional[str] = None,
                          use_as_input_image: Optional[bool] = None,
@@ -778,9 +813,25 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         self.managed_layers[layer].append(layer_channel)
 
-    def remove_managed_layer(self, removed_layer: Layer):
-        layer_channel_list = self.managed_layers.get(removed_layer, [])
-        for layer_channel in layer_channel_list:
+        viewer = napari.current_viewer()
+        viewer.layers.events.removed.connect(
+            self.remove_managed_layer
+        )
+
+    def remove_layer_channel(self, removed_layer_channel: LayerChannel):
+        if removed_layer_channel.layer not in self.managed_layers:
+            return
+
+        self.managed_layers[removed_layer_channel.layer].remove(
+            removed_layer_channel
+        )
+
+    def remove_managed_layer(self, event):
+        removed_layer = event.value
+        if removed_layer not in self.managed_layers:
+            return
+
+        for layer_channel in self.managed_layers[removed_layer]:
             layers_group = layer_channel.parent()
             image_group = layers_group.parent()
 
@@ -792,7 +843,7 @@ class ImageGroupRoot(QTreeWidgetItem):
             if not image_group.childCount():
                 self.removeChild(image_group)
 
-        if layer_channel_list:
+        if self.managed_layers[removed_layer]:
             self.managed_layers.pop(removed_layer)
 
         self.setSelected(True)
@@ -1047,7 +1098,7 @@ class MaskGenerator(PropertiesEditor):
         self._mask_axes = "".join([
             ax
             for ax in self._im_source_axes
-            if ax in "ZYX"
+            if ax != "C"
         ])
 
         (self._im_source_axes,
@@ -1192,10 +1243,6 @@ class ImageGroupsManager:
 
         viewer.dims.axis_labels = list(axis_labels)
 
-        viewer.layers.events.removed.connect(
-            self._remove_managed_layer
-        )
-
         self.image_groups_editor = ImageGroupEditor()
         self.layer_scale_editor = LayerScaleEditor()
         self.mask_generator = MaskGenerator()
@@ -1266,10 +1313,6 @@ class ImageGroupsManager:
             item.selected = True
 
             item.setExpanded(True)
-
-    def _remove_managed_layer(self, event):
-        self.groups_root.remove_managed_layer(event.value)
-        self._get_active_item(item=None)
 
     def update_group(self):
         viewer = napari.current_viewer()

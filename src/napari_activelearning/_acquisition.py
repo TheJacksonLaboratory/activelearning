@@ -230,14 +230,14 @@ class AcquisitionFunction:
     def _update_roi_from_position(self):
         viewer = napari.current_viewer()
         viewer_axes = "".join(viewer.dims.axis_labels).upper()
-        position = viewer.cursor.position
+        position = viewer.dims.current_step
         axes_order = viewer.dims.order
 
         self._roi = {
             viewer_axes[ord]:
             slice(None)
             if viewer_axes[ord] in self._input_axes
-            else slice(int(position[ord]), int(position[ord]) + 1)
+            else slice(position[ord], position[ord] + 1)
             for ord in axes_order
         }
 
@@ -274,7 +274,8 @@ class AcquisitionFunction:
                             segmentation_out,
                             sampling_positions=None,
                             segmentation_only=False,
-                            spatial_axes="ZYX"):
+                            spatial_axes="ZYX",
+                            input_axes="YXC"):
         dl = get_dataloader(dataset_metadata, patch_size=self._patch_size,
                             sampling_positions=sampling_positions,
                             spatial_axes=spatial_axes,
@@ -289,7 +290,7 @@ class AcquisitionFunction:
             mask_axes = spatial_axes
 
         pred_sel = tuple(
-            slice(None) if ax in pred_spatial_axes else None
+            slice(None) if ax in input_axes else None
             for ax in mask_axes
         )
 
@@ -370,11 +371,11 @@ class AcquisitionFunction:
         self._reset_image_progressbar(len(image_groups))
 
         viewer = napari.current_viewer()
-        spatial_axes = self._input_axes
-        if "C" in spatial_axes:
-            spatial_axes = list(spatial_axes)
-            spatial_axes.remove("C")
-            spatial_axes = "".join(spatial_axes)
+        input_spatial_axes = self._input_axes
+        if "C" in input_spatial_axes:
+            input_spatial_axes = list(input_spatial_axes)
+            input_spatial_axes.remove("C")
+            input_spatial_axes = "".join(input_spatial_axes)
 
         for n, image_group in enumerate(image_groups):
             image_group.setSelected(True)
@@ -400,13 +401,17 @@ class AcquisitionFunction:
             displayed_shape = input_layers_group.shape
             displayed_scale = input_layers_group.scale
 
-            acquisition_fun_shape, acquisition_fun_scale = list(zip(*[
-                (ax_s, ax_scl)
-                for ax, ax_s, ax_scl in zip(displayed_source_axes,
-                                            displayed_shape,
-                                            displayed_scale)
-                if ax in spatial_axes and ax_s > 1
-            ]))
+            (acquisition_fun_axes,
+             acquisition_fun_shape,
+             acquisition_fun_scale) = list(zip(*[
+                 (ax, ax_s, ax_scl)
+                 for ax, ax_s, ax_scl in zip(displayed_source_axes,
+                                             displayed_shape,
+                                             displayed_scale)
+                 if ax != "C"
+                 ]))
+
+            acquisition_fun_axes = "".join(acquisition_fun_axes)
 
             if not segmentation_only:
                 acquisition_root = save_zarr(
@@ -456,7 +461,7 @@ class AcquisitionFunction:
                 ]
 
                 if "images" in layer_type:
-                    for ax in spatial_axes:
+                    for ax in input_spatial_axes:
                         if ax not in displayed_source_axes:
                             continue
 
@@ -485,7 +490,7 @@ class AcquisitionFunction:
                 if "images" in layer_type:
                     dataset_metadata[layer_type]["axes"] = self._input_axes
                 else:
-                    dataset_metadata[layer_type]["axes"] = spatial_axes
+                    dataset_metadata[layer_type]["axes"] = input_spatial_axes
 
             if image_group.labels_group:
                 sampling_positions = list(
@@ -504,7 +509,8 @@ class AcquisitionFunction:
                 segmentation_out=segmentation_grp,
                 sampling_positions=sampling_positions,
                 segmentation_only=segmentation_only,
-                spatial_axes=spatial_axes
+                spatial_axes=acquisition_fun_axes,
+                input_axes=input_spatial_axes
             )
 
             self._update_image_progressbar(n + 1)
@@ -519,7 +525,7 @@ class AcquisitionFunction:
                 # Downsample the acquisition function
                 acquisition_fun_ms = downsample_image(
                     acquisition_root,
-                    source_axes=spatial_axes,
+                    source_axes=acquisition_fun_axes,
                     data_group="labels/acquisition_fun/0",
                     scale=4,
                     num_scales=5,
@@ -551,7 +557,7 @@ class AcquisitionFunction:
                 if acquisition_layers_group is None:
                     acquisition_layers_group = image_group.add_layers_group(
                         "acquisition",
-                        source_axes=spatial_axes,
+                        source_axes=acquisition_fun_axes,
                         use_as_input_image=False,
                         use_as_sampling_mask=False
                     )
@@ -570,7 +576,7 @@ class AcquisitionFunction:
             # Downsample the segmentation output
             segmentation_ms = downsample_image(
                 segmentation_root,
-                source_axes=spatial_axes,
+                source_axes=acquisition_fun_axes,
                 data_group=f"labels/{segmentation_group_name}/0",
                 scale=4,
                 num_scales=5,
@@ -597,7 +603,7 @@ class AcquisitionFunction:
             if segmentation_layers_group is None:
                 segmentation_layers_group = image_group.add_layers_group(
                     segmentation_group_name,
-                    source_axes=spatial_axes,
+                    source_axes=acquisition_fun_axes,
                     use_as_input_image=False,
                     use_as_sampling_mask=False
                 )
