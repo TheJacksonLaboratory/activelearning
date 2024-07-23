@@ -1,9 +1,7 @@
 from typing import Optional, Union, Iterable
 from pathlib import Path
 from qtpy.QtGui import QIntValidator
-from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
-                            QGridLayout,
-                            QLineEdit,
+from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QComboBox,
                             QLabel,
                             QFileDialog,
@@ -14,10 +12,10 @@ from qtpy.QtWidgets import (QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
                             QProgressBar,
                             QTreeWidget,
                             QTreeWidgetItem,
-                            QAbstractItemView)
+                            QAbstractItemView,
+                            QDialog)
 
 from functools import partial
-import napari
 import math
 
 from ._acquisition import AcquisitionFunction, TunableMethod
@@ -695,7 +693,7 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         self.edit_labels_btn.setEnabled(True)
 
 
-class TunableMethodWidget(QWidget, TunableMethod):
+class TunableMethodWidget(TunableMethod, QWidget):
     def __init__(self):
         super().__init__()
 

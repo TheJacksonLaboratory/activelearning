@@ -343,6 +343,7 @@ class AcquisitionFunction:
 
             self._update_patch_progressbar(n_samples)
 
+        self._update_patch_progressbar(self._max_samples)
         return img_sampling_positions
 
     def compute_acquisition_layers(

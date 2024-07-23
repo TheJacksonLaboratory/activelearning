@@ -1,10 +1,10 @@
 from typing import Annotated, Literal
 from pathlib import Path
 from magicgui import magicgui
-from qtpy.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QCheckBox
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
 
 from functools import partial
-
 from ._models import USING_CELLPOSE
 
 if USING_CELLPOSE:
@@ -29,7 +29,15 @@ if USING_CELLPOSE:
                 gpu=gpu
             )
 
-        return cellpose_segmentation_parameters
+        segmentation_parameter_names = [
+                "channel_axis",
+                "channels",
+                "pretrained_model",
+                "model_type",
+                "gpu"
+            ]
+
+        return cellpose_segmentation_parameters, segmentation_parameter_names
 
     def cellpose_finetuning_parameters_widget():
         @magicgui(auto_call=True)
@@ -98,39 +106,41 @@ if USING_CELLPOSE:
                 min_train_masks=min_train_masks,
                 model_name=model_name
             )
-        return cellpose_finetuning_parameters
 
-    class CellposeTunableWidget(QWidget, CellposeTunable):
+        finetuning_parameter_names = [
+            "batch_size",
+            "learning_rate",
+            "n_epochs",
+            "weight_decay",
+            "momentum",
+            "SGD",
+            "rgb",
+            "normalize",
+            "compute_flows",
+            "save_path",
+            "save_every",
+            "nimg_per_epoch",
+            "nimg_test_per_epoch",
+            "rescale",
+            "scale_range",
+            "bsize",
+            "min_train_masks",
+            "model_name"
+        ]
+
+        return cellpose_finetuning_parameters, finetuning_parameter_names
+
+    class CellposeTunableWidget(CellposeTunable, QWidget):
         def __init__(self):
             super().__init__()
 
-            segmentation_parameter_names = [
-                "channel_axis",
-                "channels",
-                "pretrained_model",
-                "model_type",
-                "gpu"
-            ]
-            finetuning_parameter_names = [
-                "batch_size",
-                "learning_rate",
-                "n_epochs",
-                "weight_decay",
-                "momentum",
-                "SGD",
-                "rgb",
-                "normalize",
-                "compute_flows",
-                "save_path",
-                "save_every",
-                "nimg_per_epoch",
-                "nimg_test_per_epoch",
-                "rescale",
-                "scale_range",
-                "bsize",
-                "min_train_masks",
-                "model_name"
-            ]
+            (segmentation_parameters,
+             segmentation_parameter_names) =\
+                cellpose_segmentation_parameters_widget()
+
+            (finetuning_parameters,
+             finetuning_parameter_names) =\
+                cellpose_finetuning_parameters_widget()
 
             self.advanced_segmentation_options_chk = QCheckBox(
                 "Advanced segmentation parameters"
@@ -150,27 +160,31 @@ if USING_CELLPOSE:
                 self._show_finetuning_parameters
             )
 
-            cellpose_segmentation_parameters =\
-                cellpose_segmentation_parameters_widget()
+            self._segmentation_parameters_scr = QScrollArea()
+            self._segmentation_parameters_scr.setWidgetResizable(True)
+            self._segmentation_parameters_scr.setHorizontalScrollBarPolicy(
+                Qt.ScrollBarAlwaysOff
+            )
+            self._segmentation_parameters_scr.setWidget(
+                segmentation_parameters.native
+            )
 
-            self._segmentation_parameters_widget =\
-                cellpose_segmentation_parameters.native
-
-            cellpose_finetuning_parameters =\
-                cellpose_finetuning_parameters_widget()
-
-            self._finetuning_parameters_widget =\
-                cellpose_finetuning_parameters.native
+            self._finetuning_parameters_scr = QScrollArea()
+            self._finetuning_parameters_scr.setWidgetResizable(True)
+            self._finetuning_parameters_scr.setHorizontalScrollBarPolicy(
+                Qt.ScrollBarAlwaysOff
+            )
+            self._finetuning_parameters_scr.setWidget(
+                finetuning_parameters.native
+            )
 
             for par_name in segmentation_parameter_names:
-                cellpose_segmentation_parameters.__getattr__(par_name).changed\
-                                                                      .connect(
+                segmentation_parameters.__getattr__(par_name).changed.connect(
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
             for par_name in finetuning_parameter_names:
-                cellpose_finetuning_parameters.__getattr__(par_name).changed\
-                                                                    .connect(
+                finetuning_parameters.__getattr__(par_name).changed.connect(
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
@@ -182,15 +196,15 @@ if USING_CELLPOSE:
                 self.advanced_finetuning_options_chk, 2, 0
             )
             self.parameters_lyt.addWidget(
-                self._segmentation_parameters_widget, 1, 0, 1, 2
+                self._segmentation_parameters_scr, 1, 0, 1, 2
             )
             self.parameters_lyt.addWidget(
-                self._finetuning_parameters_widget, 3, 0, 1, 2
+                self._finetuning_parameters_scr, 3, 0, 1, 2
             )
             self.setLayout(self.parameters_lyt)
 
-            self._segmentation_parameters_widget.hide()
-            self._finetuning_parameters_widget.hide()
+            self._segmentation_parameters_scr.hide()
+            self._finetuning_parameters_scr.hide()
 
         def _set_parameter(self, parameter_val, parameter_key=None):
             if ((isinstance(parameter_val, (str, Path)) and not parameter_val)
@@ -201,9 +215,7 @@ if USING_CELLPOSE:
             self.__setattr__(parameter_key, parameter_val)
 
         def _show_segmentation_parameters(self, show: bool):
-            if self._segmentation_parameters_widget is not None:
-                self._segmentation_parameters_widget.setVisible(show)
+            self._segmentation_parameters_scr.setVisible(show)
 
         def _show_finetuning_parameters(self, show: bool):
-            if self._finetuning_parameters_widget is not None:
-                self._finetuning_parameters_widget.setVisible(show)
+            self._finetuning_parameters_scr.setVisible(show)
