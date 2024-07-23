@@ -57,7 +57,7 @@ def test_update_roi_from_position(acquisition_function):
 
 def test_compute_acquisition_fun(acquisition_function,
                                  tunable_segmentation_method):
-    img = np.random.random((10, 10, 10, 10))
+    img = np.random.random((10, 10, 1))
     img_sp = np.random.random((10, 10, 1))
     MC_repetitions = 3
     result = acquisition_function._compute_acquisition_fun(img, img_sp,
@@ -83,18 +83,24 @@ def test_compute_acquisition(acquisition_function):
         "images": {"axes": "TCZYX"},
         "masks": {"source_axes": "ZYX"}
     }
-    acquisition_fun = np.zeros((10, 10, 10))
-    segmentation_out = np.zeros((10, 10, 10))
+    acquisition_fun = np.zeros((10, 10))
+    segmentation_out = np.zeros((10, 10))
     sampling_positions = None
     segmentation_only = False
     spatial_axes = "ZYX"
-    input_axes = "ZYXC"
+    input_axes = "YXC"
+
+    with patch('napari.current_viewer') as mock_viewer:
+        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
+        mock_viewer.return_value.dims.current_step = [0, 17, 20, 30]
+        mock_viewer.return_value.dims.order = [0, 1, 2, 3]
+        acquisition_function._update_roi_from_position()
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):
-        mock_dataloader.return_value = [(torch.zeros((1, 3)),
-                                         torch.zeros((1, 20, 10, 10)),
-                                         torch.zeros((10, 10, 1)))]
+        mock_dataloader.return_value = [(torch.zeros((1, 2, 3)),
+                                         torch.zeros((1, 10, 10, 1)),
+                                         torch.zeros((1, 10, 10, 1)))]
         result = acquisition_function.compute_acquisition(
             dataset_metadata, acquisition_fun, segmentation_out,
             sampling_positions,

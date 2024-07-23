@@ -25,7 +25,6 @@ try:
 except ModuleNotFoundError:
     USING_TORCH = False
 
-
 from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
@@ -156,7 +155,7 @@ class StaticPatchSampler(zds.PatchSampler):
         ]
 
         valid_mask_toplefts = np.ravel_multi_index(
-            np.split(valid_mask_toplefts, 2, axis=1),
+            np.split(valid_mask_toplefts, len(self.spatial_axes), axis=1),
             num_blocks
         )
         valid_mask_toplefts = np.unique(valid_mask_toplefts)
@@ -264,7 +263,7 @@ def get_dataloader(dataset_metadata, patch_size=512,
     else:
         patch_sampler = zds.PatchSampler(patch_size=patch_size,
                                          spatial_axes=spatial_axes,
-                                         min_area=0.25)
+                                         min_area=0.05)
 
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),

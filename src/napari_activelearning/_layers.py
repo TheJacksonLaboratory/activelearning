@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 import numpy as np
 import json
 
+import dask.array as da
 import napari
 from napari.layers import Image, Labels, Layer
 from napari.layers._multiscale_data import MultiScaleData
@@ -503,7 +504,8 @@ class LayersGroup(QTreeWidgetItem):
 
         name = get_basename(self.layers_group_name)
 
-        is_multiscale = isinstance(source_data, MultiScaleData)
+        is_multiscale = isinstance(source_data, (MultiScaleData,
+                                                 list[da.core.Array]))
         is_label = not self._use_as_input_image
 
         save_zarr(

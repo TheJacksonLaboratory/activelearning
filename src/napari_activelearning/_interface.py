@@ -1,6 +1,7 @@
 from typing import Optional, Union, Iterable
-from pathlib import Path
+
 from qtpy.QtGui import QIntValidator
+
 from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QComboBox,
                             QLabel,
@@ -12,11 +13,13 @@ from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QProgressBar,
                             QTreeWidget,
                             QTreeWidgetItem,
-                            QAbstractItemView,
-                            QDialog)
+                            QAbstractItemView)
 
 from functools import partial
 import math
+import numpy as np
+import dask.array as da
+from napari.layers._multiscale_data import MultiScaleData
 
 from ._acquisition import AcquisitionFunction, TunableMethod
 from ._layers import (ImageGroupEditor, ImageGroupsManager, LayerScaleEditor,
@@ -542,8 +545,8 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
             self._active_layers_group is not None
             and self._active_image_group is not None
             and self._active_image_group.group_dir is not None
-            and not isinstance(self._active_layers_group.source_data,
-                               (str, Path))
+            and isinstance(self._active_layers_group.source_data,
+                           (np.ndarray, da.core.Array, MultiScaleData))
         )
 
         self.remove_layers_group_btn.setEnabled(

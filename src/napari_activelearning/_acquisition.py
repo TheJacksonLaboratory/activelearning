@@ -1,5 +1,6 @@
-from typing import Optional, Iterable, Tuple
+from typing import Optional, Iterable, Tuple, Callable
 import random
+from pathlib import Path
 import numpy as np
 
 import zarrdataset as zds
@@ -49,6 +50,78 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
         u_sp_lab = np.where(mask, u_val, u_sp_lab)
 
     return u_sp_lab
+
+
+def add_multiscale_output_layer(
+        root,
+        axes: str,
+        scale: Iterable[float],
+        data_group: str,
+        group_name: str,
+        layers_group_name: str,
+        image_group: ImageGroup,
+        reference_source_axes: str,
+        reference_scale: Iterable[float],
+        output_filename: Optional[Path] = None,
+        contrast_limits: Optional[Iterable[float]] = None,
+        colormap: Optional[str] = None,
+        add_func: Optional[Callable] = napari.Viewer.add_image
+):
+    if output_filename:
+        root = output_filename
+
+    # Downsample the acquisition function
+    output_fun_ms = downsample_image(
+        root,
+        source_axes=axes,
+        data_group=data_group,
+        scale=4,
+        num_scales=5,
+        reference_source_axes=reference_source_axes,
+        reference_scale=reference_scale
+    )
+
+    func_args = dict(
+        data=output_fun_ms,
+        name=group_name,
+        multiscale=True,
+        opacity=0.8,
+        scale=scale,
+        blending="translucent_no_depth",
+    )
+
+    if colormap is not None:
+        func_args["colormap"] = colormap
+
+    if contrast_limits is not None:
+        func_args["contrast_limits"] = contrast_limits
+
+    new_output_layer = add_func(**func_args)
+
+    if isinstance(new_output_layer, list):
+        new_output_layer = new_output_layer[0]
+
+    output_layers_group = image_group.getLayersGroup(
+        layers_group_name
+    )
+
+    if output_layers_group is None:
+        output_layers_group = image_group.add_layers_group(
+            layers_group_name,
+            source_axes=axes,
+            use_as_input_image=False,
+            use_as_sampling_mask=False
+        )
+
+    output_channel = output_layers_group.add_layer(
+        new_output_layer
+    )
+
+    if output_filename:
+        output_channel.source_data = str(output_filename)
+        output_channel.data_group = data_group
+
+    return output_channel
 
 
 if USING_TORCH:
@@ -217,6 +290,7 @@ class AcquisitionFunction:
         self._patch_size = 128
         self._max_samples = 1
         self._MC_repetitions = 3
+        self._roi = None
 
         viewer = napari.current_viewer()
         self._input_axes = "".join(viewer.dims.axis_labels).upper()
@@ -276,22 +350,22 @@ class AcquisitionFunction:
                             segmentation_only=False,
                             spatial_axes="ZYX",
                             input_axes="YXC"):
-        dl = get_dataloader(dataset_metadata, patch_size=self._patch_size,
-                            sampling_positions=sampling_positions,
-                            spatial_axes=spatial_axes,
-                            shuffle=True)
-        segmentation_max = 0
-        n_samples = 0
-        img_sampling_positions = []
-
         if "masks" in dataset_metadata:
             mask_axes = dataset_metadata["masks"]["source_axes"]
         else:
             mask_axes = spatial_axes
 
+        dl = get_dataloader(dataset_metadata, patch_size=self._patch_size,
+                            sampling_positions=sampling_positions,
+                            spatial_axes=mask_axes,
+                            shuffle=True)
+        segmentation_max = 0
+        n_samples = 0
+        img_sampling_positions = []
+
         pred_sel = tuple(
             slice(None) if ax in input_axes else None
-            for ax in mask_axes
+            for ax in spatial_axes
         )
 
         self._reset_patch_progressbar()
@@ -311,7 +385,7 @@ class AcquisitionFunction:
 
             pos_u_lab = tuple(
                 pos.get(ax, self._roi[ax])
-                for ax in mask_axes
+                for ax in spatial_axes
             )
 
             if not segmentation_only:
@@ -520,97 +594,36 @@ class AcquisitionFunction:
                 continue
 
             if not segmentation_only:
-                if output_filename:
-                    acquisition_root = output_filename
-
-                # Downsample the acquisition function
-                acquisition_fun_ms = downsample_image(
+                add_multiscale_output_layer(
                     acquisition_root,
-                    source_axes=acquisition_fun_axes,
-                    data_group="labels/acquisition_fun/0",
-                    scale=4,
-                    num_scales=5,
-                    reference_source_axes=displayed_source_axes,
-                    reference_scale=displayed_scale
-                )
-
-                new_acquisition_layer = viewer.add_image(
-                    acquisition_fun_ms,
-                    name=group_name + " acquisition function",
-                    multiscale=True,
-                    opacity=0.8,
+                    axes=acquisition_fun_axes,
                     scale=acquisition_fun_scale,
-                    blending="translucent_no_depth",
-                    colormap="magma",
+                    data_group="labels/acquisition_fun/0",
+                    group_name=group_name + " acquisition function",
+                    layers_group_name="acquisition",
+                    image_group=image_group,
+                    reference_source_axes=displayed_source_axes,
+                    reference_scale=displayed_scale,
+                    output_filename=output_filename,
                     contrast_limits=(
-                        0,
-                        max(img_sampling_positions).acquisition_val
+                        0, max(img_sampling_positions).acquisition_val
                     ),
+                    colormap="magma",
+                    add_func=viewer.add_image
                 )
 
-                if isinstance(new_acquisition_layer, list):
-                    new_acquisition_layer = new_acquisition_layer[0]
-
-                acquisition_layers_group = image_group.getLayersGroup(
-                    "acquisition"
-                )
-
-                if acquisition_layers_group is None:
-                    acquisition_layers_group = image_group.add_layers_group(
-                        "acquisition",
-                        source_axes=acquisition_fun_axes,
-                        use_as_input_image=False,
-                        use_as_sampling_mask=False
-                    )
-
-                acquisition_channel = acquisition_layers_group.add_layer(
-                    new_acquisition_layer
-                )
-
-                if output_filename:
-                    acquisition_channel.source_data = str(output_filename)
-                    acquisition_channel.data_group = "labels/acquisition_fun/0"
-
-            if output_filename:
-                segmentation_root = output_filename
-
-            # Downsample the segmentation output
-            segmentation_ms = downsample_image(
+            segmentation_channel = add_multiscale_output_layer(
                 segmentation_root,
-                source_axes=acquisition_fun_axes,
+                axes=acquisition_fun_axes,
+                scale=acquisition_fun_scale,
                 data_group=f"labels/{segmentation_group_name}/0",
-                scale=4,
-                num_scales=5,
+                group_name=group_name + f" {segmentation_group_name}",
+                layers_group_name=segmentation_group_name,
+                image_group=image_group,
                 reference_source_axes=displayed_source_axes,
                 reference_scale=displayed_scale,
-            )
-
-            new_segmentation_layer = viewer.add_labels(
-                segmentation_ms,
-                name=group_name + f" {segmentation_group_name}",
-                multiscale=True,
-                opacity=0.8,
-                scale=acquisition_fun_scale,
-                blending="translucent_no_depth"
-            )
-
-            if isinstance(new_segmentation_layer, list):
-                new_segmentation_layer = new_segmentation_layer[0]
-
-            segmentation_layers_group = image_group.getLayersGroup(
-                segmentation_group_name
-            )
-
-            if segmentation_layers_group is None:
-                segmentation_layers_group = image_group.add_layers_group(
-                    segmentation_group_name,
-                    source_axes=acquisition_fun_axes,
-                    use_as_input_image=False,
-                    use_as_sampling_mask=False
-                )
-
-            segmentation_channel = segmentation_layers_group.add_layer(
-                new_segmentation_layer
+                output_filename=output_filename,
+                add_func=viewer.add_labels
             )
 
             if not segmentation_only and image_group.labels_group is None:
@@ -620,11 +633,6 @@ class AcquisitionFunction:
                 )
 
                 image_group.labels_group = new_label_group
-
-            if output_filename:
-                segmentation_channel.source_data = str(output_filename)
-                segmentation_channel.data_group =\
-                    f"labels/{segmentation_group_name}/0"
 
     def fine_tune(self):
         image_groups = list(filter(
@@ -643,11 +651,13 @@ class AcquisitionFunction:
 
         dataset_metadata_list = []
 
-        spatial_axes = self._input_axes
-        if "C" in spatial_axes:
-            spatial_axes = list(spatial_axes)
-            spatial_axes.remove("C")
-            spatial_axes = "".join(spatial_axes)
+        input_spatial_axes = self._input_axes
+        if "C" in input_spatial_axes:
+            input_spatial_axes = list(input_spatial_axes)
+            input_spatial_axes.remove("C")
+            input_spatial_axes = "".join(input_spatial_axes)
+
+        acquisition_fun_axes = None
 
         for image_group in image_groups:
             image_group.setSelected(True)
@@ -663,6 +673,13 @@ class AcquisitionFunction:
                 continue
 
             input_layers_group = image_group.child(input_layers_group_idx)
+
+            if acquisition_fun_axes is None:
+                acquisition_fun_axes = list(input_layers_group.source_axes)
+                if "C" in acquisition_fun_axes:
+                    acquisition_fun_axes.remove("C")
+
+                acquisition_fun_axes = "".join(acquisition_fun_axes)
 
             dataset_metadata = {}
 
@@ -693,8 +710,9 @@ class AcquisitionFunction:
                 if "images" in layer_type:
                     dataset_metadata[layer_type]["axes"] = self._input_axes
                 else:
-                    dataset_metadata[layer_type]["axes"] = spatial_axes
+                    dataset_metadata[layer_type]["axes"] = input_spatial_axes
 
+            # TODO: Remove non-input axes from sample positions
             sampling_positions = list(
                 map(lambda child: [ax_pos.start for ax_pos in child.position],
                     map(lambda idx: image_group.labels_group.child(idx),
@@ -704,9 +722,11 @@ class AcquisitionFunction:
             dataset_metadata_list.append((dataset_metadata,
                                           sampling_positions))
 
-        self.tunable_segmentation_method.fine_tune(dataset_metadata_list,
-                                                   patch_size=patch_size,
-                                                   spatial_axes=spatial_axes)
+        self.tunable_segmentation_method.fine_tune(
+            dataset_metadata_list,
+            patch_size=patch_size,
+            spatial_axes=acquisition_fun_axes
+        )
 
         self.compute_acquisition_layers(
             run_all=True,
