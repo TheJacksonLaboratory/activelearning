@@ -85,7 +85,7 @@ if USING_CELLPOSE:
                                            "step": 1e-3}] = 0.005,
           n_epochs: Annotated[int, {"widget_type": "SpinBox",
                                     "min": 1,
-                                    "max": 10000}] = 2000):
+                                    "max": 10000}] = 20):
             return dict(
                 batch_size=batch_size,
                 learning_rate=learning_rate,

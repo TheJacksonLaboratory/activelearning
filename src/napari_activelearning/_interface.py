@@ -1,7 +1,7 @@
 from typing import Optional, Union, Iterable
 
 from qtpy.QtGui import QIntValidator
-
+from qtpy.QtCore import Signal
 from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QComboBox,
                             QLabel,
@@ -27,6 +27,117 @@ from ._layers import (ImageGroupEditor, ImageGroupsManager, LayerScaleEditor,
                       ImageGroup,
                       ImageGroupRoot)
 from ._labels import LayersGroup, LayerChannel, LabelsManager
+
+
+class MultiSpinBox(QWidget):
+    sizesChanged = Signal(dict)
+
+    def __init__(self):
+        super().__init__()
+
+        self.edit_scale_lyt = QGridLayout()
+        self.setLayout(self.edit_scale_lyt)
+
+        self._curr_power_spn_list = []
+        self._curr_scale_le_list = []
+        self._curr_labels_list = []
+
+        self._sizes = {}
+
+    @property
+    def axes(self):
+        return self._sizes.keys()
+
+    @axes.setter
+    def axes(self, new_axes: str):
+        self._sizes = {
+            ax: 128
+            for ax in new_axes
+        }
+        self.update_spin_boxes()
+
+    @property
+    def sizes(self):
+        return self._sizes
+
+    @sizes.setter
+    def sizes(self, new_sizes: Union[Iterable[int], dict]):
+        if isinstance(dict):
+            self._sizes = new_sizes
+            self._axes = new_sizes.keys()
+
+        else:
+            self._sizes = {
+                ax: ax_s
+                for ax, ax_s in zip(self._axes, new_sizes)
+            }
+
+            for scale_le, ax_s in zip(self._curr_scale_le_list, self._sizes):
+                scale_le.setValue(ax_s)
+
+        self.update_spin_boxes()
+
+    def clear_layer_channel(self):
+        while self._curr_scale_le_list:
+            item = self._curr_scale_le_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
+
+        while self._curr_labels_list:
+            item = self._curr_labels_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
+
+        while self._curr_power_spn_list:
+            item = self._curr_power_spn_list.pop()
+            self.edit_scale_lyt.removeWidget(item)
+
+    def update_spin_boxes(self):
+        self.clear_layer_channel()
+
+        for ax_idx, (ax, ax_s) in enumerate(self._sizes.items()):
+            power_spn = QSpinBox(
+                minimum=0, maximum=16,
+                buttonSymbols=QAbstractSpinBox.UpDownArrows
+            )
+            power_spn.lineEdit().hide()
+            power_spn.setValue(int(math.log2(ax_s)))
+
+            scale_le = QLineEdit()
+            scale_le.setValidator(QIntValidator(1, 2**16))
+            scale_le.setText(str(ax_s))
+
+            self._curr_scale_le_list.append(scale_le)
+            self.edit_scale_lyt.addWidget(self._curr_scale_le_list[-1],
+                                          ax_idx + 1,
+                                          1)
+            self._curr_power_spn_list.append(power_spn)
+            self.edit_scale_lyt.addWidget(self._curr_power_spn_list[-1],
+                                          ax_idx + 1,
+                                          2)
+            self._curr_labels_list.append(QLabel(ax))
+            self.edit_scale_lyt.addWidget(self._curr_labels_list[-1],
+                                          ax_idx + 1,
+                                          0)
+
+            scale_le.textChanged.connect(
+                partial(self._set_patch_size)
+            )
+            power_spn.valueChanged.connect(
+                partial(self._modify_size, ax_idx=ax_idx)
+            )
+
+        self._set_patch_size()
+
+    def _modify_size(self, scale: int, ax_idx: int = 0):
+        self._curr_scale_le_list[ax_idx].setText(str(2 ** scale))
+
+    def _set_patch_size(self):
+        axes = self._sizes.keys()
+        self._sizes = {
+            ax: int(scale_le.text())
+            for ax, scale_le in zip(axes, self._curr_scale_le_list)
+        }
+
+        self.sizesChanged.emit(self._sizes)
 
 
 class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
@@ -317,91 +428,29 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         self.generate_mask_btn.setEnabled(False)
         self.generate_mask_btn.clicked.connect(self.generate_mask_layer)
 
+        self.patch_sizes_mspb = MultiSpinBox()
+        self.patch_sizes_mspb.sizesChanged.connect(self._set_patch_size)
+
         self.edit_scale_lyt = QGridLayout()
         self.edit_scale_lyt.addWidget(self.generate_mask_btn, 0, 0, 1, 3)
+        self.edit_scale_lyt.addWidget(self.patch_sizes_mspb, 1, 0, 1, 3)
         self.setLayout(self.edit_scale_lyt)
 
-        self._curr_power_spn_list = []
-        self._curr_scale_le_list = []
-        self._curr_labels_list = []
-
-    def _clear_layer_channel(self):
-        while self._curr_scale_le_list:
-            item = self._curr_scale_le_list.pop()
-            self.edit_scale_lyt.removeWidget(item)
-
-        while self._curr_labels_list:
-            item = self._curr_labels_list.pop()
-            self.edit_scale_lyt.removeWidget(item)
-
-        while self._curr_power_spn_list:
-            item = self._curr_power_spn_list.pop()
-            self.edit_scale_lyt.removeWidget(item)
-
-        self.generate_mask_btn.setEnabled(False)
+    def _set_patch_size(self, patch_sizes):
+        super().set_patch_size(list(patch_sizes.values()))
 
     def _update_reference_info(self):
-        super()._update_reference_info()
-        self._clear_layer_channel()
-
-        if self._active_layer_channel:
-            source_axes = self._mask_axes
-            patch_sizes = self._patch_sizes
-            if patch_sizes is None:
-                patch_sizes = [
-                    min(ax_s, 128)
-                    for ax_s in self._img_shape
-                ]
-
-            for ax_idx, (ax_ps, ax) in enumerate(zip(patch_sizes,
-                                                     source_axes)):
-                power_spn = QSpinBox(
-                    minimum=0, maximum=16,
-                    buttonSymbols=QAbstractSpinBox.UpDownArrows
-                )
-                power_spn.lineEdit().hide()
-
-                scale_le = QLineEdit()
-                scale_le.setValidator(QIntValidator(0, 2**16))
-
-                self._curr_scale_le_list.append(scale_le)
-                self.edit_scale_lyt.addWidget(self._curr_scale_le_list[-1],
-                                              ax_idx + 1,
-                                              1)
-                self._curr_power_spn_list.append(power_spn)
-                self.edit_scale_lyt.addWidget(self._curr_power_spn_list[-1],
-                                              ax_idx + 1,
-                                              2)
-                self._curr_labels_list.append(QLabel(ax))
-                self.edit_scale_lyt.addWidget(self._curr_labels_list[-1],
-                                              ax_idx + 1,
-                                              0)
-
-                scale_le.returnPressed.connect(
-                    partial(self._set_patch_size)
-                )
-                power_spn.valueChanged.connect(
-                    partial(self._modify_patch_size, ax_idx=ax_idx)
-                )
-                power_spn.setValue(int(math.log2(ax_ps)))
-
+        if super()._update_reference_info():
             self.generate_mask_btn.setEnabled(True)
+            self.patch_sizes_mspb.axes = self._mask_axes
 
-    def _modify_patch_size(self, scale: int, ax_idx: int = 0):
-        self._curr_scale_le_list[ax_idx].setText(str(2 ** scale))
-        self._set_patch_size()
-
-    def _set_patch_size(self):
-        patch_sizes = [
-            int(scale_le.text()) if scale_le.text() else 1
-            for scale_le in self._curr_scale_le_list
-        ]
-
-        super().set_patch_size(patch_sizes)
+        else:
+            self.generate_mask_btn.setEnabled(False)
 
     def generate_mask_layer(self):
-        self._set_patch_size()
-        super().generate_mask_layer()
+        self.generate_mask_btn.setEnabled(
+            super().generate_mask_layer() is not None
+        )
 
 
 class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
@@ -709,10 +758,15 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         super().__init__(image_groups_manager, labels_manager,
                          tunable_segmentation_method)
 
-        self.patch_size_spn = QSpinBox(minimum=128, maximum=1024,
-                                       value=self._patch_size,
-                                       singleStep=128)
-        self.patch_size_spn.valueChanged.connect(self._set_patch_size)
+        self.patch_sizes_mspn = MultiSpinBox()
+        spatial_input_axes = self._input_axes
+        if "C" in spatial_input_axes:
+            spatial_input_axes = list(spatial_input_axes)
+            spatial_input_axes.remove("C")
+            spatial_input_axes = "".join(spatial_input_axes)
+
+        self.patch_sizes_mspn.axes = spatial_input_axes
+        self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
 
         self.max_samples_spn = QSpinBox(minimum=1, maximum=10000,
                                         value=self._max_samples,
@@ -724,8 +778,13 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
                                            singleStep=10)
         self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
 
-        self.input_axes_le = QLineEdit(self._input_axes)
-        self.input_axes_le.editingFinished.connect(self._set_input_axes)
+        self.input_axes_le = QLineEdit()
+        self.input_axes_le.textChanged.connect(self._set_input_axes)
+        self.input_axes_le.setText(self._input_axes)
+
+        self.model_axes_le = QLineEdit()
+        self.model_axes_le.textChanged.connect(self._set_model_axes)
+        self.model_axes_le.setText(self._model_axes)
 
         self.execute_selected_btn = QPushButton("Run on selected image groups")
         self.execute_selected_btn.clicked.connect(
@@ -745,21 +804,23 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         acquisition_lyt = QGridLayout()
         acquisition_lyt.addWidget(QLabel("Patch size:"), 0, 0)
-        acquisition_lyt.addWidget(self.patch_size_spn, 0, 1)
+        acquisition_lyt.addWidget(self.patch_sizes_mspn, 0, 1, 1, 3)
         acquisition_lyt.addWidget(QLabel("Maximum samples:"), 1, 0)
         acquisition_lyt.addWidget(self.max_samples_spn, 1, 1)
         acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 2, 0)
         acquisition_lyt.addWidget(self.MC_repetitions_spn, 2, 1)
-        acquisition_lyt.addWidget(QLabel("Input axes order"), 3, 0)
+        acquisition_lyt.addWidget(QLabel("Input axes"), 3, 0)
         acquisition_lyt.addWidget(self.input_axes_le, 3, 1)
-        acquisition_lyt.addWidget(self.tunable_segmentation_method, 4, 0, 1, 2)
+        acquisition_lyt.addWidget(QLabel("Model axes"), 3, 2)
+        acquisition_lyt.addWidget(self.model_axes_le, 3, 3)
+        acquisition_lyt.addWidget(self.tunable_segmentation_method, 4, 0, 1, 4)
         acquisition_lyt.addWidget(self.execute_selected_btn, 5, 0)
         acquisition_lyt.addWidget(self.execute_all_btn, 5, 1)
-        acquisition_lyt.addWidget(self.finetuning_btn, 6, 0, 1, 2)
+        acquisition_lyt.addWidget(self.finetuning_btn, 6, 1)
         acquisition_lyt.addWidget(QLabel("Image queue:"), 7, 0, 1, 1)
-        acquisition_lyt.addWidget(self.image_pb, 7, 1)
+        acquisition_lyt.addWidget(self.image_pb, 7, 1, 1, 3)
         acquisition_lyt.addWidget(QLabel("Patch queue:"), 8, 0, 1, 1)
-        acquisition_lyt.addWidget(self.patch_pb, 8, 1)
+        acquisition_lyt.addWidget(self.patch_pb, 8, 1, 1, 3)
 
         self.setLayout(acquisition_lyt)
 
@@ -782,8 +843,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
     def _update_patch_progressbar(self, curr_patch_index: int):
         self.patch_pb.setValue(curr_patch_index)
 
-    def _set_patch_size(self):
-        self._patch_size = self.patch_size_spn.value()
+    def _set_patch_size(self, patch_sizes: dict):
+        self._patch_sizes = patch_sizes
 
     def _set_MC_repetitions(self):
         self._MC_repetitions = self.MC_repetitions_spn.value()
@@ -793,3 +854,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_input_axes(self):
         self._input_axes = self.input_axes_le.text()
+        self.patch_sizes_mspn.axes = self._input_axes
+
+    def _set_model_axes(self):
+        self._model_axes = self.model_axes_le.text()

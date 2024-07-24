@@ -287,33 +287,19 @@ class AcquisitionFunction:
     def __init__(self, image_groups_manager: ImageGroupsManager,
                  labels_manager: LabelsManager,
                  tunable_segmentation_method: TunableMethod):
-        self._patch_size = 128
+        self._patch_sizes = {}
         self._max_samples = 1
         self._MC_repetitions = 3
-        self._roi = None
 
         viewer = napari.current_viewer()
         self._input_axes = "".join(viewer.dims.axis_labels).upper()
+        self._model_axes = "".join(viewer.dims.axis_labels).upper()
 
         self.image_groups_manager = image_groups_manager
         self.labels_manager = labels_manager
         self.tunable_segmentation_method = tunable_segmentation_method
 
         super().__init__()
-
-    def _update_roi_from_position(self):
-        viewer = napari.current_viewer()
-        viewer_axes = "".join(viewer.dims.axis_labels).upper()
-        position = viewer.dims.current_step
-        axes_order = viewer.dims.order
-
-        self._roi = {
-            viewer_axes[ord]:
-            slice(None)
-            if viewer_axes[ord] in self._input_axes
-            else slice(position[ord], position[ord] + 1)
-            for ord in axes_order
-        }
 
     def _compute_acquisition_fun(self, img, img_sp, MC_repetitions):
         probs = []
@@ -347,46 +333,58 @@ class AcquisitionFunction:
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
                             sampling_positions=None,
-                            segmentation_only=False,
-                            spatial_axes="ZYX",
-                            input_axes="YXC"):
-        if "masks" in dataset_metadata:
-            mask_axes = dataset_metadata["masks"]["source_axes"]
-        else:
-            mask_axes = spatial_axes
+                            segmentation_only=False):
+        spatial_axes = self._model_axes
+        if "C" in spatial_axes:
+            spatial_axes = list(spatial_axes)
+            spatial_axes.remove("C")
+            spatial_axes = "".join(spatial_axes)
 
-        dl = get_dataloader(dataset_metadata, patch_size=self._patch_size,
+        dl = get_dataloader(dataset_metadata, patch_size=self._patch_sizes,
                             sampling_positions=sampling_positions,
-                            spatial_axes=mask_axes,
+                            spatial_axes=self._input_axes,
+                            model_input_axes=self._model_axes,
                             shuffle=True)
         segmentation_max = 0
         n_samples = 0
         img_sampling_positions = []
 
         pred_sel = tuple(
-            slice(None) if ax in input_axes else None
-            for ax in spatial_axes
+            slice(None) if ax in spatial_axes else None
+            for ax in self._input_axes
         )
+
+        drop_axis = tuple(
+            ax_idx
+            for ax_idx, ax in enumerate(
+                dataset_metadata["images"]["axes"])
+            if ax != "C" and ax not in spatial_axes
+        )
+
+        drop_axis_sp = list(drop_axis)
+        if "C" in dataset_metadata["images"]["axes"]:
+            drop_axis_sp.append(dataset_metadata["images"]["axes"].index("C"))
 
         self._reset_patch_progressbar()
         for pos, img, img_sp in dl:
             if USING_TORCH:
                 pos = pos[0].numpy()
                 img = img[0].numpy()
-                img_sp = img_sp.numpy().squeeze()
-            else:
-                img_sp = img_sp.squeeze()
+                img_sp = img_sp[0].numpy()
+
+            if len(drop_axis):
+                img = img.squeeze(drop_axis)
+
+            if len(drop_axis_sp):
+                img_sp = img_sp.squeeze(drop_axis_sp)
 
             pos = {
                 ax: slice(pos_ax[0], pos_ax[1])
-                for ax, pos_ax in zip(dataset_metadata["images"]["axes"],
-                                      pos)
+                for ax, pos_ax in zip(
+                    dataset_metadata["images"]["axes"], pos)
             }
 
-            pos_u_lab = tuple(
-                pos.get(ax, self._roi[ax])
-                for ax in spatial_axes
-            )
+            pos_u_lab = tuple(pos[ax] for ax in self._input_axes)
 
             if not segmentation_only:
                 u_sp_lab = self._compute_acquisition_fun(
@@ -441,17 +439,15 @@ class AcquisitionFunction:
         if not image_groups:
             return
 
-        self._update_roi_from_position()
-
         self._reset_image_progressbar(len(image_groups))
 
-        viewer = napari.current_viewer()
-        input_spatial_axes = self._input_axes
-        if "C" in input_spatial_axes:
-            input_spatial_axes = list(input_spatial_axes)
-            input_spatial_axes.remove("C")
-            input_spatial_axes = "".join(input_spatial_axes)
+        model_spatial_axes = self._model_axes
+        if "C" in model_spatial_axes:
+            model_spatial_axes = list(model_spatial_axes)
+            model_spatial_axes.remove("C")
+            model_spatial_axes = "".join(model_spatial_axes)
 
+        viewer = napari.current_viewer()
         for n, image_group in enumerate(image_groups):
             image_group.setSelected(True)
             group_name = image_group.group_name
@@ -476,9 +472,9 @@ class AcquisitionFunction:
             displayed_shape = input_layers_group.shape
             displayed_scale = input_layers_group.scale
 
-            (acquisition_fun_axes,
-             acquisition_fun_shape,
-             acquisition_fun_scale) = list(zip(*[
+            (output_axes,
+             output_shape,
+             output_scale) = list(zip(*[
                  (ax, ax_s, ax_scl)
                  for ax, ax_s, ax_scl in zip(displayed_source_axes,
                                              displayed_shape,
@@ -486,13 +482,13 @@ class AcquisitionFunction:
                  if ax != "C"
                  ]))
 
-            acquisition_fun_axes = "".join(acquisition_fun_axes)
+            output_axes = "".join(output_axes)
 
             if not segmentation_only:
                 acquisition_root = save_zarr(
                     output_filename,
                     data=None,
-                    shape=acquisition_fun_shape,
+                    shape=output_shape,
                     chunk_size=True,
                     name="acquisition_fun",
                     dtype=np.float32,
@@ -508,7 +504,7 @@ class AcquisitionFunction:
             segmentation_root = save_zarr(
                 output_filename,
                 data=None,
-                shape=acquisition_fun_shape,
+                shape=output_shape,
                 chunk_size=True,
                 name=segmentation_group_name,
                 dtype=np.int32,
@@ -530,30 +526,17 @@ class AcquisitionFunction:
                     continue
 
                 dataset_metadata[layer_type] = layers_group.metadata
-                dataset_metadata[layer_type]["roi"] = [
-                        self._roi.get(ax, slice(None))
-                        for ax in layers_group.source_axes
-                ]
+                dataset_metadata[layer_type]["roi"] = None
 
                 if "images" in layer_type:
-                    for ax in input_spatial_axes:
-                        if ax not in displayed_source_axes:
-                            continue
-
-                        ax_idx = displayed_source_axes.index(ax)
-
-                        if displayed_shape[ax_idx] < self._patch_size:
-                            continue
-
-                        dataset_metadata[layer_type]["roi"][ax_idx] = slice(
-                            0,
-                            self._patch_size * (displayed_shape[ax_idx]
-                                                // self._patch_size)
-                        )
-
-                dataset_metadata[layer_type]["roi"] = [tuple(
-                    dataset_metadata[layer_type]["roi"]
-                )]
+                    dataset_metadata[layer_type]["roi"] = [tuple(
+                        slice(0, ax_s - ax_s % self._patch_sizes.get(ax, 1))
+                        if (ax in model_spatial_axes
+                            or ax_s < self._patch_sizes.get(ax, 1))
+                        else slice(None)
+                        for ax, ax_s in zip(displayed_source_axes,
+                                            displayed_shape)
+                    )]
 
                 if isinstance(dataset_metadata[layer_type]["filenames"],
                               MultiScaleData):
@@ -562,18 +545,31 @@ class AcquisitionFunction:
 
                 dataset_metadata[layer_type]["modality"] = layer_type
 
-                if "images" in layer_type:
-                    dataset_metadata[layer_type]["axes"] = self._input_axes
-                else:
-                    dataset_metadata[layer_type]["axes"] = input_spatial_axes
+                model_spatial_axes = set(dataset_metadata[layer_type]["source_axes"]) - set(self._model_axes)
+                model_spatial_axes = list(model_spatial_axes) + list(self._model_axes)
+                if "images" not in layer_type and "C" in model_spatial_axes:
+                    model_spatial_axes.remove("C")
+
+                model_spatial_axes = "".join(model_spatial_axes)
+
+                dataset_metadata[layer_type]["axes"] = model_spatial_axes
 
             if image_group.labels_group:
-                sampling_positions = list(
-                    map(lambda child:
-                        [ax_pos.start for ax_pos in child.position],
-                        map(lambda idx: image_group.labels_group.child(idx),
-                            range(image_group.labels_group.childCount())))
+                # Remove non-input axes from sampled positions
+                labels = map(lambda idx: image_group.labels_group.child(idx),
+                             range(image_group.labels_group.childCount()))
+
+                spatial_pos = map(
+                    lambda child: [
+                        ax_pos.start
+                        for ax, ax_pos in zip(output_axes,
+                                              child.position)
+                        if ax in model_spatial_axes
+                    ],
+                    labels
                 )
+
+                sampling_positions = list(spatial_pos)
             else:
                 sampling_positions = None
 
@@ -583,9 +579,7 @@ class AcquisitionFunction:
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
                 sampling_positions=sampling_positions,
-                segmentation_only=segmentation_only,
-                spatial_axes=acquisition_fun_axes,
-                input_axes=input_spatial_axes
+                segmentation_only=segmentation_only
             )
 
             self._update_image_progressbar(n + 1)
@@ -596,8 +590,8 @@ class AcquisitionFunction:
             if not segmentation_only:
                 add_multiscale_output_layer(
                     acquisition_root,
-                    axes=acquisition_fun_axes,
-                    scale=acquisition_fun_scale,
+                    axes=output_axes,
+                    scale=output_scale,
                     data_group="labels/acquisition_fun/0",
                     group_name=group_name + " acquisition function",
                     layers_group_name="acquisition",
@@ -614,8 +608,8 @@ class AcquisitionFunction:
 
             segmentation_channel = add_multiscale_output_layer(
                 segmentation_root,
-                axes=acquisition_fun_axes,
-                scale=acquisition_fun_scale,
+                axes=output_axes,
+                scale=output_scale,
                 data_group=f"labels/{segmentation_group_name}/0",
                 group_name=group_name + f" {segmentation_group_name}",
                 layers_group_name=segmentation_group_name,
@@ -650,14 +644,7 @@ class AcquisitionFunction:
         patch_size = self.patch_size_spn.value()
 
         dataset_metadata_list = []
-
-        input_spatial_axes = self._input_axes
-        if "C" in input_spatial_axes:
-            input_spatial_axes = list(input_spatial_axes)
-            input_spatial_axes.remove("C")
-            input_spatial_axes = "".join(input_spatial_axes)
-
-        acquisition_fun_axes = None
+        output_axes = None
 
         for image_group in image_groups:
             image_group.setSelected(True)
@@ -674,12 +661,12 @@ class AcquisitionFunction:
 
             input_layers_group = image_group.child(input_layers_group_idx)
 
-            if acquisition_fun_axes is None:
-                acquisition_fun_axes = list(input_layers_group.source_axes)
-                if "C" in acquisition_fun_axes:
-                    acquisition_fun_axes.remove("C")
+            if output_axes is None:
+                output_axes = list(input_layers_group.source_axes)
+                if "C" in output_axes:
+                    output_axes.remove("C")
 
-                acquisition_fun_axes = "".join(acquisition_fun_axes)
+                output_axes = "".join(output_axes)
 
             dataset_metadata = {}
 
@@ -688,12 +675,7 @@ class AcquisitionFunction:
                (segmentation_layers_group, "labels")
                ]:
                 dataset_metadata[layer_type] = layers_group.metadata
-                dataset_metadata[layer_type]["roi"] = [
-                    tuple(
-                        self._roi.get(ax, slice(None))
-                        for ax in layers_group.source_axes
-                    )
-                ]
+                dataset_metadata[layer_type]["roi"] = None
 
                 if isinstance(dataset_metadata[layer_type]["filenames"],
                               MultiScaleData):
@@ -707,17 +689,20 @@ class AcquisitionFunction:
 
                 dataset_metadata[layer_type]["modality"] = layer_type
 
-                if "images" in layer_type:
-                    dataset_metadata[layer_type]["axes"] = self._input_axes
-                else:
-                    dataset_metadata[layer_type]["axes"] = input_spatial_axes
+            # Remove non-input axes from sampled positions
+            labels = map(lambda idx: image_group.labels_group.child(idx),
+                         range(image_group.labels_group.childCount()))
 
-            # TODO: Remove non-input axes from sample positions
-            sampling_positions = list(
-                map(lambda child: [ax_pos.start for ax_pos in child.position],
-                    map(lambda idx: image_group.labels_group.child(idx),
-                        range(image_group.labels_group.childCount())))
+            spatial_pos = map(
+                lambda child: [
+                    ax_pos.start
+                    for ax, ax_pos in zip(output_axes, child.position)
+                    if ax in model_spatial_axes
+                ],
+                labels
             )
+
+            sampling_positions = list(spatial_pos)
 
             dataset_metadata_list.append((dataset_metadata,
                                           sampling_positions))
@@ -725,7 +710,7 @@ class AcquisitionFunction:
         self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
             patch_size=patch_size,
-            spatial_axes=acquisition_fun_axes
+            spatial_axes=self._input_axes
         )
 
         self.compute_acquisition_layers(

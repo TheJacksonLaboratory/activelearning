@@ -8,14 +8,7 @@ import zarrdataset as zds
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 import dask.array as da
 
-try:
-    import cv2
-    from cv2.ximgproc import createSuperpixelSEEDS
-    CV_SUPERPIXELS = True
-except ModuleNotFoundError:
-    from skimage.transform import resize
-    CV_SUPERPIXELS = False
-
+from skimage.transform import resize
 import numpy as np
 
 try:
@@ -36,71 +29,56 @@ class SuperPixelGenerator(zds.MaskGenerator):
     The axes of the input image are expected to be YXC, or YX if the image has
     no channels.
     """
-    def __init__(self, iterations: int = 5, prior: int = 3,
-                 num_superpixels: int = 512,
-                 num_levels: int = 10,
-                 histogram_bins: int = 10,
-                 double_step: bool = False,
-                 axes: str = "YXC"):
+    def __init__(self, num_superpixels: int = 512, axes: str = "YXC",
+                 model_axes: str = "YXC"):
 
         super(SuperPixelGenerator, self).__init__(axes=axes)
-        self._iterations = iterations
-        self._prior = prior
-        self._num_superpixels = num_superpixels
-        self._num_levels = num_levels
-        self._histogram_bins = histogram_bins
-        self._double_step = double_step
 
-        self._ax_X = self.axes.index("X")
-        self._ax_Y = self.axes.index("Y")
-        if "C" in self.axes:
-            self._ax_C = self.axes.index("C")
-        else:
-            self._ax_C = 0
+        self._num_superpixels = num_superpixels
+        self._model_axes = model_axes
+        self._model_spatial_axes = self._model_axes
+        if "C" in self._model_spatial_axes:
+            self._model_spatial_axes = list(self._model_spatial_axes)
+            self._model_spatial_axes.remove("C")
+            self._model_spatial_axes = "".join(self._model_spatial_axes)
+
+        self._pos = tuple(
+            slice(None) if ax in self._model_spatial_axes else None
+            for ax in self.axes
+        )
 
     def _compute_transform(self, image):
-        if image.ndim > 2:
-            image_channels = image.shape[self._ax_C]
-        else:
-            image_channels = 1
-            image = image[None, ...]
+        image_shape = {
+            ax: ax_s
+            for ax, ax_s in zip(self.axes, image.shape)
+        }
 
-        if CV_SUPERPIXELS:
-            super_pixels = createSuperpixelSEEDS(
-                image.shape[self._ax_Y],
-                image.shape[self._ax_X],
-                image_channels=image_channels,
-                prior=self._prior,
-                num_superpixels=self._num_superpixels,
-                num_levels=self._num_levels,
-                histogram_bins=self._histogram_bins,
-                double_step=self._double_step
-            )
+        spatial_sizes = tuple(
+            ax_s
+            for ax, ax_s in image_shape.items()
+            if ax in self._model_spatial_axes
+        )
 
-            reshaped_image = np.stack(
-                np.split(image, image_channels, axis=self._ax_C),
-                axis=-1
-            ).squeeze(axis=self._ax_C)
-            norm_image = 255.0 * reshaped_image
-            norm_image = norm_image.astype(np.uint8)
+        max_size = max(spatial_sizes)
 
-            super_pixels.iterate(norm_image, self._iterations)
-            labels = super_pixels.getLabels()
+        scales = tuple(
+            ax_s / max_size
+            for ax, ax_s in image_shape.items()
+            if ax in self._model_spatial_axes
+        )
 
-        else:
-            cols = int(np.sqrt(self._num_superpixels))
-            rows = self._num_superpixels // cols
+        dim_sizes = tuple(
+            max(1, int(np.prod(spatial_sizes) * (scl / sum(scales))))
+            for scl in scales
+        )
 
-            labels_dim = np.arange(cols * rows).reshape(rows, cols)
-            labels = resize(labels_dim,
-                            (image.shape[self._ax_Y], image.shape[self._ax_X]),
-                            order=0)
+        labels_dim = np.arange(sum(dim_sizes)).reshape(dim_sizes)
+        labels = resize(labels_dim, spatial_sizes, order=0)
 
-        if image_channels > 1:
-            labels = np.expand_dims(labels, self._ax_C)
-        else:
-            labels = labels[..., None]
+        if "Z" not in self.axes:
+            labels = labels[0]
 
+        labels = labels[self._pos]
         return labels
 
 
@@ -155,7 +133,7 @@ class StaticPatchSampler(zds.PatchSampler):
         ]
 
         valid_mask_toplefts = np.ravel_multi_index(
-            np.split(valid_mask_toplefts, len(self.spatial_axes), axis=1),
+            np.split(valid_mask_toplefts, len(self.spatial_axes), axis=-1),
             num_blocks
         )
         valid_mask_toplefts = np.unique(valid_mask_toplefts)
@@ -234,13 +212,16 @@ class StaticPatchSampler(zds.PatchSampler):
         return patches_slices
 
 
-def get_dataloader(dataset_metadata, patch_size=512,
-                   sampling_positions=None,
-                   shuffle=True,
-                   num_workers=0,
-                   batch_size=1,
-                   spatial_axes="YX",
-                   **superpixel_kwargs):
+def get_dataloader(
+        dataset_metadata, patch_size: dict,
+        sampling_positions: Optional[Iterable[Iterable[int]]] = None,
+        shuffle: bool = True,
+        num_workers: int = 0,
+        batch_size: int = 1,
+        spatial_axes: str = "YX",
+        model_input_axes: str = "YXC",
+        **superpixel_kwargs
+):
 
     if "superpixels" not in dataset_metadata:
         dataset_metadata["superpixels"] = zds.ImagesDatasetSpecs(
@@ -248,9 +229,9 @@ def get_dataloader(dataset_metadata, patch_size=512,
             data_group=dataset_metadata["images"]["data_group"],
             source_axes=dataset_metadata["images"]["source_axes"],
             axes=dataset_metadata["images"]["axes"],
-            roi=dataset_metadata["images"]["roi"],
             image_loader_func=SuperPixelGenerator(
                 axes=dataset_metadata["images"]["axes"],
+                model_axes=model_input_axes,
                 **superpixel_kwargs
             ),
             modality="superpixels"

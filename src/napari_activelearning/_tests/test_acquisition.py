@@ -39,22 +39,6 @@ def test_initialization(acquisition_function):
     assert acquisition_function._input_axes == "TZYX"
 
 
-def test_update_roi_from_position(acquisition_function):
-    with patch('napari.current_viewer') as mock_viewer:
-        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
-        mock_viewer.return_value.dims.current_step = [0, 17, 20, 30]
-        mock_viewer.return_value.dims.order = [0, 1, 2, 3]
-        acquisition_function._input_axes = "YXC"
-        acquisition_function._update_roi_from_position()
-        expected_roi = {
-            'T': slice(0, 1),
-            'Z': slice(17, 18),
-            'Y': slice(None),
-            'X': slice(None)
-        }
-        assert acquisition_function._roi == expected_roi
-
-
 def test_compute_acquisition_fun(acquisition_function,
                                  tunable_segmentation_method):
     img = np.random.random((10, 10, 1))
@@ -80,7 +64,7 @@ def test_compute_segmentation(acquisition_function,
 
 def test_compute_acquisition(acquisition_function):
     dataset_metadata = {
-        "images": {"axes": "TCZYX"},
+        "images": {"source_axes": "TCZYX"},
         "masks": {"source_axes": "ZYX"}
     }
     acquisition_fun = np.zeros((10, 10))
@@ -94,7 +78,6 @@ def test_compute_acquisition(acquisition_function):
         mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
         mock_viewer.return_value.dims.current_step = [0, 17, 20, 30]
         mock_viewer.return_value.dims.order = [0, 1, 2, 3]
-        acquisition_function._update_roi_from_position()
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):

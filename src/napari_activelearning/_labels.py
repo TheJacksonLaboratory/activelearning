@@ -262,8 +262,16 @@ class LabelsManager:
         self._active_label_group = self._active_label.parent()
 
         self._active_layer_channel = self._active_label_group.layer_channel
-        self._active_layers_group = self._active_layer_channel.parent()
-        self._active_group = self._active_layers_group.parent()
+
+        if self._active_label_group is not None:
+            self._active_layers_group = self._active_layer_channel.parent()
+        else:
+            self._active_layers_group = None
+
+        if self._active_layers_group is not None:
+            self._active_group = self._active_layers_group.parent()
+        else:
+            self._active_group = None
 
         current_center = [
             pos * ax_scl

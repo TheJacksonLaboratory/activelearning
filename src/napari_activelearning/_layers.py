@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 import numpy as np
 import json
 
+import zarr
 import dask.array as da
 import napari
 from napari.layers import Image, Labels, Layer
@@ -504,8 +505,14 @@ class LayersGroup(QTreeWidgetItem):
 
         name = get_basename(self.layers_group_name)
 
-        is_multiscale = isinstance(source_data, (MultiScaleData,
-                                                 list[da.core.Array]))
+        is_multiscale = isinstance(source_data, MultiScaleData)
+        is_multiscale |= (
+            isinstance(source_data, list)
+            and all(map(lambda src_lvl:
+                        isinstance(src_lvl, (zarr.Array, da.core.Array)),
+                        source_data))
+        )
+
         is_label = not self._use_as_input_image
 
         save_zarr(
@@ -1083,7 +1090,7 @@ class MaskGenerator(PropertiesEditor):
            or self._active_image_group.input_layers_group is None
            or not self._active_image_group.child(
                self._active_image_group.input_layers_group).childCount()):
-            return
+            return False
 
         self._active_layers_group = self._active_image_group.child(
             self._active_image_group.input_layers_group
@@ -1119,13 +1126,14 @@ class MaskGenerator(PropertiesEditor):
                 min(128, ax_s)
                 for ax_s in self._im_shape
             ]
+        return True
 
     def generate_mask_layer(self):
         if (self._active_image_group is None
            or self._active_image_group.input_layers_group is None
            or not self._active_image_group.child(
                self._active_image_group.input_layers_group).childCount()):
-            return
+            return None
 
         self._active_layers_group = self._active_image_group.child(
             self._active_image_group.input_layers_group
