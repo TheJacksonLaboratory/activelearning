@@ -296,8 +296,8 @@ class AcquisitionFunction:
         self._MC_repetitions = 3
 
         viewer = napari.current_viewer()
-        self._input_axes = "".join(viewer.dims.axis_labels).upper()
-        self._model_axes = "".join(viewer.dims.axis_labels).upper()
+        self.input_axes = "".join(viewer.dims.axis_labels).upper()
+        self.model_axes = "".join(viewer.dims.axis_labels).upper()
 
         self.image_groups_manager = image_groups_manager
         self.labels_manager = labels_manager
@@ -355,7 +355,7 @@ class AcquisitionFunction:
                 dataset_metadata[layer_type]["roi"] = [tuple(
                     slice(0, ax_s - ax_s % self._patch_sizes.get(ax, 1))
                     if (ax != "C"
-                        and (ax in self._model_axes
+                        and (ax in self.model_axes
                              or ax_s > self._patch_sizes.get(ax, 1)))
                     else slice(None)
                     for ax, ax_s in zip(displayed_source_axes,
@@ -375,11 +375,11 @@ class AcquisitionFunction:
             dataset_metadata[layer_type]["modality"] = layer_type
 
             model_spatial_axes = list(filter(
-                lambda ax: ax not in self._model_axes,
+                lambda ax: ax not in self.model_axes,
                 dataset_metadata[layer_type]["source_axes"]
             ))
 
-            model_spatial_axes += list(self._model_axes)
+            model_spatial_axes += list(self.model_axes)
             if "images" not in layer_type and "C" in model_spatial_axes:
                 model_spatial_axes.remove("C")
 
@@ -411,23 +411,24 @@ class AcquisitionFunction:
                             segmentation_out,
                             sampling_positions=None,
                             segmentation_only=False):
-        model_spatial_axes = self._model_axes
-        if "C" in model_spatial_axes:
-            model_spatial_axes = list(model_spatial_axes)
-            model_spatial_axes.remove("C")
-            model_spatial_axes = "".join(model_spatial_axes)
+        model_spatial_axes = [
+            ax
+            for ax in self.model_axes
+            if ax != "C"
+        ]
+        model_spatial_axes = "".join(model_spatial_axes)
 
         input_spatial_axes = [
             ax
             for ax in dataset_metadata["images"]["source_axes"]
-            if ax in self._input_axes and ax != "C"
+            if ax in self.input_axes and ax != "C"
         ]
         input_spatial_axes = "".join(input_spatial_axes)
 
         dl = get_dataloader(dataset_metadata, patch_size=self._patch_sizes,
                             sampling_positions=sampling_positions,
                             spatial_axes=input_spatial_axes,
-                            model_input_axes=self._model_axes,
+                            model_input_axes=self.model_axes,
                             shuffle=True)
         segmentation_max = 0
         n_samples = 0
@@ -494,7 +495,6 @@ class AcquisitionFunction:
             )
 
             n_samples += 1
-            self.patch_pb.setValue(n_samples)
             if n_samples >= self._max_samples:
                 break
 
@@ -715,7 +715,7 @@ class AcquisitionFunction:
         self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
             patch_sizes=self.patch_sizes_mspn.sizes,
-            model_axes=self._model_axes
+            model_axes=self.model_axes
         )
 
         self.compute_acquisition_layers(

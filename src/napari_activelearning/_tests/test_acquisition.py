@@ -18,8 +18,8 @@ def labels_manager():
 @pytest.fixture
 def tunable_segmentation_method():
     method = MagicMock()
-    method.probs.return_value = np.random.random((10, 10, 10))
-    method.segment.return_value = np.random.randint(0, 2, (10, 10, 10))
+    method.probs.return_value = np.random.random((10, 10))
+    method.segment.return_value = np.random.randint(0, 2, (10, 10))
     return method
 
 
@@ -32,17 +32,10 @@ def acquisition_function(image_groups_manager, labels_manager,
                                    tunable_segmentation_method)
 
 
-def test_initialization(acquisition_function):
-    assert acquisition_function._patch_size == 128
-    assert acquisition_function._max_samples == 1
-    assert acquisition_function._MC_repetitions == 3
-    assert acquisition_function._input_axes == "TZYX"
-
-
 def test_compute_acquisition_fun(acquisition_function,
                                  tunable_segmentation_method):
-    img = np.random.random((10, 10, 1))
-    img_sp = np.random.random((10, 10, 1))
+    img = np.random.random((10, 10, 3))
+    img_sp = np.random.random((10, 10))
     MC_repetitions = 3
     result = acquisition_function._compute_acquisition_fun(img, img_sp,
                                                            MC_repetitions)
@@ -52,7 +45,7 @@ def test_compute_acquisition_fun(acquisition_function,
 
 def test_compute_segmentation(acquisition_function,
                               tunable_segmentation_method):
-    img = np.random.random((10, 10, 10))
+    img = np.random.random((1, 1, 1, 10, 10, 3))
     labels_offset = 1
     result = acquisition_function._compute_segmentation(img, labels_offset)
     expected_segmentation = tunable_segmentation_method.segment()
@@ -64,32 +57,29 @@ def test_compute_segmentation(acquisition_function,
 
 def test_compute_acquisition(acquisition_function):
     dataset_metadata = {
-        "images": {"source_axes": "TCZYX"},
-        "masks": {"source_axes": "ZYX"}
+        "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
+        "masks": {"source_axes": "TZYX", "axes": "TZYX"}
     }
-    acquisition_fun = np.zeros((10, 10))
-    segmentation_out = np.zeros((10, 10))
+    acquisition_fun = np.zeros((1, 1, 10, 10))
+    segmentation_out = np.zeros((1, 1, 10, 10))
     sampling_positions = None
     segmentation_only = False
-    spatial_axes = "ZYX"
-    input_axes = "YXC"
 
-    with patch('napari.current_viewer') as mock_viewer:
-        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
-        mock_viewer.return_value.dims.current_step = [0, 17, 20, 30]
-        mock_viewer.return_value.dims.order = [0, 1, 2, 3]
+    acquisition_function.input_axes = "TZYX"
+    acquisition_function.model_axes = "YXC"
+    acquisition_function.patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):
-        mock_dataloader.return_value = [(torch.zeros((1, 2, 3)),
-                                         torch.zeros((1, 10, 10, 1)),
-                                         torch.zeros((1, 10, 10, 1)))]
+        mock_dataloader.return_value = [
+            (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]]),
+             torch.zeros((1, 1, 1, 10, 10, 3)),
+             torch.zeros((1, 1, 1, 10, 10, 1)))
+        ]
         result = acquisition_function.compute_acquisition(
             dataset_metadata, acquisition_fun, segmentation_out,
             sampling_positions,
-            segmentation_only,
-            spatial_axes,
-            input_axes
+            segmentation_only
         )
 
         assert len(result) == 1

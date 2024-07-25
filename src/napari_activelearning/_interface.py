@@ -787,7 +787,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         patch_sizes_scr.setWidgetResizable(True)
         patch_sizes_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        spatial_input_axes = self._input_axes
+        spatial_input_axes = self.input_axes
         if "C" in spatial_input_axes:
             spatial_input_axes = list(spatial_input_axes)
             spatial_input_axes.remove("C")
@@ -808,11 +808,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         self.input_axes_le = QLineEdit()
         self.input_axes_le.textChanged.connect(self._set_input_axes)
-        self.input_axes_le.setText(self._input_axes)
+        self.input_axes_le.setText(self.input_axes)
 
         self.model_axes_le = QLineEdit()
         self.model_axes_le.textChanged.connect(self._set_model_axes)
-        self.model_axes_le.setText(self._model_axes)
+        self.model_axes_le.setText(self.model_axes)
 
         self.execute_selected_btn = QPushButton("Run on selected image groups")
         self.execute_selected_btn.clicked.connect(
@@ -881,8 +881,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self._max_samples = self.max_samples_spn.value()
 
     def _set_input_axes(self):
-        self._input_axes = self.input_axes_le.text()
-        self.patch_sizes_mspn.axes = self._input_axes
+        self.input_axes = self.input_axes_le.text()
+        self.patch_sizes_mspn.axes = self.input_axes
 
     def _set_model_axes(self):
-        self._model_axes = self.model_axes_le.text()
+        self.model_axes = self.model_axes_le.text()
