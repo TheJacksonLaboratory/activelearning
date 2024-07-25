@@ -93,6 +93,15 @@ class LabelGroupRoot(QTreeWidgetItem):
            and label_group in self.managed_layers[layer]):
             self.managed_layers[layer].remove(label_group)
 
+            layers_group = label_group.layer_channel.parent()
+            image_group = None
+            if layers_group is not None:
+                image_group = layers_group.parent()
+
+            if (image_group is not None
+               and label_group == image_group.labels_group):
+                image_group.labels_group = None
+
             if not self.managed_layers[layer]:
                 self.managed_layers.pop(layer)
 
@@ -102,21 +111,16 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         self.managed_layers[layer].append(label_group)
 
+        viewer = napari.current_viewer()
+        viewer.layers.events.removed.connect(
+            self.remove_managed_layer
+        )
+
     def remove_managed_layer(self, event):
         removed_layer = event.value
 
         label_group_list = self.managed_layers.get(removed_layer, [])
         for label_group in label_group_list:
-            layers_group = label_group.layer_channel.parent()
-            image_group = None
-
-            if layers_group is not None:
-                image_group = layers_group.parent()
-
-            if (image_group is not None
-               and label_group == image_group.labels_group):
-                image_group.labels_group = None
-
             self.removeChild(label_group)
 
     def addChild(self, child: QTreeWidgetItem):
@@ -164,7 +168,7 @@ class LabelsManager:
         self._active_label_group: Union[None, LabelGroup] = None
         self._active_layer_channel: Union[None, LayerChannel] = None
         self._active_layers_group: Union[None, LayersGroup] = None
-        self._active_group: Union[None, ImageGroup] = None
+        self._active_image_group: Union[None, ImageGroup] = None
 
         self._transaction = None
         self._active_edit_layer: Union[None, Layer] = None
@@ -172,9 +176,6 @@ class LabelsManager:
         self._requires_commit = False
 
         viewer = napari.current_viewer()
-        viewer.layers.events.removed.connect(
-            self.labels_group_root.remove_managed_layer
-        )
         viewer.layers.events.removed.connect(
             self.commit
         )
@@ -192,10 +193,27 @@ class LabelsManager:
         new_label_group.sortChildren(0, Qt.SortOrder.DescendingOrder)
 
         layer_channel.layer.mouse_double_click_callbacks.append(
-            self.focus_region_double_click
+            self.focus_and_edit_region
         )
 
         return new_label_group
+
+    def remove_labels(self):
+        if self._active_label is None and self._active_label_group is None:
+            return
+
+        self._active_label_group.removeChild(self._active_label)
+        if not self._active_label_group.childCount():
+            self.remove_labels_group(self._active_label_group)
+
+        self._active_label = None
+
+    def remove_labels_group(self):
+        if self._active_label_group is None:
+            return
+
+        self.labels_group_root.removeChild(self._active_label_group)
+        self._active_label_group = None
 
     def navigate(self, delta_patch_index=0, delta_image_index=0):
         if self._requires_commit:
@@ -224,7 +242,7 @@ class LabelsManager:
         if delta_image_index:
             n_label_groups = self.labels_group_root.childCount()
 
-            self._active_group = None
+            self._active_image_group = None
             self._active_layers_group = None
             self._active_layer_channel = None
 
@@ -254,52 +272,54 @@ class LabelsManager:
         elif not isinstance(label, LabelItem):
             label = None
 
-        if not isinstance(label, LabelItem):
-            return False
+        self._active_label_group = None
+        self._active_label = None
 
-        self._active_label = label
+        self._active_image_group = None
+        self._active_layers_group = None
+        self._active_layer_channel = None
 
-        self._active_label_group = self._active_label.parent()
+        if isinstance(label, LabelGroup):
+            self._active_label_group = label
+
+        if isinstance(label, LabelItem):
+            self._active_label = label
+            self._active_label_group = self._active_label.parent()
+
+        else:
+            return
 
         self._active_layer_channel = self._active_label_group.layer_channel
 
         if self._active_label_group is not None:
             self._active_layers_group = self._active_layer_channel.parent()
-        else:
-            self._active_layers_group = None
 
         if self._active_layers_group is not None:
-            self._active_group = self._active_layers_group.parent()
-        else:
-            self._active_group = None
+            self._active_image_group = self._active_layers_group.parent()
 
         current_center = [
-            pos * ax_scl
+            int(pos * ax_scl)
             for pos, ax_scl in zip(self._active_label.center,
                                    self._active_layer_channel.layer.scale)
         ]
 
         viewer = napari.current_viewer()
         viewer.dims.order = tuple(range(viewer.dims.ndim))
-        viewer.camera.center = (
-            *viewer.camera.center[:-viewer.dims.ndisplay],
-            *current_center
-        )
-        viewer.camera.zoom = 2 / min(
+        viewer.camera.center = current_center
+        viewer.dims.current_step = tuple(current_center)
+        viewer.camera.zoom = 4 / min(
             self._active_layer_channel.layer.scale
         )
 
         for layer in viewer.layers:
             layer.visible = False
 
-        self._active_group.visible = True
+        self._active_image_group.visible = True
 
         if edit_focused_label:
             self.edit_labels()
 
-        return True
-
-    def focus_region_double_click(self, layer, event):
+    def focus_and_edit_region(self, layer, event):
         clicked_label = None
         curr_pos = layer.world_to_data(event.position)
 

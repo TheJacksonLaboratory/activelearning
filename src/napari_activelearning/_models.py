@@ -76,7 +76,6 @@ try:
             )
             add_dropout(self._model_dropout.net)
             self._model_dropout.net.eval()
-
             self._transform = CellposeTransform(self._channels,
                                                 self._channel_axis)
 
@@ -108,7 +107,7 @@ try:
 
             self._batch_size = 8
             self._learning_rate = 0.005
-            self._n_epochs = 2000
+            self._n_epochs = 20
             self._weight_decay = 1e-5
             self._momentum = 0.9
             self._SGD = False
@@ -124,6 +123,9 @@ try:
             self._bsize = 224
             self._min_train_masks = 5
             self._model_name = None
+
+        def _get_transform(self):
+            return self._transform
 
         def _fine_tune(self, train_data, train_labels, test_data, test_labels):
             if self._model is None:

@@ -53,30 +53,23 @@ class SuperPixelGenerator(zds.MaskGenerator):
             for ax, ax_s in zip(self.axes, image.shape)
         }
 
-        spatial_sizes = tuple(
+        spatial_size = tuple(
             ax_s
             for ax, ax_s in image_shape.items()
             if ax in self._model_spatial_axes
         )
 
-        max_size = max(spatial_sizes)
-
-        scales = tuple(
-            ax_s / max_size
+        scales = np.array(tuple(
+            ax_s / sum(spatial_size)
             for ax, ax_s in image_shape.items()
             if ax in self._model_spatial_axes
-        )
+        ))
 
-        dim_sizes = tuple(
-            max(1, int(np.prod(spatial_sizes) * (scl / sum(scales))))
-            for scl in scales
-        )
+        dim_sizes = self._num_superpixels ** scales
+        dim_sizes = dim_sizes.astype(np.int32)
 
-        labels_dim = np.arange(sum(dim_sizes)).reshape(dim_sizes)
-        labels = resize(labels_dim, spatial_sizes, order=0)
-
-        if "Z" not in self.axes:
-            labels = labels[0]
+        labels_dim = np.arange(np.prod(dim_sizes)).reshape(dim_sizes)
+        labels = resize(labels_dim, spatial_size, order=0)
 
         labels = labels[self._pos]
         return labels
@@ -106,17 +99,20 @@ class StaticPatchSampler(zds.PatchSampler):
         spatial_chunk_sizes = {
             ax: (self._stride[ax]
                  * max(1, math.ceil(chk / self._stride[ax])))
-            for ax, chk in zip(image.axes, image.chunk_size)
+            for ax, chk in zip(image.source_axes, image.arr.chunks)
             if ax in self.spatial_axes
         }
 
-        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+        image_size = {
+            ax: s
+            for ax, s in zip(image.source_axes, image.arr.shape)
+        }
 
         self._max_chunk_size = {
             ax: (min(max(self._max_chunk_size[ax],
                          spatial_chunk_sizes[ax]),
                      image_size[ax]))
-            if ax in image.axes else 1
+            if ax in image.source_axes else 1
             for ax in self.spatial_axes
         }
 
@@ -165,7 +161,10 @@ class StaticPatchSampler(zds.PatchSampler):
                         chunk_tlbr: dict) -> Iterable[dict]:
         image = image_collection.collection[image_collection.reference_mode]
 
-        image_size = {ax: s for ax, s in zip(image.axes, image.shape)}
+        image_size = {
+            ax: s
+            for ax, s in zip(image.source_axes, image.arr.shape)
+        }
 
         patch_size = {
             ax: self._patch_size.get(ax, 1) if image_size.get(ax, 1) > 1 else 1
@@ -229,6 +228,7 @@ def get_dataloader(
             data_group=dataset_metadata["images"]["data_group"],
             source_axes=dataset_metadata["images"]["source_axes"],
             axes=dataset_metadata["images"]["axes"],
+            roi=dataset_metadata["images"]["roi"],
             image_loader_func=SuperPixelGenerator(
                 axes=dataset_metadata["images"]["axes"],
                 model_axes=model_input_axes,

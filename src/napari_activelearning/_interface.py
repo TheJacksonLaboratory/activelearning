@@ -1,7 +1,7 @@
 from typing import Optional, Union, Iterable
 
 from qtpy.QtGui import QIntValidator
-from qtpy.QtCore import Signal
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QComboBox,
                             QLabel,
@@ -13,7 +13,8 @@ from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
                             QProgressBar,
                             QTreeWidget,
                             QTreeWidgetItem,
-                            QAbstractItemView)
+                            QAbstractItemView,
+                            QScrollArea)
 
 from functools import partial
 import math
@@ -428,12 +429,16 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         self.generate_mask_btn.setEnabled(False)
         self.generate_mask_btn.clicked.connect(self.generate_mask_layer)
 
-        self.patch_sizes_mspb = MultiSpinBox()
-        self.patch_sizes_mspb.sizesChanged.connect(self._set_patch_size)
+        self.patch_sizes_mspn = MultiSpinBox()
+        self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
+        patch_sizes_scr = QScrollArea()
+        patch_sizes_scr.setWidget(self.patch_sizes_mspn)
+        patch_sizes_scr.setWidgetResizable(True)
+        patch_sizes_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.edit_scale_lyt = QGridLayout()
         self.edit_scale_lyt.addWidget(self.generate_mask_btn, 0, 0, 1, 3)
-        self.edit_scale_lyt.addWidget(self.patch_sizes_mspb, 1, 0, 1, 3)
+        self.edit_scale_lyt.addWidget(patch_sizes_scr, 1, 0, 1, 3)
         self.setLayout(self.edit_scale_lyt)
 
     def _set_patch_size(self, patch_sizes):
@@ -442,7 +447,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
     def _update_reference_info(self):
         if super()._update_reference_info():
             self.generate_mask_btn.setEnabled(True)
-            self.patch_sizes_mspb.axes = self._mask_axes
+            self.patch_sizes_mspn.axes = self._mask_axes
 
         else:
             self.generate_mask_btn.setEnabled(False)
@@ -543,12 +548,16 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
         self.show_editor_chk = QCheckBox("Edit group properties")
         self.show_editor_chk.setChecked(False)
         self.show_editor_chk.toggled.connect(self._show_editor)
+        image_groups_scr = QScrollArea()
+        image_groups_scr.setWidget(self.image_groups_editor)
+        image_groups_scr.setWidgetResizable(True)
+        image_groups_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         manager_lyt.addWidget(self.show_editor_chk, 3, 0, 1, 1)
-        manager_lyt.addWidget(self.image_groups_editor, 4, 0, 1, 3)
+        manager_lyt.addWidget(image_groups_scr, 4, 0, 1, 3)
         manager_lyt.addWidget(self.layer_scale_editor, 5, 0, 1, 3)
         manager_lyt.addWidget(self.mask_generator, 6, 0, 1, 3)
-        manager_lyt.addWidget(self.image_groups_tw, 7, 0, 1, 3)
+        manager_lyt.addWidget(self.image_groups_tw, 7, 0, 2, 3)
 
         self.setLayout(manager_lyt)
 
@@ -713,14 +722,24 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         self.commit_btn.setEnabled(False)
         self.commit_btn.clicked.connect(self.commit)
 
+        self.remove_labels_btn = QPushButton("Remove labels")
+        self.remove_labels_btn.setEnabled(False)
+        self.remove_labels_btn.clicked.connect(self.remove_labels)
+
+        self.remove_labels_group_btn = QPushButton("Remove labels group")
+        self.remove_labels_group_btn.setEnabled(False)
+        self.remove_labels_group_btn.clicked.connect(self.remove_labels_group)
+
         manager_lyt = QGridLayout()
-        manager_lyt.addWidget(self.labels_table_tw, 0, 0, 1, 4)
+        manager_lyt.addWidget(self.labels_table_tw, 0, 0, 2, 4)
         manager_lyt.addWidget(self.prev_img_btn, 1, 0)
         manager_lyt.addWidget(self.prev_patch_btn, 1, 1)
         manager_lyt.addWidget(self.next_patch_btn, 1, 2)
         manager_lyt.addWidget(self.next_img_btn, 1, 3)
         manager_lyt.addWidget(self.edit_labels_btn, 2, 0, 1, 2)
         manager_lyt.addWidget(self.commit_btn, 2, 2, 1, 2)
+        manager_lyt.addWidget(self.remove_labels_btn, 3, 0, 1, 2)
+        manager_lyt.addWidget(self.remove_labels_group_btn, 3, 2, 1, 2)
 
         self.setLayout(manager_lyt)
 
@@ -729,9 +748,13 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         if not label:
             label = self.labels_table_tw.selectedItems()
 
-        self.edit_labels_btn.setEnabled(
-            super(LabelsManagerWidget, self).focus_region(label,
-                                                          edit_focused_label)
+        super(LabelsManagerWidget, self).focus_region(label,
+                                                      edit_focused_label)
+
+        self.edit_labels_btn.setEnabled(self._active_label is not None)
+        self.remove_labels_btn.setEnabled(self._active_label is not None)
+        self.remove_labels_group_btn.setEnabled(
+            self._active_label_group is not None
         )
 
     def edit_labels(self):
@@ -759,6 +782,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
                          tunable_segmentation_method)
 
         self.patch_sizes_mspn = MultiSpinBox()
+        patch_sizes_scr = QScrollArea()
+        patch_sizes_scr.setWidget(self.patch_sizes_mspn)
+        patch_sizes_scr.setWidgetResizable(True)
+        patch_sizes_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         spatial_input_axes = self._input_axes
         if "C" in spatial_input_axes:
             spatial_input_axes = list(spatial_input_axes)
@@ -804,7 +832,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         acquisition_lyt = QGridLayout()
         acquisition_lyt.addWidget(QLabel("Patch size:"), 0, 0)
-        acquisition_lyt.addWidget(self.patch_sizes_mspn, 0, 1, 1, 3)
+        acquisition_lyt.addWidget(patch_sizes_scr, 0, 1, 1, 3)
         acquisition_lyt.addWidget(QLabel("Maximum samples:"), 1, 0)
         acquisition_lyt.addWidget(self.max_samples_spn, 1, 1)
         acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 2, 0)

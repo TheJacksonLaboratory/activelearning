@@ -1165,9 +1165,11 @@ class MaskGenerator(PropertiesEditor):
         ))
 
         if self._active_image_group.group_dir:
+            mask_output_filename = (self._active_image_group.group_dir
+                                    / (self._active_image_group.group_name
+                                       + ".zarr"))
             mask_root = save_zarr(
-                self._active_image_group.group_dir
-                / (self._active_image_group.group_name + ".zarr"),
+                mask_output_filename,
                 data=None,
                 shape=mask_shape,
                 chunk_size=True,
@@ -1180,6 +1182,7 @@ class MaskGenerator(PropertiesEditor):
             mask_grp = mask_root[f"labels/{masks_group_name}/0"]
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
+            mask_output_filename = None
 
         viewer = napari.current_viewer()
         new_mask_layer = viewer.add_labels(
@@ -1200,7 +1203,11 @@ class MaskGenerator(PropertiesEditor):
                 use_as_sampling_mask=True
             )
 
-        masks_layers_group.add_layer(new_mask_layer)
+        masks_layer_channel = masks_layers_group.add_layer(new_mask_layer)
+
+        if mask_output_filename:
+            masks_layer_channel.source_data = str(mask_output_filename)
+            masks_layer_channel.data_group = f"labels/{masks_group_name}/0"
 
         return new_mask_layer
 
@@ -1325,7 +1332,6 @@ class ImageGroupsManager:
         if isinstance(item, (LayerChannel, LayersGroup, ImageGroup)):
             item.visible = True
             item.selected = True
-
             item.setExpanded(True)
 
     def update_group(self):
@@ -1353,7 +1359,6 @@ class ImageGroupsManager:
         for layers_type, layers_set in [("images", image_layers),
                                         ("masks", labels_layers),
                                         ("unset", remaining_layers)]:
-
             if not layers_set:
                 continue
 
