@@ -1,5 +1,6 @@
 import pytest
 import operator
+
 from napari.layers import Image
 from napari_activelearning._layers import LayerChannel
 import numpy as np

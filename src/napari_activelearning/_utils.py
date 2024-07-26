@@ -390,6 +390,7 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
 
     elif isinstance(z_root, np.ndarray):
         source_arr = da.from_array(z_root)
+        z_ms = [source_arr]
 
     else:
         source_arr = da.from_zarr(z_root[data_group])

@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import skimage
 
 import zarrdataset as zds
 
@@ -168,3 +169,69 @@ try:
 
 except ModuleNotFoundError:
     USING_CELLPOSE = False
+
+
+class BaseTransform(zds.MaskGenerator):
+    def __init__(self, channel_axis=None):
+        self._channel_axis = channel_axis
+
+        axes = ["Y", "X"]
+
+        if self._channel_axis is not None:
+            axes.insert(self._channel_axis, "C")
+
+        axes = "".join(axes)
+
+        super(BaseTransform, self).__init__(axes=axes)
+
+    def _compute_transform(self, image: np.ndarray) -> np.ndarray:
+        if "C" in self.axes:
+            image_t = image.mean(axis=self.axes.index("C"))
+        else:
+            image_t = image
+
+        return image_t
+
+
+class SimpleSegmentation(SegmentationMethod):
+    def __init__(self):
+        super().__init__()
+        self._channel_axis = 2
+        self._transform = None
+        self._threshold = 0.5
+
+    def _model_init(self):
+        self._transform = BaseTransform(channel_axis=self._channel_axis)
+
+    def _run_pred(self, img, *args, **kwargs):
+        if self._transform is None:
+            self._model_init()
+
+        img_g = self._transform(img)
+        img_g = img_g + 1e-3 * np.random.randn(*img_g.shape)
+        img_g = (img_g - img_g.min()) / (img_g.max() - img_g.min() + 1e-12)
+        return img_g
+
+    def _run_eval(self, img, *args, **kwargs):
+        if self._transform is None:
+            self._model_init()
+
+        img_g = self._transform(img)
+
+        labels = skimage.measure.label(img_g > self._threshold)
+        return labels
+
+
+class SimpleTunable(SimpleSegmentation, FineTuningMethod):
+    def __init__(self):
+        super().__init__()
+
+    def _get_transform(self):
+        if self._transform is None:
+            self._model_init()
+
+        return self._transform
+
+    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+        if self._transform is None:
+            self._model_init()

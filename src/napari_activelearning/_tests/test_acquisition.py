@@ -1,7 +1,13 @@
 import pytest
+import shutil
 from unittest.mock import MagicMock, patch
+from pathlib import Path
 import numpy as np
-from napari_activelearning._acquisition import AcquisitionFunction
+import zarr
+
+from napari_activelearning._acquisition import (AcquisitionFunction,
+                                                add_multiscale_output_layer)
+from napari_activelearning._layers import LayerChannel
 
 try:
     import torch
@@ -21,6 +27,22 @@ def labels_manager():
 
 
 @pytest.fixture
+def layers_group():
+    layer = MagicMock()
+    layer.name = "Image layer"
+    layers_group_mock = MagicMock()
+    layers_group_mock.add_layer.return_value = LayerChannel(layer)
+    return layers_group_mock
+
+
+@pytest.fixture
+def image_group(layers_group):
+    image_group_mock = MagicMock()
+    image_group_mock.getLayersGroup.return_value = layers_group
+    return image_group_mock
+
+
+@pytest.fixture
 def tunable_segmentation_method():
     method = MagicMock()
     method.probs.return_value = np.random.random((10, 10))
@@ -35,6 +57,37 @@ def acquisition_function(image_groups_manager, labels_manager,
         mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
         return AcquisitionFunction(image_groups_manager, labels_manager,
                                    tunable_segmentation_method)
+
+
+@pytest.fixture(scope="module", params=[True, False])
+def output_dir(request, tmpdir_factory):
+    if request.param:
+        tmp_dir = tmpdir_factory.mktemp("output")
+        tmp_dir_path = Path(tmp_dir)
+    else:
+        tmp_dir_path = None
+
+    yield tmp_dir_path
+
+
+@pytest.fixture
+def root_array():
+    root_array_data = zarr.empty((1, 3, 1, 10, 10))
+    yield root_array_data
+
+@pytest.fixture
+def output_array(root_array, output_dir):
+    output_filename = None
+
+    if output_dir is not None:
+        output_filename = output_dir / "out.zarr"
+        z_group = zarr.open(output_filename)
+    else:
+        z_group = zarr.open()
+
+    z_group.create_dataset("data", data=root_array)
+
+    yield (z_group, output_filename)
 
 
 def test_compute_acquisition_fun(acquisition_function,
@@ -86,8 +139,8 @@ def test_compute_acquisition(acquisition_function):
         else:
             mock_dataloader.return_value = [
                 (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
-                 np.array((1, 1, 10, 10, 3)),
-                 np.array((1, 1, 10, 10, 1)))
+                 np.zeros((1, 1, 10, 10, 3)),
+                 np.zeros((1, 1, 10, 10, 1)))
             ]
         result = acquisition_function.compute_acquisition(
             dataset_metadata, acquisition_fun, segmentation_out,
@@ -96,3 +149,37 @@ def test_compute_acquisition(acquisition_function):
         )
 
         assert len(result) == 1
+
+
+def test_add_multiscale_output_layer(output_array, image_group,
+                                     make_napari_viewer):
+    root_array, output_filename = output_array
+    axes = "TCZYX"
+    scale = [1, 1, 1, 1, 1]
+    data_group = "data"
+    group_name = "group"
+    layers_group_name = "layers_group"
+    reference_source_axes = "TCZYX"
+    reference_scale = [1, 1, 1, 1, 1]
+    contrast_limits = [0, 1]
+    colormap = "gray"
+    viewer = make_napari_viewer()
+    add_func = viewer.add_image
+
+    output_channel = add_multiscale_output_layer(
+        root_array,
+        axes,
+        scale,
+        data_group,
+        group_name,
+        layers_group_name,
+        image_group,
+        reference_source_axes,
+        reference_scale,
+        output_filename,
+        contrast_limits,
+        colormap,
+        add_func
+    )
+
+    assert isinstance(output_channel, LayerChannel)

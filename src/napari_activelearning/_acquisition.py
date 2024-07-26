@@ -188,10 +188,6 @@ class SegmentationMethod:
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
 
-    def get_transform(self):
-        raise NotImplementedError("This method requies to be overriden by a "
-                                  "derived class.")
-
     def probs(self, img, *args, **kwargs):
         probs = self._run_pred(img, *args, **kwargs)
         return probs

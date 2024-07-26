@@ -1,9 +1,9 @@
 from ._interface import (ImageGroupsManagerWidget,
                          LabelsManagerWidget,
-                         AcquisitionFunctionWidget,
-                         TunableMethodWidget)
+                         AcquisitionFunctionWidget)
 
 from ._models import USING_CELLPOSE
+from ._models_interface import SimpleTunableWidget
 
 if USING_CELLPOSE:
     from ._models_interface import CellposeTunableWidget
@@ -11,7 +11,7 @@ if USING_CELLPOSE:
     SEGMENTATION_METHOD_CLASS = CellposeTunableWidget
 
 else:
-    SEGMENTATION_METHOD_CLASS = TunableMethodWidget
+    SEGMENTATION_METHOD_CLASS = SimpleTunableWidget
 
 CURRENT_IMAGE_GROUPS_MANAGER = None
 CURRENT_LABEL_GROUPS_MANAGER = None

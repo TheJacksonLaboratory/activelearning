@@ -5,7 +5,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
 
 from functools import partial
-from ._models import USING_CELLPOSE
+from ._models import USING_CELLPOSE, SimpleTunable
 
 if USING_CELLPOSE:
     from ._models import CellposeTunable
@@ -219,3 +219,77 @@ if USING_CELLPOSE:
 
         def _show_finetuning_parameters(self, show: bool):
             self._finetuning_parameters_scr.setVisible(show)
+
+
+def simple_segmentation_parameters_widget():
+    @magicgui(auto_call=True)
+    def simple_segmentation_parameters(
+        channel_axis: Annotated[int, {"widget_type": "SpinBox", "min": 0,
+                                      "max": 2**16}] = 2,
+        threshold: Annotated[float, {"widget_type": "FloatSpinBox",
+                                     "min": 0.0,
+                                     "max": 1.0,
+                                     "step": 1e-5}] = 0.5,
+    ):
+        return dict(channel_axis=channel_axis, threshold=threshold)
+
+    segmentation_parameter_names = [
+            "channel_axis",
+            "threshold"
+        ]
+
+    return simple_segmentation_parameters, segmentation_parameter_names
+
+
+class SimpleTunableWidget(SimpleTunable, QWidget):
+    def __init__(self):
+        super().__init__()
+
+        (segmentation_parameters,
+            segmentation_parameter_names) =\
+            simple_segmentation_parameters_widget()
+
+        self.advanced_segmentation_options_chk = QCheckBox(
+            "Advanced segmentation parameters"
+        )
+
+        self.advanced_segmentation_options_chk.setChecked(False)
+        self.advanced_segmentation_options_chk.toggled.connect(
+            self._show_segmentation_parameters
+        )
+
+        self._segmentation_parameters_scr = QScrollArea()
+        self._segmentation_parameters_scr.setWidgetResizable(True)
+        self._segmentation_parameters_scr.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
+        self._segmentation_parameters_scr.setWidget(
+            segmentation_parameters.native
+        )
+
+        for par_name in segmentation_parameter_names:
+            segmentation_parameters.__getattr__(par_name).changed.connect(
+                partial(self._set_parameter, parameter_key="_" + par_name)
+            )
+
+        self.parameters_lyt = QGridLayout()
+        self.parameters_lyt.addWidget(
+            self.advanced_segmentation_options_chk, 0, 0
+        )
+        self.parameters_lyt.addWidget(
+            self._segmentation_parameters_scr, 1, 0, 1, 2
+        )
+        self.setLayout(self.parameters_lyt)
+
+        self._segmentation_parameters_scr.hide()
+
+    def _set_parameter(self, parameter_val, parameter_key=None):
+        if ((isinstance(parameter_val, (str, Path)) and not parameter_val)
+            or (isinstance(parameter_val, (int, float))
+                and parameter_val < 0)):
+            parameter_val = None
+
+        self.__setattr__(parameter_key, parameter_val)
+
+    def _show_segmentation_parameters(self, show: bool):
+        self._segmentation_parameters_scr.setVisible(show)

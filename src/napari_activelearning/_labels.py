@@ -162,6 +162,8 @@ class LabelGroupRoot(QTreeWidgetItem):
 
 class LabelsManager:
     def __init__(self):
+        super().__init__()
+
         self.labels_group_root = LabelGroupRoot()
 
         self._active_label: Union[None, LabelItem] = None
@@ -179,8 +181,6 @@ class LabelsManager:
         viewer.layers.events.removed.connect(
             self.commit
         )
-
-        super().__init__()
 
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
