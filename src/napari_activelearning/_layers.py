@@ -917,6 +917,8 @@ class ImageGroupEditor(PropertiesEditor):
         self._group_name = None
         self._layers_group_name = None
         self._edit_axes = None
+        self._edit_scale = None
+        self._edit_translate = None
         self._use_as_input = None
         self._use_as_sampling = None
         self._edit_channel = None
@@ -948,10 +950,7 @@ class ImageGroupEditor(PropertiesEditor):
             self._active_image_group.group_name = self._group_name
 
     def update_channels(self, channel: Optional[int] = None):
-        if not self._active_layer_channel:
-            return
-
-        if not self._active_layers_group:
+        if not self._active_layer_channel or not self._active_layers_group:
             return
 
         if channel:
@@ -1055,6 +1054,26 @@ class ImageGroupEditor(PropertiesEditor):
         elif (self._active_image_group.sampling_mask_layers_group
               == layers_group_idx):
             self._active_image_group.sampling_mask_layers_group = None
+
+    def update_scale(self, scale: Optional[Iterable[float]] = None):
+        if (not self._active_layers_group or not self._active_layers_group
+           or not self._active_layer_channel):
+            return
+
+        if scale is not None:
+            self._edit_scale = scale
+
+        self._active_layer_channel.scale = self._edit_scale
+
+    def update_translate(self, translate: Optional[Iterable[float]] = None):
+        if (not self._active_layers_group or not self._active_layers_group
+           or not self._active_layer_channel):
+            return
+
+        if translate is not None:
+            self._edit_translate = translate
+
+        self._active_layer_channel.translate = self._edit_translate
 
 
 class LayerScaleEditor(PropertiesEditor):

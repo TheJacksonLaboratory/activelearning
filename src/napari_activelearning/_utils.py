@@ -14,9 +14,9 @@ import numpy as np
 try:
     import torch
     from torch.utils.data import DataLoader
-    USING_TORCH = True
+    USING_PYTORCH = True
 except ModuleNotFoundError:
-    USING_TORCH = False
+    USING_PYTORCH = False
 
 from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
@@ -254,7 +254,7 @@ def get_dataloader(
         shuffle=shuffle
     )
 
-    if USING_TORCH:
+    if USING_PYTORCH:
         train_dataloader = DataLoader(
             train_dataset,
             num_workers=num_workers,

@@ -9,9 +9,9 @@ import dask.array as da
 try:
     import torch
     from torch.utils.data import DataLoader
-    USING_TORCH = True
+    USING_PYTORCH = True
 except ModuleNotFoundError:
-    USING_TORCH = False
+    USING_PYTORCH = False
 
 import napari
 from napari.layers._multiscale_data import MultiScaleData
@@ -123,7 +123,7 @@ def add_multiscale_output_layer(
     return output_channel
 
 
-if USING_TORCH:
+if USING_PYTORCH:
     class DropoutEvalOverrider(torch.nn.Module):
         def __init__(self, dropout_module):
             super(DropoutEvalOverrider, self).__init__()
@@ -239,7 +239,7 @@ class FineTuningMethod:
                 shuffle=True,
             )
 
-            if USING_TORCH:
+            if USING_PYTORCH:
                 dataloader = DataLoader(
                     dataset,
                     num_workers=self._num_workers,
@@ -256,7 +256,7 @@ class FineTuningMethod:
             )
 
             for img, lab in dataloader:
-                if USING_TORCH:
+                if USING_PYTORCH:
                     img = img[0].numpy()
                     lab = lab[0].numpy()
 
@@ -453,7 +453,7 @@ class AcquisitionFunction:
 
         self._reset_patch_progressbar()
         for pos, img, img_sp in dl:
-            if USING_TORCH:
+            if USING_PYTORCH:
                 pos = pos[0].numpy()
                 img = img[0].numpy()
                 img_sp = img_sp[0].numpy()

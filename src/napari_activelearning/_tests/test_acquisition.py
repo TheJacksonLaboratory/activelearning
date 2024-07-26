@@ -1,8 +1,13 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
-import torch
 from napari_activelearning._acquisition import AcquisitionFunction
+
+try:
+    import torch
+    USING_PYTORCH = True
+except ModuleNotFoundError:
+    USING_PYTORCH = False
 
 
 @pytest.fixture
@@ -71,11 +76,19 @@ def test_compute_acquisition(acquisition_function):
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):
-        mock_dataloader.return_value = [
-            (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]]),
-             torch.zeros((1, 1, 1, 10, 10, 3)),
-             torch.zeros((1, 1, 1, 10, 10, 1)))
-        ]
+        if USING_PYTORCH:
+            mock_dataloader.return_value = [
+                (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10],
+                                    [0, -1]]]),
+                 torch.zeros((1, 1, 1, 10, 10, 3)),
+                 torch.zeros((1, 1, 1, 10, 10, 1)))
+            ]
+        else:
+            mock_dataloader.return_value = [
+                (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
+                 np.array((1, 1, 10, 10, 3)),
+                 np.array((1, 1, 10, 10, 1)))
+            ]
         result = acquisition_function.compute_acquisition(
             dataset_metadata, acquisition_fun, segmentation_out,
             sampling_positions,

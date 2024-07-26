@@ -1,8 +1,9 @@
 from typing import Optional, Union, Iterable
 
-from qtpy.QtGui import QIntValidator
+from qtpy.QtGui import QIntValidator, QDoubleValidator
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QLineEdit,
+from qtpy.QtWidgets import (QWidget, QPushButton, QGridLayout, QVBoxLayout,
+                            QLineEdit,
                             QComboBox,
                             QLabel,
                             QFileDialog,
@@ -36,6 +37,8 @@ class MultiSpinBox(QWidget):
     def __init__(self):
         super().__init__()
 
+        self._dtype = int
+
         self.edit_scale_lyt = QGridLayout()
         self.setLayout(self.edit_scale_lyt)
 
@@ -62,8 +65,8 @@ class MultiSpinBox(QWidget):
         return self._sizes
 
     @sizes.setter
-    def sizes(self, new_sizes: Union[Iterable[int], dict]):
-        if isinstance(dict):
+    def sizes(self, new_sizes: Union[Iterable, dict]):
+        if isinstance(new_sizes, dict):
             self._sizes = new_sizes
             self._axes = new_sizes.keys()
 
@@ -77,6 +80,21 @@ class MultiSpinBox(QWidget):
                 scale_le.setValue(ax_s)
 
         self.update_spin_boxes()
+
+    @staticmethod
+    def _create_spinbox(ax_s: int):
+        power_spn = QSpinBox(
+            minimum=0, maximum=16,
+            buttonSymbols=QAbstractSpinBox.UpDownArrows
+        )
+        power_spn.lineEdit().hide()
+        power_spn.setValue(int(math.log2(ax_s)))
+
+        scale_le = QLineEdit()
+        scale_le.setValidator(QIntValidator(1, 2**16))
+        scale_le.setText(str(ax_s))
+
+        return scale_le, power_spn
 
     def clear_layer_channel(self):
         while self._curr_scale_le_list:
@@ -95,16 +113,7 @@ class MultiSpinBox(QWidget):
         self.clear_layer_channel()
 
         for ax_idx, (ax, ax_s) in enumerate(self._sizes.items()):
-            power_spn = QSpinBox(
-                minimum=0, maximum=16,
-                buttonSymbols=QAbstractSpinBox.UpDownArrows
-            )
-            power_spn.lineEdit().hide()
-            power_spn.setValue(int(math.log2(ax_s)))
-
-            scale_le = QLineEdit()
-            scale_le.setValidator(QIntValidator(1, 2**16))
-            scale_le.setText(str(ax_s))
+            scale_le, power_spn = self._create_spinbox(ax_s)
 
             self._curr_scale_le_list.append(scale_le)
             self.edit_scale_lyt.addWidget(self._curr_scale_le_list[-1],
@@ -134,23 +143,41 @@ class MultiSpinBox(QWidget):
     def _set_patch_size(self):
         axes = self._sizes.keys()
         self._sizes = {
-            ax: int(scale_le.text())
+            ax: self._dtype(scale_le.text())
             for ax, scale_le in zip(axes, self._curr_scale_le_list)
         }
 
         self.sizesChanged.emit(self._sizes)
 
 
+class MultiDoubleSpinBox(MultiSpinBox):
+    def __init__(self):
+        super().__init__()
+        self._dtype = float
+
+    @staticmethod
+    def _create_spinbox(ax_s: float):
+        power_spn = QDoubleSpinBox(
+            minimum=-16, maximum=16,
+            buttonSymbols=QAbstractSpinBox.UpDownArrows
+        )
+        power_spn.lineEdit().hide()
+        power_spn.setValue(math.log2(max(1e-12, ax_s)))
+
+        scale_le = QLineEdit()
+        scale_le.setValidator(QDoubleValidator(1e-12, 1e12, 12))
+        scale_le.setText(str(ax_s))
+
+        return scale_le, power_spn
+
+
 class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
     def __init__(self):
         super().__init__()
 
-        layout = QGridLayout()
         self.group_name_le = QLineEdit("None selected")
         self.group_name_le.setEnabled(False)
         self.group_name_le.returnPressed.connect(self.update_group_name)
-        layout.addWidget(QLabel("Group name:"), 0, 0)
-        layout.addWidget(self.group_name_le, 0, 1)
 
         self.layers_group_name_cmb = QComboBox()
         self.layers_group_name_cmb.setEditable(True)
@@ -158,25 +185,17 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.update_layers_group_name
         )
         self.layers_group_name_cmb.setEnabled(False)
-        layout.addWidget(QLabel("Channels group name:"), 0, 2)
-        layout.addWidget(self.layers_group_name_cmb, 0, 3)
 
         self.display_name_lbl = QLabel("None selected")
-        layout.addWidget(QLabel("Channel name:"), 1, 0)
-        layout.addWidget(self.display_name_lbl, 1, 1)
 
         self.edit_channel_spn = QSpinBox(minimum=0, maximum=0)
         self.edit_channel_spn.setEnabled(False)
         self.edit_channel_spn.editingFinished.connect(self.update_channels)
         self.edit_channel_spn.valueChanged.connect(self.update_channels)
-        layout.addWidget(QLabel("Channel:"), 1, 2)
-        layout.addWidget(self.edit_channel_spn, 1, 3)
 
         self.edit_axes_le = QLineEdit("None selected")
         self.edit_axes_le.setEnabled(False)
         self.edit_axes_le.returnPressed.connect(self.update_source_axes)
-        layout.addWidget(QLabel("Axes order:"), 2, 0)
-        layout.addWidget(self.edit_axes_le, 2, 1)
 
         self.output_dir_lbl = QLabel("Output directory:")
         self.output_dir_le = QLineEdit("Unset")
@@ -189,25 +208,65 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self._update_output_dir_edit
         )
         self.output_dir_le.returnPressed.connect(self.update_output_dir)
-        layout.addWidget(QLabel("Output directory:"), 3, 0)
-        layout.addWidget(self.output_dir_le, 3, 1, 1, 3)
-        layout.addWidget(self.output_dir_btn, 3, 3)
 
         self.use_as_input_chk = QCheckBox("Use as input")
         self.use_as_input_chk.setEnabled(False)
         self.use_as_input_chk.toggled.connect(
             self.update_use_as_input
         )
-        layout.addWidget(self.use_as_input_chk, 4, 0)
 
         self.use_as_sampling_chk = QCheckBox("Use as sampling mask")
         self.use_as_sampling_chk.setEnabled(False)
         self.use_as_sampling_chk.toggled.connect(
             self.update_use_as_sampling
         )
-        layout.addWidget(self.use_as_sampling_chk, 4, 1)
 
-        self.setLayout(layout)
+        self.edit_scale_mdspn = MultiDoubleSpinBox()
+        self.edit_scale_mdspn.setEnabled(False)
+        self.edit_scale_mdspn.sizesChanged.connect(self.update_scale)
+
+        self.edit_translate_mdspn = MultiDoubleSpinBox()
+        self.edit_translate_mdspn.setEnabled(False)
+        self.edit_translate_mdspn.sizesChanged.connect(self.update_translate)
+
+        show_editor_chk = QCheckBox("Edit group properties")
+        show_editor_chk.setChecked(False)
+        show_editor_chk.toggled.connect(self._show_editor)
+
+        editor_grid_lyt = QGridLayout()
+        editor_grid_lyt.addWidget(QLabel("Group name:"), 0, 0)
+        editor_grid_lyt.addWidget(self.group_name_le, 0, 1)
+        editor_grid_lyt.addWidget(QLabel("Channels group name:"), 0, 2)
+        editor_grid_lyt.addWidget(self.layers_group_name_cmb, 0, 3)
+        editor_grid_lyt.addWidget(QLabel("Channel name:"), 1, 0)
+        editor_grid_lyt.addWidget(self.display_name_lbl, 1, 1)
+        editor_grid_lyt.addWidget(QLabel("Channel:"), 1, 2)
+        editor_grid_lyt.addWidget(self.edit_channel_spn, 1, 3)
+        editor_grid_lyt.addWidget(QLabel("Axes order:"), 2, 0)
+        editor_grid_lyt.addWidget(self.edit_axes_le, 2, 1)
+        editor_grid_lyt.addWidget(QLabel("Output directory:"), 3, 0)
+        editor_grid_lyt.addWidget(self.output_dir_le, 3, 1, 1, 3)
+        editor_grid_lyt.addWidget(self.output_dir_btn, 3, 3)
+        editor_grid_lyt.addWidget(self.use_as_input_chk, 4, 0)
+        editor_grid_lyt.addWidget(self.use_as_sampling_chk, 4, 1)
+        editor_grid_lyt.addWidget(QLabel("Layer scale"), 5, 0)
+        editor_grid_lyt.addWidget(self.edit_scale_mdspn, 5, 1)
+        editor_grid_lyt.addWidget(QLabel("Layer translate"), 5, 2)
+        editor_grid_lyt.addWidget(self.edit_translate_mdspn, 5, 3)
+
+        self.editor_widget = QWidget()
+        self.editor_widget.setLayout(editor_grid_lyt)
+
+        editor_lyt = QVBoxLayout()
+        editor_lyt.addWidget(show_editor_chk)
+        editor_lyt.addWidget(self.editor_widget)
+
+        self.setLayout(editor_lyt)
+
+        self.editor_widget.setVisible(False)
+
+    def _show_editor(self, show: bool):
+        self.editor_widget.setVisible(show)
 
     def _clear_image_group(self):
         self.layers_group_name_cmb.clear()
@@ -292,6 +351,20 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.edit_channel_spn.setValue(self._active_layer_channel.channel)
             self.edit_channel_spn.setEnabled(True)
 
+            self.edit_scale_mdspn.sizes = {
+                ax: ax_scl
+                for ax, ax_scl in zip(self._active_layer_channel.source_axes,
+                                      self._active_layer_channel.scale)
+            }
+            self.edit_scale_mdspn.setEnabled(True)
+
+            self.edit_translate_mdspn.sizes = {
+                ax: ax_scl
+                for ax, ax_scl in zip(self._active_layer_channel.source_axes,
+                                      self._active_layer_channel.translate)
+            }
+            self.edit_translate_mdspn.setEnabled(True)
+
     def _update_output_dir_edit(self, path):
         self.output_dir_le.setText(self.output_dir_dlg.selectedFiles()[0])
         self.update_output_dir()
@@ -318,6 +391,14 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
 
     def update_use_as_sampling(self):
         super().update_use_as_sampling(self.use_as_sampling_chk.isChecked())
+
+    def update_scale(self):
+        super().update_scale(list(self.edit_scale_mdspn.sizes.values()))
+
+    def update_translate(self):
+        super().update_translate(
+            list(self.edit_translate_mdspn.sizes.values())
+        )
 
     @property
     def active_image_group(self):
@@ -355,69 +436,6 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self._fill_layer()
 
 
-class LayerScaleEditorWidget(LayerScaleEditor, QWidget):
-    def __init__(self):
-        super().__init__()
-
-        self.edit_scale_lyt = QGridLayout()
-        self.edit_scale_lyt.addWidget(QLabel("Channel(s) scale(s):"), 0, 0)
-        self._curr_labels_list = []
-        self._curr_scale_spn_list = []
-
-        self.setLayout(self.edit_scale_lyt)
-
-    def _clear_layer_channel(self):
-        while self._curr_scale_spn_list:
-            item = self._curr_scale_spn_list.pop()
-            self.edit_scale_lyt.removeWidget(item)
-
-        while self._curr_labels_list:
-            item = self._curr_labels_list.pop()
-            self.edit_scale_lyt.removeWidget(item)
-
-    def _fill_layer(self):
-        self._clear_layer_channel()
-
-        if self._active_layer_channel:
-            scales = self._active_layer_channel.scale
-            source_axes = self._active_layer_channel.source_axes
-
-            for ax_idx, (ax_scl, ax) in enumerate(zip(scales, source_axes)):
-                edit_scale_spn = QDoubleSpinBox(minimum=1e-12, maximum=1e12,
-                                                singleStep=1e-7,
-                                                decimals=7)
-                edit_scale_spn.setValue(ax_scl)
-                edit_scale_spn.lineEdit().returnPressed.connect(
-                    self.update_scale
-                )
-                self._curr_labels_list.append(QLabel(ax))
-                self.edit_scale_lyt.addWidget(self._curr_labels_list[-1],
-                                              ax_idx + 1,
-                                              0)
-                self._curr_scale_spn_list.append(edit_scale_spn)
-                self.edit_scale_lyt.addWidget(self._curr_scale_spn_list[-1],
-                                              ax_idx + 1,
-                                              1)
-
-    def update_scale(self):
-        new_scale = [
-            edit_scale_spn.value()
-            for edit_scale_spn in self._curr_scale_spn_list
-        ]
-        super().update_scale(new_scale)
-
-    @property
-    def active_layer_channel(self):
-        return super().active_layer_channel
-
-    @active_layer_channel.setter
-    def active_layer_channel(self,
-                             active_layer_channel: Union[LayerChannel, None]):
-        super(LayerScaleEditor, type(self)).active_layer_channel\
-                                            .fset(self, active_layer_channel)
-        self._fill_layer()
-
-
 class MaskGeneratorWidget(MaskGenerator, QWidget):
     def __init__(self):
         super().__init__()
@@ -436,10 +454,26 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         patch_sizes_scr.setWidgetResizable(True)
         patch_sizes_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.edit_scale_lyt = QGridLayout()
-        self.edit_scale_lyt.addWidget(self.generate_mask_btn, 0, 0, 1, 3)
-        self.edit_scale_lyt.addWidget(patch_sizes_scr, 1, 0, 1, 3)
-        self.setLayout(self.edit_scale_lyt)
+        edit_mask_lyt = QVBoxLayout()
+        edit_mask_lyt.addWidget(patch_sizes_scr)
+        edit_mask_lyt.addWidget(self.generate_mask_btn)
+        self.edit_mask_widget = QWidget()
+        self.edit_mask_widget.setLayout(edit_mask_lyt)
+
+        show_editor_chk = QCheckBox("Edit mask properties")
+        show_editor_chk.setChecked(False)
+        show_editor_chk.toggled.connect(self._show_editor)
+
+        mask_lyt = QVBoxLayout()
+        mask_lyt.addWidget(show_editor_chk)
+        mask_lyt.addWidget(self.edit_mask_widget)
+
+        self.setLayout(mask_lyt)
+
+        self.edit_mask_widget.setVisible(False)
+
+    def _show_editor(self, show: bool):
+        self.edit_mask_widget.setVisible(show)
 
     def _set_patch_size(self, patch_sizes):
         super().set_patch_size(list(patch_sizes.values()))
@@ -464,7 +498,6 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
 
         # Re-instanciate the following objects with their widget versions.
         self.image_groups_editor = ImageGroupEditorWidget()
-        self.layer_scale_editor = LayerScaleEditorWidget()
         self.mask_generator = MaskGeneratorWidget()
 
         self.image_groups_tw = QTreeWidget()
@@ -545,30 +578,11 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
         manager_lyt.addWidget(self.remove_layer_btn, 2, 1)
         manager_lyt.addWidget(self.save_metadata_btn, 2, 2)
 
-        self.show_editor_chk = QCheckBox("Edit group properties")
-        self.show_editor_chk.setChecked(False)
-        self.show_editor_chk.toggled.connect(self._show_editor)
-        image_groups_scr = QScrollArea()
-        image_groups_scr.setWidget(self.image_groups_editor)
-        image_groups_scr.setWidgetResizable(True)
-        image_groups_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        manager_lyt.addWidget(self.show_editor_chk, 3, 0, 1, 1)
-        manager_lyt.addWidget(image_groups_scr, 4, 0, 1, 3)
-        manager_lyt.addWidget(self.layer_scale_editor, 5, 0, 1, 3)
-        manager_lyt.addWidget(self.mask_generator, 6, 0, 1, 3)
-        manager_lyt.addWidget(self.image_groups_tw, 7, 0, 2, 3)
+        manager_lyt.addWidget(self.image_groups_editor, 3, 0, 1, 3)
+        manager_lyt.addWidget(self.mask_generator, 4, 0, 1, 3)
+        manager_lyt.addWidget(self.image_groups_tw, 5, 0, 1, 3)
 
         self.setLayout(manager_lyt)
-
-        self.image_groups_editor.setVisible(False)
-        self.layer_scale_editor.setVisible(False)
-        self.mask_generator.setVisible(False)
-
-    def _show_editor(self, show: bool = False):
-        self.image_groups_editor.setVisible(show)
-        self.layer_scale_editor.setVisible(show)
-        self.mask_generator.setVisible(show)
 
     def _save_layers_group(self):
         self.save_layers_group()
@@ -782,10 +796,22 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
                          tunable_segmentation_method)
 
         self.patch_sizes_mspn = MultiSpinBox()
+
         patch_sizes_scr = QScrollArea()
         patch_sizes_scr.setWidget(self.patch_sizes_mspn)
         patch_sizes_scr.setWidgetResizable(True)
         patch_sizes_scr.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        patch_sizes_lyt = QVBoxLayout()
+        patch_sizes_lyt.addWidget(QLabel("Patch size:"))
+        patch_sizes_lyt.addWidget(patch_sizes_scr)
+
+        self.patch_sizes_widget = QWidget()
+        self.patch_sizes_widget.setLayout(patch_sizes_lyt)
+
+        patch_sizes_chk = QCheckBox("Edit patch sizes")
+        patch_sizes_chk.setChecked(False)
+        patch_sizes_chk.toggled.connect(self._show_patch_sizes)
 
         spatial_input_axes = self.input_axes
         if "C" in spatial_input_axes:
@@ -831,31 +857,30 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.finetuning_btn.clicked.connect(self.fine_tune)
 
         acquisition_lyt = QGridLayout()
-        acquisition_lyt.addWidget(QLabel("Patch size:"), 0, 0)
-        acquisition_lyt.addWidget(patch_sizes_scr, 0, 1, 1, 3)
-        acquisition_lyt.addWidget(QLabel("Maximum samples:"), 1, 0)
-        acquisition_lyt.addWidget(self.max_samples_spn, 1, 1)
-        acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 2, 0)
-        acquisition_lyt.addWidget(self.MC_repetitions_spn, 2, 1)
-        acquisition_lyt.addWidget(QLabel("Input axes"), 3, 0)
-        acquisition_lyt.addWidget(self.input_axes_le, 3, 1)
-        acquisition_lyt.addWidget(QLabel("Model axes"), 3, 2)
-        acquisition_lyt.addWidget(self.model_axes_le, 3, 3)
-        acquisition_lyt.addWidget(self.tunable_segmentation_method, 4, 0, 1, 4)
-        acquisition_lyt.addWidget(self.execute_selected_btn, 5, 0)
-        acquisition_lyt.addWidget(self.execute_all_btn, 5, 1)
-        acquisition_lyt.addWidget(self.finetuning_btn, 6, 1)
-        acquisition_lyt.addWidget(QLabel("Image queue:"), 7, 0, 1, 1)
-        acquisition_lyt.addWidget(self.image_pb, 7, 1, 1, 3)
-        acquisition_lyt.addWidget(QLabel("Patch queue:"), 8, 0, 1, 1)
-        acquisition_lyt.addWidget(self.patch_pb, 8, 1, 1, 3)
+        acquisition_lyt.addWidget(patch_sizes_chk, 0, 0) 
+        acquisition_lyt.addWidget(self.patch_sizes_widget, 1, 0, 1, 3) 
+        acquisition_lyt.addWidget(QLabel("Maximum samples:"), 2, 0)
+        acquisition_lyt.addWidget(self.max_samples_spn, 2, 1)
+        acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 3, 0)
+        acquisition_lyt.addWidget(self.MC_repetitions_spn, 3, 1)
+        acquisition_lyt.addWidget(QLabel("Input axes"), 4, 0)
+        acquisition_lyt.addWidget(self.input_axes_le, 4, 1)
+        acquisition_lyt.addWidget(QLabel("Model axes"), 4, 2)
+        acquisition_lyt.addWidget(self.model_axes_le, 4, 3)
+        acquisition_lyt.addWidget(self.tunable_segmentation_method, 5, 0, 1, 4)
+        acquisition_lyt.addWidget(self.execute_selected_btn, 6, 0)
+        acquisition_lyt.addWidget(self.execute_all_btn, 6, 1)
+        acquisition_lyt.addWidget(self.finetuning_btn, 7, 1)
+        acquisition_lyt.addWidget(QLabel("Image queue:"), 8, 0, 1, 1)
+        acquisition_lyt.addWidget(self.image_pb, 8, 1, 1, 3)
+        acquisition_lyt.addWidget(QLabel("Patch queue:"), 9, 0, 1, 1)
+        acquisition_lyt.addWidget(self.patch_pb, 9, 1, 1, 3)
 
         self.setLayout(acquisition_lyt)
+        self.patch_sizes_widget.setVisible(False)
 
-        self.labels_manager.setVisible(False)
-
-    def _show_labels_manager(self, show_it: bool):
-        self.labels_manager.setVisible(show_it)
+    def _show_patch_sizes(self, show: bool):
+        self.patch_sizes_widget.setVisible(show)
 
     def _reset_image_progressbar(self, num_images: int):
         self.image_pb.setRange(0, num_images)
