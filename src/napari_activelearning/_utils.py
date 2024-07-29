@@ -396,7 +396,11 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         source_arr = da.from_zarr(z_root[data_group])
         z_ms = [source_arr]
 
-    data_group = "/".join(data_group.split("/")[:-1])
+    if data_group is None:
+        data_group = ""
+    else:
+        data_group = "/".join(data_group.split("/")[:-1])
+
     groups_root = data_group + "/%i"
 
     source_arr_shape = {ax: source_arr.shape[source_axes.index(ax)]
@@ -478,15 +482,22 @@ def get_source_data(layer: Layer):
     data_group = ""
 
     if input_filename:
+        input_filename = Path(input_filename)
+        input_filename_parts = input_filename.parts
+        extension_idx = list(filter(lambda idx:
+                                    ".zarr" in input_filename_parts[idx],
+                                    range(len(input_filename_parts))))
+        if extension_idx:
+            extension_idx = extension_idx[0]
+            data_group = str(Path(*input_filename_parts[extension_idx + 1:]))
+            input_filename = Path(*input_filename_parts[:extension_idx + 1])
+
         input_filename = str(input_filename)
-        data_group = "/".join(input_filename.split(".")[-1].split("/")[1:])
+
     else:
         return layer.data, None
 
-    if data_group:
-        input_filename = input_filename[:-len(data_group) - 1]
-
-    if input_filename and isinstance(layer.data, MultiScaleData):
+    if input_filename and isinstance(layer.data, (MultiScaleData, list)):
         data_group = str(Path(data_group) / "0")
 
     if not input_filename:

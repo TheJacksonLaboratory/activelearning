@@ -24,7 +24,7 @@ def layer_channel(sample_layer):
 
 
 def test_initialization(layer_channel, sample_layer):
-    assert layer_channel.layer == sample_layer, print(id(sample_layer), id(layer_channel.layer))
+    assert layer_channel.layer == sample_layer
     assert layer_channel.channel == 1
     assert layer_channel.source_axes == "TZYX"
     assert layer_channel.name == "sample_layer"
