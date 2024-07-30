@@ -213,6 +213,21 @@ def single_scale_layer(single_scale_disk_zarr):
 
 
 @pytest.fixture(scope="package")
+def single_scale_memory_layer(single_scale_array):
+    source_data, input_filename, data_group, _ = single_scale_array
+
+    layer = Image(
+        data=source_data,
+        name="sample_memory_layer",
+        scale=[1.0, 1.0, 1.0, 1.0],
+        translate=[0.0, 0.0, 0.0, 0.0],
+        visible=True
+    )
+
+    return layer, source_data, input_filename, data_group
+
+
+@pytest.fixture(scope="package")
 def multiscale_layer(multiscale_disk_zarr):
     source_data, input_filename, data_group, _ = multiscale_disk_zarr
 
