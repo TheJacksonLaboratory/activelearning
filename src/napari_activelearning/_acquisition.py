@@ -51,6 +51,26 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
     return u_sp_lab
 
 
+def compute_acquisition_fun(tunable_segmentation_method, img, img_sp,
+                            MC_repetitions):
+    probs = []
+    for _ in range(MC_repetitions):
+        probs.append(
+            tunable_segmentation_method.probs(img)
+        )
+    probs = np.stack(probs, axis=0)
+
+    u_sp_lab = compute_acquisition_superpixel(probs, img_sp)
+
+    return u_sp_lab
+
+
+def compute_segmentation(tunable_segmentation_method, img, labels_offset=0):
+    seg_out = tunable_segmentation_method.segment(img)
+    seg_out = np.where(seg_out, seg_out + labels_offset, 0)
+    return seg_out
+
+
 def add_multiscale_output_layer(
         root,
         axes: str,
@@ -277,6 +297,8 @@ class FineTuningMethod:
 
         self._fine_tune(train_data, train_labels, test_data, test_labels)
 
+        return train_data, train_labels, test_data, test_labels
+
 
 class TunableMethod(SegmentationMethod, FineTuningMethod):
     def __init__(self):
@@ -300,23 +322,6 @@ class AcquisitionFunction:
         self.tunable_segmentation_method = tunable_segmentation_method
 
         super().__init__()
-
-    def _compute_acquisition_fun(self, img, img_sp, MC_repetitions):
-        probs = []
-        for _ in range(MC_repetitions):
-            probs.append(
-                self.tunable_segmentation_method.probs(img)
-            )
-        probs = np.stack(probs, axis=0)
-
-        u_sp_lab = compute_acquisition_superpixel(probs, img_sp)
-
-        return u_sp_lab
-
-    def _compute_segmentation(self, img, labels_offset=0):
-        seg_out = self.tunable_segmentation_method.segment(img)
-        seg_out = np.where(seg_out, seg_out + labels_offset, 0)
-        return seg_out
 
     def _reset_image_progressbar(self, num_images: int):
         pass
@@ -469,7 +474,8 @@ class AcquisitionFunction:
             pos_u_lab = tuple(pos[ax] for ax in input_spatial_axes)
 
             if not segmentation_only:
-                u_sp_lab = self._compute_acquisition_fun(
+                u_sp_lab = compute_acquisition_fun(
+                    self.tunable_segmentation_method,
                     img,
                     img_sp,
                     self._MC_repetitions,
@@ -479,7 +485,8 @@ class AcquisitionFunction:
             else:
                 acquisition_val = 0
 
-            seg_out = self._compute_segmentation(
+            seg_out = compute_segmentation(
+                self.tunable_segmentation_method,
                 img,
                 segmentation_max
             )
@@ -514,11 +521,11 @@ class AcquisitionFunction:
         image_groups = list(filter(
             lambda item:
             isinstance(item, ImageGroup),
-            self.image_groups_manager.image_groups_tw.selectedItems()
+            self.image_groups_manager.get_active_item()
         ))
 
         if not image_groups:
-            return
+            return False
 
         self._reset_image_progressbar(len(image_groups))
 
@@ -656,6 +663,8 @@ class AcquisitionFunction:
 
                 image_group.labels_group = new_label_group
 
+        return True
+
     def fine_tune(self):
         image_groups = list(filter(
             lambda item:
@@ -667,7 +676,7 @@ class AcquisitionFunction:
 
         if (not image_groups
            or not self.labels_manager.labels_group_root.childCount()):
-            return
+            return False
 
         dataset_metadata_list = []
 
@@ -710,7 +719,7 @@ class AcquisitionFunction:
 
         self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
-            patch_sizes=self.patch_sizes_mspn.sizes,
+            patch_sizes=self._patch_sizes,
             model_axes=self.model_axes
         )
 
@@ -719,3 +728,5 @@ class AcquisitionFunction:
             segmentation_group_name="fine_tunned_segmentation",
             segmentation_only=True
         )
+
+        return True

@@ -789,8 +789,10 @@ class ImageGroupRoot(QTreeWidgetItem):
 
     def addChild(self, child: QTreeWidgetItem):
         if isinstance(child, ImageGroup):
-            if not child.group_name:
-                group_name = "unset"
+            group_name = "unset"
+
+            if child.group_name:
+                group_name = child.group_name
 
             group_name = validate_name(self.group_names, "", group_name)
 
@@ -813,11 +815,9 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         return child
 
-    def takeChildred(self):
+    def takeChildren(self):
         children = super(ImageGroupRoot, self).takeChildren()
-        for child in children:
-            if isinstance(child, ImageGroup):
-                self.group_names.remove(child.group_name)
+        self.group_names.clear()
 
         return children
 
@@ -1289,15 +1289,22 @@ class ImageGroupsManager:
 
         super().__init__()
 
-    def _get_active_item(self,
-                         item: Optional[
-                             Union[QTreeWidgetItem, Iterable[QTreeWidgetItem]]
-                             ] = None):
+        self._selected_items = []
+
+    def set_active_item(self,
+                        item: Optional[
+                            Union[QTreeWidgetItem, Iterable[QTreeWidgetItem]]
+                            ] = None):
         if isinstance(item, list):
             if not len(item):
                 return
 
-            item = item[-1]
+            self._selected_items = item
+
+        else:
+            self._selected_items = [item]
+
+        item = self._selected_items[-1]
 
         self._active_layer_channel = None
         self._active_layers_group = None
@@ -1332,8 +1339,11 @@ class ImageGroupsManager:
         self.image_groups_editor.active_layer_channel =\
             self._active_layer_channel
 
-    def _focus_active_element(self, item: Union[QTreeWidgetItem,
-                                                Iterable[QTreeWidgetItem]]):
+    def get_active_item(self):
+        return self._selected_items
+
+    def focus_active_item(self, item: Union[QTreeWidgetItem,
+                                            Iterable[QTreeWidgetItem]]):
         if isinstance(item, list):
             if not len(item):
                 return

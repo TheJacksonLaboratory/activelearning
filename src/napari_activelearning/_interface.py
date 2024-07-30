@@ -514,7 +514,7 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
         )
 
         self.image_groups_tw.itemDoubleClicked.connect(
-            self._focus_active_element
+            self.focus_active_item
         )
         self.image_groups_tw.itemSelectionChanged.connect(
             self._get_active_item
@@ -588,9 +588,7 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
         self.save_layers_group()
         self.save_layers_group_btn.setEnabled(False)
 
-    def _get_active_item(self, item: Optional[
-                             Union[QTreeWidgetItem, Iterable[QTreeWidgetItem]]
-                             ] = None):
+    def _get_active_item(self):
         item_list = list(filter(
             lambda item: isinstance(item, (ImageGroupRoot,
                                            ImageGroup,
@@ -599,7 +597,7 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
             self.image_groups_tw.selectedItems()
         ))
 
-        super(ImageGroupsManagerWidget, self)._get_active_item(item_list)
+        self.set_active_item(item_list)
 
         self.remove_group_btn.setEnabled(
             self._active_image_group is not None

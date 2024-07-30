@@ -1,16 +1,12 @@
-import pytest
-
 import shutil
 from pathlib import Path
 import operator
 
 import numpy as np
 import zarr
-import zarrdataset as zds
 
-from napari.layers import Image
-from napari.layers._source import Source
 from napari.layers._multiscale_data import MultiScaleData
+
 from napari_activelearning._utils import (get_source_data, downsample_image,
                                           save_zarr,
                                           validate_name,
@@ -19,174 +15,11 @@ from napari_activelearning._utils import (get_source_data, downsample_image,
                                           StaticPatchSampler,
                                           SuperPixelGenerator)
 
-
-@pytest.fixture
-def dataset_metadata():
-    return {
-        "images": {
-            "filenames": ["image1.tif", "image2.tif"],
-            "data_group": "data",
-            "source_axes": "YXC",
-            "axes": "YXC",
-            "roi": None,
-            "modality": "images"
-        }
-    }
-
-
-@pytest.fixture(scope="module", params=[True, False])
-def output_dir(request, tmpdir_factory):
-    if request.param:
-        tmp_dir = tmpdir_factory.mktemp("temp")
-        tmp_dir_path = Path(tmp_dir)
-    else:
-        tmp_dir_path = None
-
-    yield tmp_dir_path
-
-
-@pytest.fixture(scope="module", params=[Path, None, zarr.Group])
-def output_group(request, tmpdir_factory):
-    group_type = request.param
-    if group_type is Path:
-        tmp_dir = tmpdir_factory.mktemp("temp")
-        zarr_group = Path(tmp_dir) / "output.zarr"
-    elif group_type is zarr.Group:
-        zarr_group = zarr.open()
-    else:
-        zarr_group = None
-
-    yield zarr_group
-
-
-@pytest.fixture(scope="module", params=[None, "0"])
-def data_group(request):
-    return request.param
-
-
-def single_scale_array(*args):
-    shape = (1, 3, 10, 10, 10)
-    data = np.random.random(shape)
-    return data, None, None, shape
-
-
-def multiscale_array(*args):
-    shape = (1, 3, 10, 10, 10)
-    data = np.random.random(shape)
-    data = [data, data[..., ::2, ::2, ::2], data[..., ::4, ::4, ::4]]
-    shape = [arr.shape for arr in data]
-
-    return data, None, None, shape
-
-
-def single_scale_zarr(output_dir, data_group):
-    input_filename = None
-
-    sample_data, _, _, shape = single_scale_array()
-
-    if output_dir:
-        input_filename = output_dir / "input.zarr"
-        z_root = zarr.open(input_filename)
-    else:
-        z_root = zarr.open()
-
-    if data_group:
-        z_group = z_root.create_group(data_group)
-    else:
-        z_group = z_root
-
-    z_group.create_dataset(name="0", data=sample_data, overwrite=True)
-    if data_group:
-        data_group = str(Path(data_group) / "0")
-    else:
-        data_group = "0"
-
-    return z_root, input_filename, data_group, shape
-
-
-def multiscale_zarr(output_dir, data_group):
-    input_filename = None
-
-    sample_data, _, _, shape = multiscale_array()
-
-    if output_dir:
-        input_filename = output_dir / "input.zarr"
-        z_root = zarr.open(input_filename)
-
-    else:
-        z_root = zarr.open()
-
-    if data_group:
-        z_group = z_root.create_group(data_group)
-    else:
-        z_group = z_root
-
-    source_data = []
-    for lvl, data in enumerate(sample_data):
-        z_group.create_dataset(name="%i" % lvl, data=data, overwrite=True)
-        source_data.append(z_group["%i" % lvl])
-
-    return source_data, input_filename, data_group, shape
-
-
-@pytest.fixture
-def image_collection():
-    source_data, input_filename, data_group, shape = single_scale_zarr(None,
-                                                                       None)
-    collection = zds.ImageCollection(
-        dict(
-            images=dict(
-                filename=source_data,
-                data_group=data_group,
-                source_axes="TCZYX",
-                axes="TCZYX"
-            )
-        ),
-        spatial_axes="ZYX"
-    )
-    return collection
-
-
-@pytest.fixture(scope="module", params=[single_scale_array,
-                                        single_scale_zarr,
-                                        multiscale_array,
-                                        multiscale_zarr])
-def sample_layer(request, output_dir, data_group):
-    (source_data,
-     input_filename,
-     data_group,
-     _) = request.param(output_dir, data_group)
-
-    if isinstance(source_data, zarr.Group):
-        source_data = source_data[data_group]
-
-    layer = Image(
-        data=source_data,
-        name="sample_layer",
-        scale=[1.0, 1.0, 1.0, 1.0],
-        translate=[0.0, 0.0, 0.0, 0.0],
-        visible=True
-    )
-
-    if input_filename:
-        if data_group:
-            layer._source = Source(path=str(input_filename / data_group))
-        else:
-            layer._source = Source(path=str(input_filename))
-
-    if isinstance(layer.data, (MultiScaleData, list)):
-        if data_group:
-            data_group = str(Path(data_group) / "0")
-        else:
-            data_group = "0"
-
-    return layer, source_data, input_filename, data_group
-
-
-@pytest.fixture(scope="module", params=[single_scale_array,
-                                        single_scale_zarr])
-def single_scale_type_variant_array(request, output_dir, data_group):
-    return request.param(output_dir, data_group)
+try:
+    import torch
+    USING_PYTORCH = True
+except ModuleNotFoundError:
+    USING_PYTORCH = False
 
 
 def test_get_source_data(sample_layer):
@@ -348,7 +181,11 @@ def test_get_dataloader(dataset_metadata):
         model_input_axes=model_input_axes
     )
 
-    assert isinstance(dataloader._patch_sampler, StaticPatchSampler)
+    if USING_PYTORCH:
+        assert isinstance(dataloader.dataset._patch_sampler,
+                          StaticPatchSampler)
+    else:
+        assert isinstance(dataloader._patch_sampler, StaticPatchSampler)
 
 
 def test_compute_chunks(image_collection):
@@ -380,9 +217,12 @@ def test_compute_patches(image_collection):
 
     # Assert that each chunk slice has the correct shape
     for chunk_slices in chunks_slices:
-        assert chunk_slices["Z"].stop - chunk_slices["Z"].start == patch_size["Z"]
-        assert chunk_slices["Y"].stop - chunk_slices["Y"].start == patch_size["Y"]
-        assert chunk_slices["X"].stop - chunk_slices["X"].start == patch_size["X"]
+        assert (chunk_slices["Z"].stop - chunk_slices["Z"].start
+                == patch_size["Z"])
+        assert (chunk_slices["Y"].stop - chunk_slices["Y"].start
+                == patch_size["Y"])
+        assert (chunk_slices["X"].stop - chunk_slices["X"].start
+                == patch_size["X"])
 
 
 def test_compute_transform():
