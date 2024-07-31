@@ -88,7 +88,22 @@ class LabelGroupRoot(QTreeWidgetItem):
         super().__init__(["Labeled groups"])
         self.managed_layers = {}
 
-    def remove_managed_group(self, layer: Layer, label_group: LabelGroup):
+    def add_managed_label_group(self, label_group: LabelGroup):
+        layer = label_group.layer_channel.layer
+
+        if layer not in self.managed_layers:
+            self.managed_layers[layer] = []
+
+        self.managed_layers[layer].append(label_group)
+
+        viewer = napari.current_viewer()
+        viewer.layers.events.removed.connect(
+            self.remove_managed_layer
+        )
+
+    def remove_managed_label_group(self, label_group: LabelGroup):
+        layer = label_group.layer_channel.layer
+
         if (layer in self.managed_layers
            and label_group in self.managed_layers[layer]):
             self.managed_layers[layer].remove(label_group)
@@ -105,17 +120,6 @@ class LabelGroupRoot(QTreeWidgetItem):
             if not self.managed_layers[layer]:
                 self.managed_layers.pop(layer)
 
-    def add_managed_layer(self, layer: Layer, label_group: LabelGroup):
-        if layer not in self.managed_layers:
-            self.managed_layers[layer] = []
-
-        self.managed_layers[layer].append(label_group)
-
-        viewer = napari.current_viewer()
-        viewer.layers.events.removed.connect(
-            self.remove_managed_layer
-        )
-
     def remove_managed_layer(self, event):
         removed_layer = event.value
 
@@ -126,7 +130,7 @@ class LabelGroupRoot(QTreeWidgetItem):
     def addChild(self, child: QTreeWidgetItem):
         if isinstance(child, LabelGroup):
             if child.layer_channel:
-                self.add_managed_layer(child.layer_channel.layer, child)
+                self.add_managed_label_group(child)
 
         super(LabelGroupRoot, self).addChild(child)
 
@@ -140,14 +144,14 @@ class LabelGroupRoot(QTreeWidgetItem):
 
     def removeChild(self, child: QTreeWidgetItem):
         if isinstance(child, LabelGroup) and child.layer_channel:
-            self.remove_managed_group(child.layer_channel.layer, child)
+            self.remove_managed_label_group(child)
 
         super(LabelGroupRoot, self).removeChild(child)
 
     def takeChild(self, index: int):
         child = super(LabelGroupRoot, self).takeChild(index)
         if isinstance(child, LabelGroup) and child.layer_channel:
-            self.remove_managed_group(child.layer_channel.layer, child)
+            self.remove_managed_label_group(child)
 
         return child
 
@@ -155,7 +159,7 @@ class LabelGroupRoot(QTreeWidgetItem):
         children = super(LabelGroupRoot, self).takeChildren()
         for child in children:
             if isinstance(child, LabelGroup) and child.layer_channel:
-                self.remove_managed_group(child.layer_channel.layer, child)
+                self.remove_managed_label_group(child)
 
         return children
 

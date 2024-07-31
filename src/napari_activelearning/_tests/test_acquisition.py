@@ -39,13 +39,14 @@ def test_compute_segmentation(tunable_segmentation_method):
 
 
 def test_compute_acquisition(image_groups_manager, labels_manager,
-                             tunable_segmentation_method):
-    with patch('napari.current_viewer') as mock_viewer:
-        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
+                             tunable_segmentation_method,
+                             make_napari_viewer):
+    viewer = make_napari_viewer()
+    viewer.dims.axis_labels = ['t', 'z', 'y', 'x']
 
-        acquisition_function = AcquisitionFunction(image_groups_manager,
-                                                   labels_manager,
-                                                   tunable_segmentation_method)
+    acquisition_function = AcquisitionFunction(image_groups_manager,
+                                               labels_manager,
+                                               tunable_segmentation_method)
 
     dataset_metadata = {
         "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
@@ -86,8 +87,9 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
 
 
 def test_add_multiscale_output_layer(single_scale_type_variant_array,
-                                     image_group,
+                                     simple_image_group,
                                      make_napari_viewer):
+    image_group, _, _ = simple_image_group
     root_array, input_filename, data_group, _ = single_scale_type_variant_array
     output_filename = input_filename
 
@@ -123,13 +125,17 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
 
 def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
                                    tunable_segmentation_method,
-                                   image_group):
-    with patch('napari.current_viewer') as mock_viewer:
-        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
+                                   simple_image_group,
+                                   make_napari_viewer):
+    image_group, _, _ = simple_image_group
+    image_groups_manager.groups_root.addChild(image_group)
 
-        acquisition_function = AcquisitionFunction(image_groups_manager,
-                                                   labels_manager,
-                                                   tunable_segmentation_method)
+    viewer = make_napari_viewer()
+    viewer.dims.axis_labels = ['t', 'z', 'y', 'x']
+
+    acquisition_function = AcquisitionFunction(image_groups_manager,
+                                               labels_manager,
+                                               tunable_segmentation_method)
 
     acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
     acquisition_function.input_axes = "TZYX"
@@ -173,9 +179,12 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 def test_compute_acquisition_layers(image_groups_manager, labels_manager,
                                     tunable_segmentation_method,
                                     make_napari_viewer,
-                                    image_group,
+                                    simple_image_group,
                                     labels_group,
                                     multiscale_layer_channel):
+
+    image_group, _, _ = simple_image_group
+    image_groups_manager.groups_root.addChild(image_group)
 
     viewer = make_napari_viewer()
     viewer.dims.axis_labels = ['t', 'z', 'y', 'x']
@@ -228,13 +237,16 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
         labels_manager.labels_group_root.addChild(labels_group)
 
 
-def test_fine_tune(image_groups_manager, labels_manager,
+def test_fine_tune(image_groups_manager, simple_image_group,
+                   labels_manager,
                    tunable_segmentation_method,
-                   image_group,
                    multiscale_layer_channel,
                    multiscale_layers_group,
                    labels_group,
                    make_napari_viewer):
+    image_group, _, _ = simple_image_group
+    image_groups_manager.groups_root.addChild(image_group)
+
     image_group.addChild(multiscale_layers_group)
     image_group.labels_group = labels_group
 

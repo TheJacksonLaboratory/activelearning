@@ -442,7 +442,7 @@ class LayersGroup(QTreeWidgetItem):
                 curr_layer_channel.channel = curr_layer_channel.channel - 1
 
         if self.parent() is not None and self.parent().parent() is not None:
-            self.parent().parent().remove_layer_channel(layer_channel)
+            self.parent().parent().remove_managed_layer_channel(layer_channel)
 
         self._update_source_axes()
         self.updated = True
@@ -472,7 +472,7 @@ class LayersGroup(QTreeWidgetItem):
         if (isinstance(child, LayerChannel)
            and self.parent() is not None
            and self.parent().parent() is not None):
-            self.parent().parent().add_managed_layer(child.layer, child)
+            self.parent().parent().add_managed_layer_channel(child)
 
         super(LayersGroup, self).addChild(child)
 
@@ -686,25 +686,25 @@ class ImageGroup(QTreeWidgetItem):
 
         return layers_group
 
-    def remove_layers_group(self, layers_group: LayersGroup):
-        layers_group.takeChildren()
-
     def takeChild(self, index: int):
         child = super(ImageGroup, self).takeChild(index)
         if isinstance(child, LayersGroup):
-            self.remove_layers_group(child)
+            child.takeChildren()
+
         return child
 
     def takeChildren(self):
         children = super(ImageGroup, self).takeChildren()
         for child in children:
             if isinstance(child, LayersGroup):
-                self.remove_layers_group(child)
+                child.takeChildren()
 
         return children
 
     def removeChild(self, child: QTreeWidgetItem):
-        self.remove_layers_group(child)
+        if isinstance(child, LayersGroup):
+            child.takeChildren()
+
         super(ImageGroup, self).removeChild(child)
 
     def add_layers_group(self, layers_group_name: Optional[str] = None,
@@ -801,9 +801,11 @@ class ImageGroupRoot(QTreeWidgetItem):
         super(ImageGroupRoot, self).addChild(child)
 
     def removeChild(self, child: QTreeWidgetItem):
-        if (isinstance(child, ImageGroup)
-           and child.group_name in self.group_names):
-            self.group_names.remove(child.group_name)
+        if isinstance(child, ImageGroup):
+            if child.group_name in self.group_names:
+                self.group_names.remove(child.group_name)
+
+            child.takeChildren()
 
         super(ImageGroupRoot, self).removeChild(child)
 
@@ -812,16 +814,22 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         if isinstance(child, ImageGroup):
             self.group_names.remove(child.group_name)
+            child.takeChildren()
 
         return child
 
     def takeChildren(self):
         children = super(ImageGroupRoot, self).takeChildren()
+        for child in children:
+            if isinstance(child, ImageGroup):
+                child.takeChildren()
+
         self.group_names.clear()
 
         return children
 
-    def add_managed_layer(self, layer: Layer, layer_channel: LayerChannel):
+    def add_managed_layer_channel(self, layer_channel: LayerChannel):
+        layer = layer_channel.layer
         if layer not in self.managed_layers:
             self.managed_layers[layer] = []
 
@@ -832,7 +840,8 @@ class ImageGroupRoot(QTreeWidgetItem):
             self.remove_managed_layer
         )
 
-    def remove_layer_channel(self, removed_layer_channel: LayerChannel):
+    def remove_managed_layer_channel(self,
+                                     removed_layer_channel: LayerChannel):
         if removed_layer_channel.layer not in self.managed_layers:
             return
 
@@ -847,6 +856,9 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         for layer_channel in self.managed_layers[removed_layer]:
             layers_group = layer_channel.parent()
+            if layers_group is None:
+                continue
+
             image_group = layers_group.parent()
 
             layers_group.removeChild(layer_channel)
@@ -857,7 +869,7 @@ class ImageGroupRoot(QTreeWidgetItem):
             if not image_group.childCount():
                 self.removeChild(image_group)
 
-        if self.managed_layers[removed_layer]:
+        if not self.managed_layers[removed_layer]:
             self.managed_layers.pop(removed_layer)
 
         self.setSelected(True)
@@ -927,10 +939,10 @@ class ImageGroupEditor(PropertiesEditor):
     def update_output_dir(self, output_dir: Optional[Union[Path, str]] = None):
         if output_dir:
             self._output_dir = str(output_dir)
-        else:
+        elif self._active_image_group is not None:
             self._output_dir = str(self._active_image_group.group_dir)
 
-        if not self._active_image_group:
+        if self._active_image_group is None:
             return
 
         if self._output_dir.lower() in ("unset", "none", ""):
@@ -961,12 +973,11 @@ class ImageGroupEditor(PropertiesEditor):
             self._active_layers_group.move_channel(prev_channel,
                                                    self._edit_channel)
 
-    def update_source_axes(self, source_axes: Optional[str] = None):
+    def update_source_axes(self, source_axes: str):
         if not self._active_layers_group and not self._active_layer_channel:
             return
 
-        if source_axes:
-            self._edit_axes = source_axes
+        self._edit_axes = source_axes
 
         if self._active_layers_group:
             if self._active_layers_group.source_axes != self._edit_axes:
@@ -1019,12 +1030,11 @@ class ImageGroupEditor(PropertiesEditor):
 
         return False
 
-    def update_use_as_input(self, use_it: Optional[bool] = None):
+    def update_use_as_input(self, use_it: bool):
         if not self._active_layers_group:
             return
 
-        if use_it is not None:
-            self._use_as_input = use_it
+        self._use_as_input = use_it
 
         layers_group_idx = self.active_image_group.indexOfChild(
             self._active_layers_group
@@ -1036,12 +1046,11 @@ class ImageGroupEditor(PropertiesEditor):
         elif self._active_image_group.input_layers_group == layers_group_idx:
             self._active_image_group.input_layers_group = None
 
-    def update_use_as_sampling(self, use_it: Optional[bool] = None):
+    def update_use_as_sampling(self, use_it: bool):
         if not self._active_layers_group:
             return
 
-        if use_it is not None:
-            self._use_as_sampling = use_it
+        self._use_as_sampling = use_it
 
         layers_group_idx = self.active_image_group.indexOfChild(
             self._active_layers_group
@@ -1055,24 +1064,20 @@ class ImageGroupEditor(PropertiesEditor):
               == layers_group_idx):
             self._active_image_group.sampling_mask_layers_group = None
 
-    def update_scale(self, scale: Optional[Iterable[float]] = None):
+    def update_scale(self, scale: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
             return
 
-        if scale is not None:
-            self._edit_scale = scale
-
+        self._edit_scale = scale
         self._active_layer_channel.scale = self._edit_scale
 
-    def update_translate(self, translate: Optional[Iterable[float]] = None):
+    def update_translate(self, translate: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
             return
 
-        if translate is not None:
-            self._edit_translate = translate
-
+        self._edit_translate = translate
         self._active_layer_channel.translate = self._edit_translate
 
 
@@ -1237,8 +1242,7 @@ class MaskGenerator(PropertiesEditor):
         if isinstance(patch_sizes, int):
             patch_sizes = [patch_sizes] * len(self._mask_axes)
 
-        if len(self._mask_axes):
-            self._patch_sizes = patch_sizes
+        self._patch_sizes = patch_sizes
 
     @property
     def active_image_group(self):
@@ -1301,10 +1305,10 @@ class ImageGroupsManager:
 
             self._selected_items = item
 
-        else:
+        elif item is not None:
             self._selected_items = [item]
 
-        item = self._selected_items[-1]
+        item = self._selected_items[-1] if len(self._selected_items) else None
 
         self._active_layer_channel = None
         self._active_layers_group = None
@@ -1316,8 +1320,11 @@ class ImageGroupsManager:
         elif isinstance(item, LayersGroup):
             self._active_layers_group = item
 
-        elif isinstance(item, ImageGroup) and item != self.groups_root:
+        elif isinstance(item, ImageGroup):
             self._active_image_group = item
+
+        else:
+            return
 
         self.layer_scale_editor.active_layer_channel =\
             self._active_layer_channel
@@ -1410,6 +1417,7 @@ class ImageGroupsManager:
     def create_group(self):
         self._active_image_group = ImageGroup()
         self.groups_root.addChild(self._active_image_group)
+        self.set_active_item(self._active_image_group)
 
         self._active_image_group.setExpanded(True)
 
@@ -1425,6 +1433,7 @@ class ImageGroupsManager:
         self._active_layers_group = self._active_image_group.add_layers_group(
             source_axes=active_source_axes
         )
+        self.set_active_item(self._active_layers_group)
 
         self._active_layers_group.setExpanded(True)
 
@@ -1435,16 +1444,16 @@ class ImageGroupsManager:
                 viewer.layers.selection)
         )
 
-        selected_layers = list(zip(*selected_layers))[1]
+        selected_layers = list(zip(*selected_layers))
 
         if not selected_layers:
             return
 
-        for layer in selected_layers:
+        for layer in selected_layers[1]:
             self._active_layer_channel = self._active_layers_group.add_layer(
                 layer=layer
             )
-
+            self.set_active_item(self._active_layer_channel)
             self._active_layer_channel.setExpanded(True)
 
             if (self._active_image_group.group_name is None

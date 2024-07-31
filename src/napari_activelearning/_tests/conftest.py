@@ -28,16 +28,10 @@ def tunable_segmentation_method():
 
 
 @pytest.fixture(scope="package")
-def acquisition_function(image_groups_manager, labels_manager,
-                         tunable_segmentation_method):
-    with patch('napari.current_viewer') as mock_viewer:
-        mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
-
-        acquisition_fun = AcquisitionFunction(image_groups_manager,
-                                              labels_manager,
-                                              tunable_segmentation_method)
-
-    return acquisition_fun
+def output_temp_dir(tmpdir_factory):
+    tmp_dir = tmpdir_factory.mktemp("temp")
+    tmp_dir = Path(tmp_dir)
+    yield tmp_dir
 
 
 @pytest.fixture(scope="package", params=[Path, None, zarr.Group])
@@ -128,19 +122,6 @@ def multiscale_disk_zarr(multiscale_array, tmpdir_factory):
 
 
 @pytest.fixture(scope="package")
-def multiscale_memory_zarr(multiscale_array):
-    sample_data, _, _, shape = multiscale_array
-    z_root = zarr.open()
-
-    source_data = []
-    for lvl, data in enumerate(sample_data):
-        z_root.create_dataset(name="%i" % lvl, data=data, overwrite=True)
-        source_data.append(z_root["%i" % lvl])
-
-    return source_data, None, None, shape
-
-
-@pytest.fixture(scope="package")
 def dataset_metadata(single_scale_disk_zarr):
     z_root, input_filename, data_group, _ = single_scale_disk_zarr
     return {
@@ -182,7 +163,7 @@ def image_collection(single_scale_disk_zarr):
     return collection
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def single_scale_layer(single_scale_disk_zarr):
     source_data, input_filename, data_group, _ = single_scale_disk_zarr
 
@@ -197,17 +178,7 @@ def single_scale_layer(single_scale_disk_zarr):
         visible=True
     )
 
-    if input_filename:
-        if data_group:
-            layer._source = Source(path=str(input_filename / data_group))
-        else:
-            layer._source = Source(path=str(input_filename))
-
-    if isinstance(layer.data, (MultiScaleData, list)):
-        if data_group:
-            data_group = str(Path(data_group) / "0")
-        else:
-            data_group = "0"
+    layer._source = Source(path=str(input_filename / data_group))
 
     return layer, source_data, input_filename, data_group
 
@@ -227,7 +198,7 @@ def single_scale_memory_layer(single_scale_array):
     return layer, source_data, input_filename, data_group
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def multiscale_layer(multiscale_disk_zarr):
     source_data, input_filename, data_group, _ = multiscale_disk_zarr
 
@@ -241,16 +212,12 @@ def multiscale_layer(multiscale_disk_zarr):
 
     layer._source = Source(path=str(input_filename / data_group))
 
-    if isinstance(layer.data, (MultiScaleData, list)):
-        if data_group:
-            data_group = str(Path(data_group) / "0")
-        else:
-            data_group = "0"
+    data_group = str(Path(data_group) / "0")
 
     return layer, source_data, input_filename, data_group
 
 
-@pytest.fixture(scope="package", params=[
+@pytest.fixture(scope="function", params=[
     "single_scale_layer",
     "multiscale_layer"
 ])
@@ -267,31 +234,19 @@ def single_scale_type_variant_array(request):
     return request.getfixturevalue(request.param)
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def layer_channel(single_scale_layer):
     layer, source_data, input_filename, data_group = single_scale_layer
     return LayerChannel(layer=layer, channel=1, source_axes="TCZYX")
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def multiscale_layer_channel(multiscale_layer):
     layer, source_data, input_filename, data_group = multiscale_layer
     return LayerChannel(layer=layer, channel=1, source_axes="TZYX")
 
 
-@pytest.fixture(scope="package")
-def layers_group(layer_channel):
-    layers_group_mock = LayersGroup("sample_layers_group",
-                                    source_axes="TCZYX",
-                                    use_as_input_image=True,
-                                    use_as_sampling_mask=False)
-    layers_group_mock.addChild(layer_channel)
-    layers_group_mock.source_axes = "TCZYX"
-
-    return layers_group_mock
-
-
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def multiscale_layers_group(multiscale_layer_channel):
     layers_group_mock = LayersGroup("segmentation",
                                     source_axes="TZYX",
@@ -303,29 +258,42 @@ def multiscale_layers_group(multiscale_layer_channel):
     return layers_group_mock
 
 
-@pytest.fixture(scope="package")
-def image_group(layers_group):
-    image_group_mock = ImageGroup()
-    image_group_mock._layers_group_name = "sample_group"
-    image_group_mock.addChild(layers_group)
+@pytest.fixture(scope="function")
+def simple_image_group(single_scale_array):
+    source_data, input_filename, data_group, _ = single_scale_array
 
-    return image_group_mock
+    layer = Image(
+        data=source_data,
+        name="sample_layer",
+        scale=[1.0, 1.0, 1.0, 1.0],
+        translate=[0.0, 0.0, 0.0, 0.0],
+        visible=True
+    )
+
+    image_group = ImageGroup("simple_group")
+
+    layers_group = LayersGroup("simple_layers_group")
+    image_group.addChild(layers_group)
+
+    layer_channel = layers_group.add_layer(layer, 0, "TCZYX")
+    image_group.input_layers_group = 0
+
+    return image_group, layers_group, layer_channel
 
 
-@pytest.fixture(scope="package")
-def image_groups_manager(image_group):
+@pytest.fixture(scope="function")
+def image_groups_manager():
     with patch('napari.current_viewer') as mock_viewer:
         mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
         mock_viewer.return_value.dims.ndim = 5
         mock_viewer.return_value.dims.ndisplay = 2
 
         image_groups_mgr = ImageGroupsManager()
-        image_groups_mgr.groups_root.addChild(image_group)
 
     return image_groups_mgr
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def img_sampling_positions():
     sampling_positions = [
         LabelItem(
@@ -348,14 +316,14 @@ def img_sampling_positions():
     return sampling_positions
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def labels_group(layer_channel, img_sampling_positions):
     labels_group_mock = LabelGroup(layer_channel)
     labels_group_mock.addChildren(img_sampling_positions)
     return labels_group_mock
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def labels_manager(labels_group):
     with patch('napari.current_viewer') as mock_viewer:
         mock_viewer.return_value.dims.axis_labels = ['t', 'z', 'y', 'x']
