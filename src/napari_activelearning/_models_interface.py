@@ -134,11 +134,11 @@ if USING_CELLPOSE:
         def __init__(self):
             super().__init__()
 
-            (segmentation_parameters,
+            (self._segmentation_parameters,
              segmentation_parameter_names) =\
                 cellpose_segmentation_parameters_widget()
 
-            (finetuning_parameters,
+            (self._finetuning_parameters,
              finetuning_parameter_names) =\
                 cellpose_finetuning_parameters_widget()
 
@@ -166,7 +166,7 @@ if USING_CELLPOSE:
                 Qt.ScrollBarAlwaysOff
             )
             self._segmentation_parameters_scr.setWidget(
-                segmentation_parameters.native
+                self._segmentation_parameters.native
             )
 
             self._finetuning_parameters_scr = QScrollArea()
@@ -175,16 +175,17 @@ if USING_CELLPOSE:
                 Qt.ScrollBarAlwaysOff
             )
             self._finetuning_parameters_scr.setWidget(
-                finetuning_parameters.native
+                self._finetuning_parameters.native
             )
 
             for par_name in segmentation_parameter_names:
-                segmentation_parameters.__getattr__(par_name).changed.connect(
+                self._segmentation_parameters.__getattr__(par_name)\
+                                             .changed.connect(
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
             for par_name in finetuning_parameter_names:
-                finetuning_parameters.__getattr__(par_name).changed.connect(
+                self._finetuning_parameters.__getattr__(par_name).changed.connect(
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
@@ -220,6 +221,12 @@ if USING_CELLPOSE:
         def _show_finetuning_parameters(self, show: bool):
             self._finetuning_parameters_scr.setVisible(show)
 
+        def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+            super()._fine_tune(train_data, train_labels, test_data,
+                               test_labels)
+            self._segmentation_parameters.pretrained_model.value =\
+                self._pretrained_model
+
 
 def simple_segmentation_parameters_widget():
     @magicgui(auto_call=True)
@@ -245,7 +252,7 @@ class SimpleTunableWidget(SimpleTunable, QWidget):
     def __init__(self):
         super().__init__()
 
-        (segmentation_parameters,
+        (self._segmentation_parameters,
             segmentation_parameter_names) =\
             simple_segmentation_parameters_widget()
 
@@ -264,11 +271,11 @@ class SimpleTunableWidget(SimpleTunable, QWidget):
             Qt.ScrollBarAlwaysOff
         )
         self._segmentation_parameters_scr.setWidget(
-            segmentation_parameters.native
+            self._segmentation_parameters.native
         )
 
         for par_name in segmentation_parameter_names:
-            segmentation_parameters.__getattr__(par_name).changed.connect(
+            self._segmentation_parameters.__getattr__(par_name).changed.connect(
                 partial(self._set_parameter, parameter_key="_" + par_name)
             )
 

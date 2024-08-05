@@ -129,10 +129,9 @@ try:
             return self._transform
 
         def _fine_tune(self, train_data, train_labels, test_data, test_labels):
-            if self._model is None:
-                self._model_init()
+            self._model_init()
 
-            model_path = train.train_seg(
+            self._pretrained_model = train.train_seg(
                 self._model.net,
                 train_data=train_data,
                 train_labels=train_labels,
@@ -163,7 +162,7 @@ try:
                 model_name=self._model_name
             )
 
-            self._model_init(pretrained_model=model_path)
+            self._model_init(pretrained_model=self._pretrained_model)
 
     USING_CELLPOSE = True
 
