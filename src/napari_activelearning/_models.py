@@ -53,7 +53,9 @@ try:
         def _model_init(self):
             gpu = torch.cuda.is_available() and self._gpu
             if self._pretrained_model is None:
-                model_type = self._model_type = None
+                model_type = self._model_type
+            else:
+                model_type = None
 
             self._model = models.CellposeModel(
                 gpu=gpu,
@@ -84,7 +86,7 @@ try:
 
         def _run_pred(self, img, *args, **kwargs):
             if self.refresh_model:
-                self._model_init(pretrained_model=self._pretrained_model)
+                self._model_init()
 
             x = self._transform(img)
 
@@ -97,7 +99,7 @@ try:
 
         def _run_eval(self, img, *args, **kwargs):
             if self.refresh_model:
-                self._model_init(pretrained_model=self._pretrained_model)
+                self._model_init()
 
             seg, _, _ = self._model.eval(img, diameter=None,
                                          flow_threshold=None,

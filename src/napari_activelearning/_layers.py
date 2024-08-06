@@ -1323,9 +1323,6 @@ class ImageGroupsManager:
         elif isinstance(item, ImageGroup):
             self._active_image_group = item
 
-        else:
-            return
-
         self.layer_scale_editor.active_layer_channel =\
             self._active_layer_channel
 

@@ -18,7 +18,8 @@ if USING_CELLPOSE:
                                         "max": 2**16}] = 2,
           channels: tuple[int, int] = (0, 0),
           pretrained_model: Annotated[Path, {"widget_type": "FileEdit",
-                                      "mode": "r"}] = Path(""),
+                                             "visible": False,
+                                             "mode": "r"}] = Path(""),
           model_type: Literal["custom",
                               "cyto",
                               "cyto2",
@@ -232,7 +233,7 @@ if USING_CELLPOSE:
                         .visible = False
                     self._pretrained_model = None
 
-            if getattr(self, parameter_key) != parameter_key:
+            if getattr(self, parameter_key) != parameter_val:
                 self.refresh_model = True
                 setattr(self, parameter_key, parameter_val)
 
