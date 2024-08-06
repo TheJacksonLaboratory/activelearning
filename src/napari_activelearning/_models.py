@@ -39,6 +39,9 @@ try:
 
             self._model = None
             self._model_dropout = None
+
+            self.refresh_model = True
+
             self._transform = None
 
             self._pretrained_model = None
@@ -80,8 +83,10 @@ try:
             self._transform = CellposeTransform(self._channels,
                                                 self._channel_axis)
 
+            self.refresh_model = False
+
         def _run_pred(self, img, *args, **kwargs):
-            if self._model is None:
+            if self.refresh_model:
                 self._model_init(pretrained_model=self._pretrained_model)
 
             x = self._transform(img)
@@ -94,7 +99,7 @@ try:
             return probs
 
         def _run_eval(self, img, *args, **kwargs):
-            if self._model is None:
+            if self.refresh_model:
                 self._model_init(pretrained_model=self._pretrained_model)
 
             seg, _, _ = self._model.eval(img, diameter=None,
@@ -162,7 +167,7 @@ try:
                 model_name=self._model_name
             )
 
-            self._model_init(pretrained_model=self._pretrained_model)
+            self.refresh_model = True
 
     USING_CELLPOSE = True
 

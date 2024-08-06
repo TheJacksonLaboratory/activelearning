@@ -43,10 +43,12 @@ def get_acquisition_function_widget():
     global CURRENT_ACQUISITION_FUNCTION
 
     if CURRENT_ACQUISITION_FUNCTION is None:
+        segmentation_method = SEGMENTATION_METHOD_CLASS()
+
         CURRENT_ACQUISITION_FUNCTION = AcquisitionFunctionWidget(
             image_groups_manager=get_image_groups_manager_widget(),
             labels_manager=get_label_groups_manager_widget(),
-            tunable_segmentation_method=SEGMENTATION_METHOD_CLASS()
+            tunable_segmentation_method=segmentation_method,
         )
 
     return CURRENT_ACQUISITION_FUNCTION
