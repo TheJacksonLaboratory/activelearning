@@ -17,8 +17,14 @@ if USING_CELLPOSE:
                                         "min": 0,
                                         "max": 2**16}] = 2,
           channels: tuple[int, int] = (0, 0),
-          pretrained_model: Path = Path(""),
-          model_type: Literal["cyto", "nuclei", "tissuenet_cp3"] = "cyto",
+          pretrained_model: Annotated[Path, {"widget_type": "FileEdit",
+                                      "mode": "r"}] = Path(""),
+          model_type: Literal["custom",
+                              "cyto",
+                              "cyto2",
+                              "cyto3",
+                              "nuclei",
+                              "tissuenet_cp3"] = "cyto3",
           gpu: bool = True
           ):
             return dict(
@@ -185,7 +191,8 @@ if USING_CELLPOSE:
                 )
 
             for par_name in finetuning_parameter_names:
-                self._finetuning_parameters.__getattr__(par_name).changed.connect(
+                self._finetuning_parameters.__getattr__(par_name).changed\
+                                                                 .connect(
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
@@ -208,12 +215,26 @@ if USING_CELLPOSE:
             self._finetuning_parameters_scr.hide()
 
         def _set_parameter(self, parameter_val, parameter_key=None):
-            if ((isinstance(parameter_val, (str, Path)) and not parameter_val)
+            if (((parameter_key in {"_save_path", "_pretrained_model"})
+                 and not parameter_val.exists())
                or (isinstance(parameter_val, (int, float))
                    and parameter_val < 0)):
                 parameter_val = None
 
-            self.__setattr__(parameter_key, parameter_val)
+            if parameter_key == "_model_type":
+                if parameter_val == "custom":
+                    self._segmentation_parameters\
+                        .pretrained_model\
+                        .visible = True
+                else:
+                    self._segmentation_parameters\
+                        .pretrained_model\
+                        .visible = False
+                    self._pretrained_model = None
+
+            if getattr(self, parameter_key) != parameter_key:
+                self.refresh_model = True
+                setattr(self, parameter_key, parameter_val)
 
         def _show_segmentation_parameters(self, show: bool):
             self._segmentation_parameters_scr.setVisible(show)
@@ -275,7 +296,8 @@ class SimpleTunableWidget(SimpleTunable, QWidget):
         )
 
         for par_name in segmentation_parameter_names:
-            self._segmentation_parameters.__getattr__(par_name).changed.connect(
+            self._segmentation_parameters.__getattr__(par_name).changed\
+                                                               .connect(
                 partial(self._set_parameter, parameter_key="_" + par_name)
             )
 
@@ -291,12 +313,7 @@ class SimpleTunableWidget(SimpleTunable, QWidget):
         self._segmentation_parameters_scr.hide()
 
     def _set_parameter(self, parameter_val, parameter_key=None):
-        if ((isinstance(parameter_val, (str, Path)) and not parameter_val)
-            or (isinstance(parameter_val, (int, float))
-                and parameter_val < 0)):
-            parameter_val = None
-
-        self.__setattr__(parameter_key, parameter_val)
+        setattr(self, parameter_key, parameter_val)
 
     def _show_segmentation_parameters(self, show: bool):
         self._segmentation_parameters_scr.setVisible(show)
