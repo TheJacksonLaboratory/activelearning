@@ -283,12 +283,16 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.layers_group_name_cmb.setEnabled(False)
         self.use_as_input_chk.setEnabled(False)
         self.use_as_sampling_chk.setEnabled(False)
+        self.edit_scale_mdspn.axes = ""
+        self.edit_translate_mdspn.axes = ""
 
     def _clear_layer_channel(self):
         self.display_name_lbl.setText("None selected")
         self.edit_channel_spn.setValue(0)
         self.edit_channel_spn.setMaximum(0)
         self.edit_channel_spn.setEnabled(False)
+        self.edit_scale_mdspn.setEnabled(False)
+        self.edit_translate_mdspn.setEnabled(False)
 
     def _fill_image_group(self):
         self._clear_image_group()
@@ -355,6 +359,7 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
                 ax: ax_scl
                 for ax, ax_scl in zip(self._active_layer_channel.source_axes,
                                       self._active_layer_channel.scale)
+                if ax != "C"
             }
             self.edit_scale_mdspn.setEnabled(True)
 
@@ -362,6 +367,7 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
                 ax: ax_scl
                 for ax, ax_scl in zip(self._active_layer_channel.source_axes,
                                       self._active_layer_channel.translate)
+                if ax != "C"
             }
             self.edit_translate_mdspn.setEnabled(True)
 
@@ -485,6 +491,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
 
         else:
             self.generate_mask_btn.setEnabled(False)
+            self.patch_sizes_mspn.axes = ""
 
     def generate_mask_layer(self):
         self.generate_mask_btn.setEnabled(
@@ -697,7 +704,8 @@ class LabelsManagerWidget(LabelsManager, QWidget):
             "Sampling top-left",
             "Sampling bottom-right"
         ])
-        self.labels_table_tw.itemSelectionChanged.connect(self.focus_region)
+        # self.labels_table_tw.itemSelectionChanged.connect(self.focus_region)
+        self.labels_table_tw.itemPressed.connect(self.focus_region)
 
         self.labels_table_tw.addTopLevelItem(self.labels_group_root)
         self.labels_group_root.setExpanded(True)
@@ -768,6 +776,11 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         self.remove_labels_group_btn.setEnabled(
             self._active_label_group is not None
         )
+
+        self.prev_img_btn.setEnabled(self._active_label is not None)
+        self.prev_patch_btn.setEnabled(self._active_label is not None)
+        self.next_patch_btn.setEnabled(self._active_label is not None)
+        self.next_img_btn.setEnabled(self._active_label is not None)
 
     def edit_labels(self):
         editing = super(LabelsManagerWidget, self).edit_labels()
