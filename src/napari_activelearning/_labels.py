@@ -223,8 +223,6 @@ class LabelsManager:
         if self._requires_commit:
             self.commit()
 
-        self._active_label.setSelected(False)
-
         self._active_label_group = self._active_label.parent()
         patch_index = self._active_label_group.indexOfChild(
             self._active_label
@@ -263,8 +261,10 @@ class LabelsManager:
 
         patch_index = patch_index % self._active_label_group.childCount()
 
+        self._active_label.setSelected(False)
         self._active_label = self._active_label_group.child(patch_index)
         self._active_label.setSelected(True)
+        self.focus_region(self._active_label)
 
     def focus_region(self, label: Optional[QTreeWidgetItem] = None,
                      edit_focused_label: bool = False):
@@ -302,7 +302,7 @@ class LabelsManager:
             self._active_image_group = self._active_layers_group.parent()
 
         current_center = [
-            int(pos * ax_scl)
+            pos * ax_scl
             for pos, ax_scl in zip(self._active_label.center,
                                    self._active_layer_channel.layer.scale)
         ]
@@ -310,10 +310,7 @@ class LabelsManager:
         viewer = napari.current_viewer()
         viewer.dims.order = tuple(range(viewer.dims.ndim))
         viewer.camera.center = current_center
-        viewer.dims.current_step = tuple(current_center)
-        viewer.camera.zoom = 4 / min(
-            self._active_layer_channel.layer.scale
-        )
+        viewer.dims.current_step = tuple(map(int, current_center))
 
         for layer in viewer.layers:
             layer.visible = False
