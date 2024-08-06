@@ -50,18 +50,15 @@ try:
             self._channel_axis = 2
             self._channels = [0, 0]
 
-        def _model_init(self, pretrained_model=None):
-            if (pretrained_model is not None
-               and not os.path.exists(pretrained_model)):
-                pretrained_model = None
-
+        def _model_init(self):
             gpu = torch.cuda.is_available() and self._gpu
-            model_type = self._model_type if pretrained_model is None else None
+            if self._pretrained_model is None:
+                model_type = self._model_type = None
 
             self._model = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=pretrained_model
+                pretrained_model=self._pretrained_model
             )
             self._model.mkldnn = False
             self._model.net.mkldnn = False
@@ -69,7 +66,7 @@ try:
             self._model_dropout = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=pretrained_model
+                pretrained_model=self._pretrained_model
             )
             self._model_dropout.mkldnn = False
             self._model_dropout.net.mkldnn = False
