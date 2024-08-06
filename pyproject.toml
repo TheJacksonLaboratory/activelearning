@@ -24,12 +24,15 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "napari",
     "numpy",
+    "dask[array]",
     "magicgui",
     "qtpy",
     "scikit-image",
     "tensorstore==0.1.59",
     "ome-zarr==0.9.0",
+    "zarr",
     "zarrdataset>=0.2.0",
 ]
 
@@ -49,10 +52,12 @@ testing = [
 [project.entry-points."napari.manifest"]
 napari-activelearning = "napari_activelearning:napari.yaml"
 
+[project.urls]
+Homepage = "https://github.com/TheJacksonLaboratory/activelearning"
 
 
 [build-system]
-requires = ["setuptools>=42.0.0", "wheel", "setuptools_scm"]
+requires = ["setuptools>=42.0.0", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
