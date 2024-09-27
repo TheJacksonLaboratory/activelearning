@@ -1,6 +1,6 @@
 from typing import Optional, Union, Iterable
-from pathlib import Path
-
+from pathlib import PurePosixPath, Path
+from urllib.parse import urlparse
 import math
 import tensorstore as ts
 import zarr
@@ -254,6 +254,8 @@ def get_dataloader(
         shuffle=shuffle
     )
 
+    train_dataset.add_transform("images", zds.ToDtype(np.float32))
+
     if USING_PYTORCH:
         train_dataloader = DataLoader(
             train_dataset,
@@ -482,23 +484,37 @@ def get_source_data(layer: Layer):
     data_group = ""
 
     if input_filename:
-        input_filename = Path(input_filename)
-        input_filename_parts = input_filename.parts
+        input_url = urlparse(input_filename)
+
+        input_scheme = input_url.scheme
+        input_netloc = input_url.netloc
+        input_path = PurePosixPath(input_url.path)
+
+        input_filename_parts = input_path.parts
         extension_idx = list(filter(lambda idx:
                                     ".zarr" in input_filename_parts[idx],
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = str(Path(*input_filename_parts[extension_idx + 1:]))
-            input_filename = Path(*input_filename_parts[:extension_idx + 1])
+            data_group = str(PurePosixPath(
+                *input_filename_parts[extension_idx + 1:]
+            ))
+            input_path = str(PurePosixPath(
+                *input_filename_parts[:extension_idx + 1]
+            ))
+        else:
+            input_path = str(input_path)
 
-        input_filename = str(input_filename)
+        if input_scheme:
+            input_scheme += "://"
+
+        input_filename = input_scheme + input_netloc + input_path
 
     else:
         return layer.data, None
 
     if input_filename and isinstance(layer.data, (MultiScaleData, list)):
-        data_group = str(Path(data_group) / "0")
+        data_group = str(PurePosixPath(data_group) / "0")
 
     if not input_filename:
         input_filename = None

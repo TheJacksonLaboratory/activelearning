@@ -255,6 +255,8 @@ class FineTuningMethod:
                 shuffle=True,
             )
 
+            dataset.add_transform("images", zds.ToDtype(np.float32))
+
             if USING_PYTORCH:
                 dataloader = DataLoader(
                     dataset,

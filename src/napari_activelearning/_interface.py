@@ -872,8 +872,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.finetuning_btn.clicked.connect(self.fine_tune)
 
         acquisition_lyt = QGridLayout()
-        acquisition_lyt.addWidget(patch_sizes_chk, 0, 0) 
-        acquisition_lyt.addWidget(self.patch_sizes_widget, 1, 0, 1, 3) 
+        acquisition_lyt.addWidget(patch_sizes_chk, 0, 0)
+        acquisition_lyt.addWidget(self.patch_sizes_widget, 1, 0, 1, 3)
         acquisition_lyt.addWidget(QLabel("Maximum samples:"), 2, 0)
         acquisition_lyt.addWidget(self.max_samples_spn, 2, 1)
         acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 3, 0)
