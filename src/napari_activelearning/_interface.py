@@ -100,14 +100,17 @@ class MultiSpinBox(QWidget):
         while self._curr_scale_le_list:
             item = self._curr_scale_le_list.pop()
             self.edit_scale_lyt.removeWidget(item)
+            item.deleteLater()
 
         while self._curr_labels_list:
             item = self._curr_labels_list.pop()
             self.edit_scale_lyt.removeWidget(item)
+            item.deleteLater()
 
         while self._curr_power_spn_list:
             item = self._curr_power_spn_list.pop()
             self.edit_scale_lyt.removeWidget(item)
+            item.deleteLater()
 
     def update_spin_boxes(self):
         self.clear_layer_channel()
@@ -129,7 +132,7 @@ class MultiSpinBox(QWidget):
                                           0)
 
             scale_le.textChanged.connect(
-                partial(self._set_patch_size)
+                self._set_patch_size
             )
             power_spn.valueChanged.connect(
                 partial(self._modify_size, ax_idx=ax_idx)
@@ -771,7 +774,8 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         super(LabelsManagerWidget, self).focus_region(label,
                                                       edit_focused_label)
 
-        self.edit_labels_btn.setEnabled(self._active_label is not None)
+        self.edit_labels_btn.setEnabled(self._active_label is not None
+                                        and not edit_focused_label)
         self.remove_labels_btn.setEnabled(self._active_label is not None)
         self.remove_labels_group_btn.setEnabled(
             self._active_label_group is not None
@@ -785,7 +789,7 @@ class LabelsManagerWidget(LabelsManager, QWidget):
     def edit_labels(self):
         editing = super(LabelsManagerWidget, self).edit_labels()
         self.commit_btn.setEnabled(editing)
-        self.edit_labels_btn.setEnabled(editing)
+        self.edit_labels_btn.setEnabled(not editing)
 
     def commit(self):
         super(LabelsManagerWidget, self).commit()

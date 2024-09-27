@@ -60,6 +60,9 @@ class LabelItem(QTreeWidgetItem):
         self._acquisition_val = new_acquisition_val
         self.setText(0, str(self._acquisition_val))
 
+    def __gt__(self, other_label):
+        return self._acquisition_val > other_label._acquisition_val
+
 
 class LabelGroup(QTreeWidgetItem):
     _layer_channel = None
@@ -208,20 +211,21 @@ class LabelsManager:
 
         self._active_label_group.removeChild(self._active_label)
         if not self._active_label_group.childCount():
-            self.remove_labels_group(self._active_label_group)
+            self.remove_labels_group()
 
-        self._active_label = None
+        self._requires_commit = False
+        self.commit()
 
     def remove_labels_group(self):
         if self._active_label_group is None:
             return
 
         self.labels_group_root.removeChild(self._active_label_group)
-        self._active_label_group = None
+        self._requires_commit = False
+        self.commit()
 
     def navigate(self, delta_patch_index=0, delta_image_index=0):
-        if self._requires_commit:
-            self.commit()
+        self.commit()
 
         self._active_label_group = self._active_label.parent()
         patch_index = self._active_label_group.indexOfChild(
@@ -403,40 +407,40 @@ class LabelsManager:
         return True
 
     def commit(self):
-        if not self._requires_commit:
-            return
-
-        edit_data = None
-        if self._active_edit_layer:
-            edit_data = self._active_edit_layer.data
-
         segmentation_channel_layer = None
         segmentation_channel_data = None
-        if self._active_layers_group:
-            segmentation_channel = self._active_layers_group.child(0)
-            segmentation_channel_layer = segmentation_channel.layer
-            if isinstance(segmentation_channel.layer.data, MultiScaleData):
-                segmentation_channel_data = segmentation_channel_layer.data[0]
-            else:
-                segmentation_channel_data = segmentation_channel_layer.data
+        edit_data = None
 
-        if isinstance(self._transaction, ts.Transaction):
-            self._transaction.commit_async()
-        elif (self._active_label.position is not None
-              and segmentation_channel_data is not None):
-            segmentation_channel_data[self._active_label.position] = edit_data
+        if self._requires_commit:
+            if self._active_edit_layer:
+                edit_data = self._active_edit_layer.data
 
-        if segmentation_channel_layer:
-            segmentation_channel_layer.refresh()
-            segmentation_channel_layer.visible = True
+            if self._active_layers_group:
+                segmentation_channel = self._active_layers_group.child(0)
+                segmentation_channel_layer = segmentation_channel.layer
+                if isinstance(segmentation_channel.layer.data, MultiScaleData):
+                    segmentation_channel_data =\
+                        segmentation_channel_layer.data[0]
+                else:
+                    segmentation_channel_data = segmentation_channel_layer.data
+
+            if isinstance(self._transaction, ts.Transaction):
+                self._transaction.commit_async()
+            elif (self._active_label.position is not None
+                  and segmentation_channel_data is not None):
+                segmentation_channel_data[self._active_label.position] =\
+                    edit_data
 
         viewer = napari.current_viewer()
         if (self._active_edit_layer
            and self._active_edit_layer in viewer.layers):
             viewer.layers.remove(self._active_edit_layer)
 
+        if segmentation_channel_layer:
+            segmentation_channel_layer.refresh()
+            segmentation_channel_layer.visible = True
+            viewer.layers.selection.add(segmentation_channel_layer)
+
         self._transaction = None
         self._active_edit_layer = None
-
         self._requires_commit = False
-        viewer.layers.selection.add(segmentation_channel_layer)
