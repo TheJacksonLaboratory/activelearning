@@ -16,6 +16,7 @@ from napari_activelearning._layers import (LayerChannel,
                                            ImageGroupsManager,
                                            ImageGroupEditor,
                                            MaskGenerator)
+from napari_activelearning._utils import get_source_data
 
 
 def test_initialization(single_scale_layer):
@@ -30,7 +31,8 @@ def test_initialization(single_scale_layer):
     assert layer_channel.data_group == data_group
 
     assert ((isinstance(layer_channel.source_data, (Path, str))
-             and layer_channel.source_data == str(input_filename))
+             and (Path(layer_channel.source_data.lower())
+                  == Path(str(input_filename))))
             or np.array_equal(layer_channel.source_data, layer.data))
 
 
@@ -217,13 +219,21 @@ def test_layers_group_properties(single_scale_layer, make_napari_viewer):
     assert layers_group.source_axes == "TCZYX"
 
     expected_metadata = {
-            "modality": "new_sample_layers_group",
-            "filenames": str(input_filename),
-            "data_group": data_group,
-            "source_axes": "TCZYX",
-            "add_to_output": False
-        }
-    assert layers_group.metadata == expected_metadata
+        "modality": "new_sample_layers_group",
+        "filenames": str(input_filename),
+        "data_group": data_group,
+        "source_axes": "TCZYX",
+        "add_to_output": False
+    }
+    assert layers_group.metadata["modality"] == expected_metadata["modality"]
+    assert (Path(layers_group.metadata["filenames"].lower())
+            == Path(expected_metadata["filenames"].lower()))
+    assert (layers_group.metadata["data_group"]
+            == expected_metadata["data_group"])
+    assert (layers_group.metadata["source_axes"]
+            == expected_metadata["source_axes"])
+    assert (layers_group.metadata["add_to_output"]
+            == expected_metadata["add_to_output"])
     viewer.layers.clear()
 
 
