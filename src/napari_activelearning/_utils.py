@@ -1,5 +1,5 @@
 from typing import Optional, Union, Iterable
-from pathlib import PurePosixPath, Path
+from pathlib import PureWindowsPath, Path
 from urllib.parse import urlparse
 import math
 import tensorstore as ts
@@ -488,7 +488,7 @@ def get_source_data(layer: Layer):
 
         input_scheme = input_url.scheme
         input_netloc = input_url.netloc
-        input_path = PurePosixPath(input_url.path)
+        input_path = Path(input_url.path)
 
         input_filename_parts = input_path.parts
         extension_idx = list(filter(lambda idx:
@@ -496,25 +496,41 @@ def get_source_data(layer: Layer):
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = str(PurePosixPath(
+            data_group = Path(
                 *input_filename_parts[extension_idx + 1:]
-            ))
-            input_path = str(PurePosixPath(
+            )
+            input_path = Path(
                 *input_filename_parts[:extension_idx + 1]
-            ))
-        else:
-            input_path = str(input_path)
+            )
+
+        if isinstance(data_group, PureWindowsPath):
+            data_group = data_group.as_posix()
+
+        if isinstance(input_path, PureWindowsPath):
+            input_path = input_path.as_posix()
+
+        input_path = str(input_path)
 
         if input_scheme:
-            input_scheme += "://"
+            if input_scheme in ["http", "https", "ftp", "s3"]:
+                input_scheme += "://"
+            else:
+                input_scheme += ":"
 
         input_filename = input_scheme + input_netloc + input_path
 
+        if ".zarr" in input_filename:
+            if data_group:
+                data_group = Path(data_group)
+
+            z_grp = zarr.open(input_filename, mode="r")
+            while not isinstance(z_grp[data_group], zarr.Array):
+                data_group = data_group / "0"
+
+        data_group = str(data_group)
+
     else:
         return layer.data, None
-
-    if input_filename and isinstance(layer.data, (MultiScaleData, list)):
-        data_group = str(PurePosixPath(data_group) / "0")
 
     if not input_filename:
         input_filename = None

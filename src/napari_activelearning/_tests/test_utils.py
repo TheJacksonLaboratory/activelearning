@@ -27,13 +27,15 @@ def test_get_source_data(sample_layer):
     input_filename, data_group = get_source_data(layer)
 
     assert (not isinstance(input_filename, (Path, str))
-            or input_filename == str(org_input_filename))
+            or (Path(input_filename.lower())
+                == Path(str(org_input_filename).lower())))
     assert (isinstance(input_filename, (Path, str))
             or (isinstance(input_filename, (MultiScaleData, list))
                 and all(map(np.array_equal, input_filename, org_source_data)))
             or np.array_equal(input_filename, org_source_data))
     assert (not isinstance(input_filename, (Path, str))
-            or data_group == org_data_group)
+            or (Path(str(data_group).lower())
+                == Path(str(org_data_group).lower())))
 
 
 def test_downsample_image(single_scale_type_variant_array):
