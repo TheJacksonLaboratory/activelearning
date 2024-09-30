@@ -32,7 +32,7 @@ def test_initialization(single_scale_layer):
 
     assert ((isinstance(layer_channel.source_data, (Path, str))
              and (Path(layer_channel.source_data.lower())
-                  == Path(str(input_filename))))
+                  == Path(str(input_filename).lower())))
             or np.array_equal(layer_channel.source_data, layer.data))
 
 
