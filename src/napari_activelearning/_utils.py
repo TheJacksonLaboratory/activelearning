@@ -1,6 +1,6 @@
 from typing import Optional, Union, Iterable
-from pathlib import Path
-
+from pathlib import PureWindowsPath, Path
+from urllib.parse import urlparse
 import math
 import tensorstore as ts
 import zarr
@@ -254,6 +254,8 @@ def get_dataloader(
         shuffle=shuffle
     )
 
+    train_dataset.add_transform("images", zds.ToDtype(np.float32))
+
     if USING_PYTORCH:
         train_dataloader = DataLoader(
             train_dataset,
@@ -482,23 +484,53 @@ def get_source_data(layer: Layer):
     data_group = ""
 
     if input_filename:
-        input_filename = Path(input_filename)
-        input_filename_parts = input_filename.parts
+        input_url = urlparse(input_filename)
+
+        input_scheme = input_url.scheme
+        input_netloc = input_url.netloc
+        input_path = Path(input_url.path)
+
+        input_filename_parts = input_path.parts
         extension_idx = list(filter(lambda idx:
                                     ".zarr" in input_filename_parts[idx],
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = str(Path(*input_filename_parts[extension_idx + 1:]))
-            input_filename = Path(*input_filename_parts[:extension_idx + 1])
+            data_group = Path(
+                *input_filename_parts[extension_idx + 1:]
+            )
+            input_path = Path(
+                *input_filename_parts[:extension_idx + 1]
+            )
 
-        input_filename = str(input_filename)
+        if isinstance(data_group, PureWindowsPath):
+            data_group = data_group.as_posix()
+
+        if isinstance(input_path, PureWindowsPath):
+            input_path = input_path.as_posix()
+
+        input_path = str(input_path)
+
+        if input_scheme:
+            if input_scheme in ["http", "https", "ftp", "s3"]:
+                input_scheme += "://"
+            else:
+                input_scheme += ":"
+
+        input_filename = input_scheme + input_netloc + input_path
+
+        if ".zarr" in input_filename:
+            if data_group:
+                data_group = Path(data_group)
+
+            z_grp = zarr.open(input_filename, mode="r")
+            while not isinstance(z_grp[data_group], zarr.Array):
+                data_group = data_group / "0"
+
+        data_group = str(data_group)
 
     else:
         return layer.data, None
-
-    if input_filename and isinstance(layer.data, (MultiScaleData, list)):
-        data_group = str(Path(data_group) / "0")
 
     if not input_filename:
         input_filename = None
