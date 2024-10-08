@@ -123,16 +123,12 @@ class LabelGroupRoot(QTreeWidgetItem):
             if not self.managed_layers[layer]:
                 self.managed_layers.pop(layer)
 
-        self.setSelected(True)
-
     def remove_managed_layer(self, event):
         removed_layer = event.value
 
         label_group_list = self.managed_layers.get(removed_layer, [])
         for label_group in label_group_list:
             self.removeChild(label_group)
-
-        self.setSelected(True)
 
     def addChild(self, child: QTreeWidgetItem):
         if isinstance(child, LabelGroup):
@@ -155,14 +151,10 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         super(LabelGroupRoot, self).removeChild(child)
 
-        self.setSelected(True)
-
     def takeChild(self, index: int):
         child = super(LabelGroupRoot, self).takeChild(index)
         if isinstance(child, LabelGroup) and child.layer_channel:
             self.remove_managed_label_group(child)
-
-        self.setSelected(True)
 
         return child
 
@@ -171,8 +163,6 @@ class LabelGroupRoot(QTreeWidgetItem):
         for child in children:
             if isinstance(child, LabelGroup) and child.layer_channel:
                 self.remove_managed_label_group(child)
-
-        self.setSelected(True)
 
         return children
 
@@ -199,50 +189,6 @@ class LabelsManager:
             self.commit
         )
 
-    def _load_label_data(self, input_filename, data_group=None):
-        if isinstance(input_filename, (Path, str)):
-            spec = {
-                'driver': 'zarr',
-                'kvstore': {
-                    'driver': 'file',
-                    'path': str(Path(input_filename) / data_group),
-                },
-            }
-
-            ts_array = ts.open(spec).result()
-
-            self._transaction = ts.Transaction()
-
-            label_data = ts_array.with_transaction(self._transaction)
-            selection = ts.d[:][self._active_label.position].translate_to[0]
-            label_data = label_data[selection]
-
-        elif isinstance(input_filename, MultiScaleData):
-            label_data = np.array(
-                input_filename[0][self._active_label.position]
-            )
-        else:
-            label_data = np.array(input_filename[self._active_label.position])
-
-        return label_data
-
-    def _write_label_data(self, label_data: np.ndarray):
-        if self._active_layers_group:
-            segmentation_channel = self._active_layers_group.child(0)
-            segmentation_channel_layer = segmentation_channel.layer
-            if isinstance(segmentation_channel.layer.data, MultiScaleData):
-                segmentation_channel_data =\
-                    segmentation_channel_layer.data[0]
-            else:
-                segmentation_channel_data = segmentation_channel_layer.data
-
-        if isinstance(self._transaction, ts.Transaction):
-            self._transaction.commit_async()
-        elif (self._active_label.position is not None
-                and segmentation_channel_data is not None):
-            segmentation_channel_data[self._active_label.position] =\
-                label_data
-
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
         new_label_group = LabelGroup(layer_channel)
@@ -266,14 +212,7 @@ class LabelsManager:
         self._active_label_group.removeChild(self._active_label)
         if not self._active_label_group.childCount():
             self.remove_labels_group()
-        else:
-            self._active_label_group.setSelected(True)
 
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
-
-        self._active_label = None
         self._requires_commit = False
         self.commit()
 
@@ -282,14 +221,6 @@ class LabelsManager:
             return
 
         self.labels_group_root.removeChild(self._active_label_group)
-
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
-
-        self.labels_group_root.setSelected(True)
-        self._active_label_group = None
-
         self._requires_commit = False
         self.commit()
 
@@ -346,7 +277,7 @@ class LabelsManager:
 
         if isinstance(label, list) and len(label):
             label = label[0]
-        elif not isinstance(label, (LabelItem, LabelGroup)):
+        elif not isinstance(label, LabelItem):
             label = None
 
         self._active_label_group = None
@@ -430,11 +361,33 @@ class LabelsManager:
         input_filename = self._active_layers_group.source_data
         data_group = self._active_layers_group.data_group
 
-        label_data = self._load_label_data(input_filename, data_group)
+        if isinstance(input_filename, (Path, str)):
+            spec = {
+                'driver': 'zarr',
+                'kvstore': {
+                    'driver': 'file',
+                    'path': str(Path(input_filename) / data_group),
+                },
+            }
+
+            ts_array = ts.open(spec).result()
+
+            self._transaction = ts.Transaction()
+
+            lazy_data = ts_array.with_transaction(self._transaction)
+            lazy_data =\
+                lazy_data[ts.d[:][self._active_label.position].translate_to[0]]
+
+        elif isinstance(input_filename, MultiScaleData):
+            lazy_data = np.array(
+                input_filename[0][self._active_label.position]
+            )
+        else:
+            lazy_data = np.array(input_filename[self._active_label.position])
 
         viewer = napari.current_viewer()
         self._active_edit_layer = viewer.add_labels(
-            label_data,
+            lazy_data,
             name="Labels edit",
             blending="translucent_no_depth",
             opacity=0.7,
@@ -462,22 +415,21 @@ class LabelsManager:
             if self._active_edit_layer:
                 edit_data = self._active_edit_layer.data
 
-            # if self._active_layers_group:
-            #     segmentation_channel = self._active_layers_group.child(0)
-            #     segmentation_channel_layer = segmentation_channel.layer
-            #     if isinstance(segmentation_channel.layer.data, MultiScaleData):
-            #         segmentation_channel_data =\
-            #             segmentation_channel_layer.data[0]
-            #     else:
-            #         segmentation_channel_data = segmentation_channel_layer.data
+            if self._active_layers_group:
+                segmentation_channel = self._active_layers_group.child(0)
+                segmentation_channel_layer = segmentation_channel.layer
+                if isinstance(segmentation_channel.layer.data, MultiScaleData):
+                    segmentation_channel_data =\
+                        segmentation_channel_layer.data[0]
+                else:
+                    segmentation_channel_data = segmentation_channel_layer.data
 
-            # if isinstance(self._transaction, ts.Transaction):
-            #     self._transaction.commit_async()
-            # elif (self._active_label.position is not None
-            #       and segmentation_channel_data is not None):
-            #     segmentation_channel_data[self._active_label.position] =\
-            #         edit_data
-            self._write_label_data(edit_data)
+            if isinstance(self._transaction, ts.Transaction):
+                self._transaction.commit_async()
+            elif (self._active_label.position is not None
+                  and segmentation_channel_data is not None):
+                segmentation_channel_data[self._active_label.position] =\
+                    edit_data
 
         viewer = napari.current_viewer()
         if (self._active_edit_layer

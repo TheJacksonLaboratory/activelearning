@@ -794,17 +794,7 @@ class LabelsManagerWidget(LabelsManager, QWidget):
     def commit(self):
         super(LabelsManagerWidget, self).commit()
         self.commit_btn.setEnabled(False)
-        self.edit_labels_btn.setEnabled(self._active_label is not None)
-
-        self.prev_img_btn.setEnabled(self._active_label is not None)
-        self.prev_patch_btn.setEnabled(self._active_label is not None)
-        self.next_patch_btn.setEnabled(self._active_label is not None)
-        self.next_img_btn.setEnabled(self._active_label is not None)
-
-        self.remove_labels_btn.setEnabled(self._active_label is not None)
-        self.remove_labels_group_btn.setEnabled(
-            self._active_label_group is not None
-        )
+        self.edit_labels_btn.setEnabled(True)
 
 
 class TunableMethodWidget(TunableMethod, QWidget):
