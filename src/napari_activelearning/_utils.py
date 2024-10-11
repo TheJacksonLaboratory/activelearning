@@ -249,7 +249,7 @@ def get_dataloader(
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),
         return_positions=True,
-        draw_same_chunk=True,
+        draw_same_chunk=False,
         patch_sampler=patch_sampler,
         shuffle=shuffle
     )

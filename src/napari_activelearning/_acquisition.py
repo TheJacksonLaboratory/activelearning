@@ -246,7 +246,7 @@ class FineTuningMethod:
             dataset = zds.ZarrDataset(
                 list(dataset_metadata.values()),
                 return_positions=False,
-                draw_same_chunk=True,
+                draw_same_chunk=False,
                 patch_sampler=StaticPatchSampler(
                     patch_size=patch_sizes,
                     top_lefts=top_lefts,
