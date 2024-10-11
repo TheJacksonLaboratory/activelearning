@@ -354,7 +354,7 @@ class AcquisitionFunction:
             dataset_metadata[layer_type] = layers_group.metadata
             dataset_metadata[layer_type]["roi"] = None
 
-            if "images" in layer_type:
+            if layer_type in ["images", "labels"]:
                 dataset_metadata[layer_type]["roi"] = [tuple(
                     slice(0, ax_s - ax_s % self._patch_sizes.get(ax, 1))
                     if (ax != "C"
@@ -363,6 +363,8 @@ class AcquisitionFunction:
                     else slice(None)
                     for ax, ax_s in zip(displayed_source_axes,
                                         displayed_shape)
+                    if (layer_type == "images"
+                        or (layer_type == "labels" and ax != "C"))
                 )]
 
             if isinstance(dataset_metadata[layer_type]["filenames"],
