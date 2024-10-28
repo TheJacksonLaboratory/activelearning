@@ -496,9 +496,12 @@ def get_source_data(layer: Layer):
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = Path(
-                *input_filename_parts[extension_idx + 1:]
-            )
+            data_group = input_filename_parts[extension_idx + 1:]
+            if len(data_group):
+                data_group = Path(*data_group)
+            else:
+                data_group = ""
+
             input_path = Path(
                 *input_filename_parts[:extension_idx + 1]
             )
@@ -509,6 +512,7 @@ def get_source_data(layer: Layer):
         if isinstance(input_path, PureWindowsPath):
             input_path = input_path.as_posix()
 
+        data_group = str(data_group)
         input_path = str(input_path)
 
         if input_scheme:
@@ -520,14 +524,9 @@ def get_source_data(layer: Layer):
         input_filename = input_scheme + input_netloc + input_path
 
         if ".zarr" in input_filename:
-            if data_group:
-                data_group = Path(data_group)
-
             z_grp = zarr.open(input_filename, mode="r")
             while not isinstance(z_grp[data_group], zarr.Array):
-                data_group = data_group / "0"
-
-        data_group = str(data_group)
+                data_group = str(Path(data_group) / "0")
 
     else:
         return layer.data, None
