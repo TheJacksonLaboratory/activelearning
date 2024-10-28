@@ -512,6 +512,7 @@ def get_source_data(layer: Layer):
         if isinstance(input_path, PureWindowsPath):
             input_path = input_path.as_posix()
 
+        data_group = str(data_group)
         input_path = str(input_path)
 
         if input_scheme:
