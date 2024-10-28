@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import numpy as np
 import zarr
 import zarrdataset as zds
@@ -82,7 +82,12 @@ def single_scale_disk_zarr(single_scale_array, tmpdir_factory):
     z_group = z_root.create_group(data_group)
 
     z_group.create_dataset(name="0", data=sample_data, overwrite=True)
-    data_group = str(Path(data_group) / "0")
+    data_group = Path(data_group) / "0"
+
+    if isinstance(data_group, PureWindowsPath):
+        data_group = data_group.as_posix()
+
+    data_group = str(data_group)
 
     return z_root, input_filename, data_group, shape
 
