@@ -524,7 +524,7 @@ def get_source_data(layer: Layer):
                 data_group = Path(data_group)
 
             z_grp = zarr.open(input_filename, mode="r")
-            while not isinstance(z_grp[data_group], zarr.Array):
+            while not isinstance(z_grp[str(data_group)], zarr.Array):
                 data_group = data_group / "0"
 
         data_group = str(data_group)
