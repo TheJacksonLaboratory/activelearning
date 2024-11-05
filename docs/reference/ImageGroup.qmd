@@ -1,0 +1,6 @@
+# ImageGroup { #napari_activelearning.ImageGroup }
+
+```python
+ImageGroup(self, group_name=None, group_dir=None)
+```
+

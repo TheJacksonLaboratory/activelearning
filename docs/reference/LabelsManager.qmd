@@ -1,0 +1,6 @@
+# LabelsManager { #napari_activelearning.LabelsManager }
+
+```python
+LabelsManager(self)
+```
+

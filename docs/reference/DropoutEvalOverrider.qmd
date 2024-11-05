@@ -1,0 +1,6 @@
+# DropoutEvalOverrider { #napari_activelearning.DropoutEvalOverrider }
+
+```python
+DropoutEvalOverrider(self, dropout_module)
+```
+

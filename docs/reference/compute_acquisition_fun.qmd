@@ -1,0 +1,11 @@
+# compute_acquisition_fun { #napari_activelearning.compute_acquisition_fun }
+
+```python
+compute_acquisition_fun(
+    tunable_segmentation_method
+    img
+    img_sp
+    MC_repetitions
+)
+```
+

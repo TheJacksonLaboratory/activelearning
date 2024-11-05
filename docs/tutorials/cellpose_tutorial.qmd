@@ -1,0 +1,20 @@
+---
+title: "Tutorial: How to fine tune a Cellpose model"
+author: Fernando Cervantes (fernando.cervantes@jax.org)
+format:
+  revealjs:
+    code-fold: false
+    progress: true
+    controls: true
+    fontsize: 22pt
+
+  ipynb:
+    roc: true
+
+execute:
+  echo:
+    true
+
+jupyter: python3
+---
+

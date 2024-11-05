@@ -1,0 +1,6 @@
+# compute_acquisition_superpixel { #napari_activelearning.compute_acquisition_superpixel }
+
+```python
+compute_acquisition_superpixel(probs, super_pixel_labels)
+```
+

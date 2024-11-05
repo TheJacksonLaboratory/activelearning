@@ -1,0 +1,6 @@
+# SegmentationMethod._run_eval { #napari_activelearning.SegmentationMethod._run_eval }
+
+```python
+SegmentationMethod._run_eval(img, *args, **kwargs)
+```
+

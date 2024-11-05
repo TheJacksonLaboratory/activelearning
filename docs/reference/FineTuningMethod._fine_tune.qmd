@@ -1,0 +1,6 @@
+# FineTuningMethod._fine_tune { #napari_activelearning.FineTuningMethod._fine_tune }
+
+```python
+FineTuningMethod._fine_tune(train_data, train_labels, test_data, test_labels)
+```
+

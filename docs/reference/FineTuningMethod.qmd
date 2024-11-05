@@ -1,0 +1,6 @@
+# FineTuningMethod { #napari_activelearning.FineTuningMethod }
+
+```python
+FineTuningMethod(self)
+```
+

@@ -1,0 +1,6 @@
+# ImageGroupsManager.update_group { #napari_activelearning.ImageGroupsManager.update_group }
+
+```python
+ImageGroupsManager.update_group()
+```
+

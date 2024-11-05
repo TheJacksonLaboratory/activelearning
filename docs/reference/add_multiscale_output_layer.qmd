@@ -1,0 +1,20 @@
+# add_multiscale_output_layer { #napari_activelearning.add_multiscale_output_layer }
+
+```python
+add_multiscale_output_layer(
+    root
+    axes
+    scale
+    data_group
+    group_name
+    layers_group_name
+    image_group
+    reference_source_axes
+    reference_scale
+    output_filename=None
+    contrast_limits=None
+    colormap=None
+    add_func=napari.Viewer.add_image
+)
+```
+

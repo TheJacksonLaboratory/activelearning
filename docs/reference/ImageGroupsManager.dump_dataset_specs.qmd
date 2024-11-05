@@ -1,0 +1,6 @@
+# ImageGroupsManager.dump_dataset_specs { #napari_activelearning.ImageGroupsManager.dump_dataset_specs }
+
+```python
+ImageGroupsManager.dump_dataset_specs()
+```
+

@@ -1,0 +1,89 @@
+project:
+  type: website
+
+metadata-files:
+  - _sidebar.yml
+
+website:
+  page-navigation: true
+  navbar:
+    left:
+      - file: tutorials/
+        text: Tutorials
+      - href: reference/
+        text: Reference
+
+format:
+  html:
+    theme: cosmo
+    css:
+      - api/_styles-quartodoc.css
+      - styles.css
+    toc: true
+
+quartodoc:
+  # the name used to import the package you want to create reference docs for
+  package: napari_activelearning
+
+  # write sidebar data to this file
+  sidebar: _sidebar.yml
+
+  sections:
+    - title: Some functions
+      desc: Functions to inspect docstrings.
+      contents:
+        # the functions being documented in the package.
+        # you can refer to anything: class methods, modules, etc..
+        - LayerChannel
+        - LayersGroup
+        - ImageGroup
+        - ImageGroupRoot
+        - ImageGroupEditor
+        - MaskGenerator
+        - ImageGroupsManager
+        - ImageGroupsManager.set_active_item
+        - ImageGroupsManager.get_active_item
+        - ImageGroupsManager.focus_active_item
+        - ImageGroupsManager.update_group
+        - ImageGroupsManager.create_group
+        - ImageGroupsManager.create_layers_group
+        - ImageGroupsManager.add_layers_to_group
+        - ImageGroupsManager.remove_layer
+        - ImageGroupsManager.remove_layers_group
+        - ImageGroupsManager.remove_group
+        - ImageGroupsManager.save_layers_group
+        - ImageGroupsManager.dump_dataset_specs
+        # - LabelItem
+        # - LabelGroup
+        # - LabelGroupRoot
+        # - LabelsManager
+        # - LabelsManager.add_labels
+        # - LabelsManager.remove_labels
+        # - LabelsManager.remove_labels_group
+        # - LabelsManager.navigate
+        # - LabelsManager.focus_region
+        # - LabelsManager.focus_and_edit_region
+        # - LabelsManager.edit_labels
+        # - LabelsManager.commit
+        - AcquisitionFunction
+        - compute_BALD
+        - compute_acquisition_superpixel
+        - compute_acquisition_fun
+        - compute_segmentation
+        - add_multiscale_output_layer
+        - DropoutEvalOverrider
+        - add_dropout
+        - SegmentationMethod
+        - SegmentationMethod._run_pred
+        - SegmentationMethod._run_eval
+        - SegmentationMethod.probs
+        - SegmentationMethod.segment
+        - FineTuningMethod
+        - FineTuningMethod._get_transform
+        - FineTuningMethod._fine_tune
+        - FineTuningMethod.fine_tune
+        - TunableMethod
+        - AcquisitionFunction
+        - AcquisitionFunction.compute_acquisition
+        - AcquisitionFunction.compute_acquisition_layers
+        - AcquisitionFunction.fine_tune

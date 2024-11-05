@@ -1,0 +1,6 @@
+# SegmentationMethod.probs { #napari_activelearning.SegmentationMethod.probs }
+
+```python
+SegmentationMethod.probs(img, *args, **kwargs)
+```
+

@@ -1,0 +1,49 @@
+website:
+  sidebar:
+  - contents:
+    - reference/index.qmd
+    - contents:
+      - reference/LayerChannel.qmd
+      - reference/LayersGroup.qmd
+      - reference/ImageGroup.qmd
+      - reference/ImageGroupRoot.qmd
+      - reference/ImageGroupEditor.qmd
+      - reference/MaskGenerator.qmd
+      - reference/ImageGroupsManager.qmd
+      - reference/ImageGroupsManager.set_active_item.qmd
+      - reference/ImageGroupsManager.get_active_item.qmd
+      - reference/ImageGroupsManager.focus_active_item.qmd
+      - reference/ImageGroupsManager.update_group.qmd
+      - reference/ImageGroupsManager.create_group.qmd
+      - reference/ImageGroupsManager.create_layers_group.qmd
+      - reference/ImageGroupsManager.add_layers_to_group.qmd
+      - reference/ImageGroupsManager.remove_layer.qmd
+      - reference/ImageGroupsManager.remove_layers_group.qmd
+      - reference/ImageGroupsManager.remove_group.qmd
+      - reference/ImageGroupsManager.save_layers_group.qmd
+      - reference/ImageGroupsManager.dump_dataset_specs.qmd
+      - reference/AcquisitionFunction.qmd
+      - reference/compute_BALD.qmd
+      - reference/compute_acquisition_superpixel.qmd
+      - reference/compute_acquisition_fun.qmd
+      - reference/compute_segmentation.qmd
+      - reference/add_multiscale_output_layer.qmd
+      - reference/DropoutEvalOverrider.qmd
+      - reference/add_dropout.qmd
+      - reference/SegmentationMethod.qmd
+      - reference/SegmentationMethod._run_pred.qmd
+      - reference/SegmentationMethod._run_eval.qmd
+      - reference/SegmentationMethod.probs.qmd
+      - reference/SegmentationMethod.segment.qmd
+      - reference/FineTuningMethod.qmd
+      - reference/FineTuningMethod._get_transform.qmd
+      - reference/FineTuningMethod._fine_tune.qmd
+      - reference/FineTuningMethod.fine_tune.qmd
+      - reference/TunableMethod.qmd
+      - reference/AcquisitionFunction.qmd
+      - reference/AcquisitionFunction.compute_acquisition.qmd
+      - reference/AcquisitionFunction.compute_acquisition_layers.qmd
+      - reference/AcquisitionFunction.fine_tune.qmd
+      section: Some functions
+    id: reference
+  - id: dummy-sidebar

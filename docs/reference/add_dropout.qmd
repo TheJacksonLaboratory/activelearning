@@ -1,0 +1,6 @@
+# add_dropout { #napari_activelearning.add_dropout }
+
+```python
+add_dropout(net, p=0.05)
+```
+

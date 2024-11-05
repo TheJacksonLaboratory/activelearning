@@ -1,0 +1,6 @@
+# SegmentationMethod { #napari_activelearning.SegmentationMethod }
+
+```python
+SegmentationMethod(self)
+```
+

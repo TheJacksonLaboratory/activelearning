@@ -1,0 +1,6 @@
+# SegmentationMethod.segment { #napari_activelearning.SegmentationMethod.segment }
+
+```python
+SegmentationMethod.segment(img, *args, **kwargs)
+```
+

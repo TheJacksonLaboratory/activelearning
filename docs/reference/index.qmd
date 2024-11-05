@@ -1,0 +1,49 @@
+# Function reference {.doc .doc-index}
+
+## Some functions
+
+Functions to inspect docstrings.
+
+| | |
+| --- | --- |
+| [LayerChannel](LayerChannel.qmd#napari_activelearning.LayerChannel) |  |
+| [LayersGroup](LayersGroup.qmd#napari_activelearning.LayersGroup) |  |
+| [ImageGroup](ImageGroup.qmd#napari_activelearning.ImageGroup) |  |
+| [ImageGroupRoot](ImageGroupRoot.qmd#napari_activelearning.ImageGroupRoot) |  |
+| [ImageGroupEditor](ImageGroupEditor.qmd#napari_activelearning.ImageGroupEditor) |  |
+| [MaskGenerator](MaskGenerator.qmd#napari_activelearning.MaskGenerator) |  |
+| [ImageGroupsManager](ImageGroupsManager.qmd#napari_activelearning.ImageGroupsManager) |  |
+| [ImageGroupsManager.set_active_item](ImageGroupsManager.set_active_item.qmd#napari_activelearning.ImageGroupsManager.set_active_item) |  |
+| [ImageGroupsManager.get_active_item](ImageGroupsManager.get_active_item.qmd#napari_activelearning.ImageGroupsManager.get_active_item) |  |
+| [ImageGroupsManager.focus_active_item](ImageGroupsManager.focus_active_item.qmd#napari_activelearning.ImageGroupsManager.focus_active_item) |  |
+| [ImageGroupsManager.update_group](ImageGroupsManager.update_group.qmd#napari_activelearning.ImageGroupsManager.update_group) |  |
+| [ImageGroupsManager.create_group](ImageGroupsManager.create_group.qmd#napari_activelearning.ImageGroupsManager.create_group) |  |
+| [ImageGroupsManager.create_layers_group](ImageGroupsManager.create_layers_group.qmd#napari_activelearning.ImageGroupsManager.create_layers_group) |  |
+| [ImageGroupsManager.add_layers_to_group](ImageGroupsManager.add_layers_to_group.qmd#napari_activelearning.ImageGroupsManager.add_layers_to_group) |  |
+| [ImageGroupsManager.remove_layer](ImageGroupsManager.remove_layer.qmd#napari_activelearning.ImageGroupsManager.remove_layer) |  |
+| [ImageGroupsManager.remove_layers_group](ImageGroupsManager.remove_layers_group.qmd#napari_activelearning.ImageGroupsManager.remove_layers_group) |  |
+| [ImageGroupsManager.remove_group](ImageGroupsManager.remove_group.qmd#napari_activelearning.ImageGroupsManager.remove_group) |  |
+| [ImageGroupsManager.save_layers_group](ImageGroupsManager.save_layers_group.qmd#napari_activelearning.ImageGroupsManager.save_layers_group) |  |
+| [ImageGroupsManager.dump_dataset_specs](ImageGroupsManager.dump_dataset_specs.qmd#napari_activelearning.ImageGroupsManager.dump_dataset_specs) |  |
+| [AcquisitionFunction](AcquisitionFunction.qmd#napari_activelearning.AcquisitionFunction) |  |
+| [compute_BALD](compute_BALD.qmd#napari_activelearning.compute_BALD) |  |
+| [compute_acquisition_superpixel](compute_acquisition_superpixel.qmd#napari_activelearning.compute_acquisition_superpixel) |  |
+| [compute_acquisition_fun](compute_acquisition_fun.qmd#napari_activelearning.compute_acquisition_fun) |  |
+| [compute_segmentation](compute_segmentation.qmd#napari_activelearning.compute_segmentation) |  |
+| [add_multiscale_output_layer](add_multiscale_output_layer.qmd#napari_activelearning.add_multiscale_output_layer) |  |
+| [DropoutEvalOverrider](DropoutEvalOverrider.qmd#napari_activelearning.DropoutEvalOverrider) |  |
+| [add_dropout](add_dropout.qmd#napari_activelearning.add_dropout) |  |
+| [SegmentationMethod](SegmentationMethod.qmd#napari_activelearning.SegmentationMethod) |  |
+| [SegmentationMethod._run_pred](SegmentationMethod._run_pred.qmd#napari_activelearning.SegmentationMethod._run_pred) |  |
+| [SegmentationMethod._run_eval](SegmentationMethod._run_eval.qmd#napari_activelearning.SegmentationMethod._run_eval) |  |
+| [SegmentationMethod.probs](SegmentationMethod.probs.qmd#napari_activelearning.SegmentationMethod.probs) |  |
+| [SegmentationMethod.segment](SegmentationMethod.segment.qmd#napari_activelearning.SegmentationMethod.segment) |  |
+| [FineTuningMethod](FineTuningMethod.qmd#napari_activelearning.FineTuningMethod) |  |
+| [FineTuningMethod._get_transform](FineTuningMethod._get_transform.qmd#napari_activelearning.FineTuningMethod._get_transform) |  |
+| [FineTuningMethod._fine_tune](FineTuningMethod._fine_tune.qmd#napari_activelearning.FineTuningMethod._fine_tune) |  |
+| [FineTuningMethod.fine_tune](FineTuningMethod.fine_tune.qmd#napari_activelearning.FineTuningMethod.fine_tune) |  |
+| [TunableMethod](TunableMethod.qmd#napari_activelearning.TunableMethod) |  |
+| [AcquisitionFunction](AcquisitionFunction.qmd#napari_activelearning.AcquisitionFunction) |  |
+| [AcquisitionFunction.compute_acquisition](AcquisitionFunction.compute_acquisition.qmd#napari_activelearning.AcquisitionFunction.compute_acquisition) |  |
+| [AcquisitionFunction.compute_acquisition_layers](AcquisitionFunction.compute_acquisition_layers.qmd#napari_activelearning.AcquisitionFunction.compute_acquisition_layers) |  |
+| [AcquisitionFunction.fine_tune](AcquisitionFunction.fine_tune.qmd#napari_activelearning.AcquisitionFunction.fine_tune) |  |

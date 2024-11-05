@@ -1,0 +1,6 @@
+# compute_BALD { #napari_activelearning.compute_BALD }
+
+```python
+compute_BALD(probs)
+```
+

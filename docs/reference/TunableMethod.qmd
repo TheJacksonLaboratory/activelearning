@@ -1,0 +1,6 @@
+# TunableMethod { #napari_activelearning.TunableMethod }
+
+```python
+TunableMethod(self)
+```
+

@@ -1,0 +1,6 @@
+# ImageGroupsManager { #napari_activelearning.ImageGroupsManager }
+
+```python
+ImageGroupsManager(self, default_axis_labels='TZYX')
+```
+

@@ -1,0 +1,6 @@
+# ImageGroupsManager.remove_group { #napari_activelearning.ImageGroupsManager.remove_group }
+
+```python
+ImageGroupsManager.remove_group()
+```
+
