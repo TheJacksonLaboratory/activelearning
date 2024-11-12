@@ -6,6 +6,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
 import tensorstore as ts
+import zarr
 
 import napari
 from napari.layers import Layer
@@ -201,21 +202,8 @@ class LabelsManager:
 
     def _load_label_data(self, input_filename, data_group=None):
         if isinstance(input_filename, (Path, str)):
-            spec = {
-                'driver': 'zarr',
-                'kvstore': {
-                    'driver': 'file',
-                    'path': str(Path(input_filename) / data_group),
-                },
-            }
-
-            ts_array = ts.open(spec).result()
-
-            self._transaction = ts.Transaction()
-
-            label_data = ts_array.with_transaction(self._transaction)
-            selection = ts.d[:][self._active_label.position].translate_to[0]
-            label_data = label_data[selection]
+            label_data_grp = zarr.open(Path(input_filename) / data_group)
+            label_data = label_data_grp[self._active_label.position]
 
         elif isinstance(input_filename, MultiScaleData):
             label_data = np.array(
@@ -455,28 +443,13 @@ class LabelsManager:
 
     def commit(self):
         segmentation_channel_layer = None
-        segmentation_channel_data = None
+
         edit_data = None
 
         if self._requires_commit:
             if self._active_edit_layer:
                 edit_data = self._active_edit_layer.data
 
-            # if self._active_layers_group:
-            #     segmentation_channel = self._active_layers_group.child(0)
-            #     segmentation_channel_layer = segmentation_channel.layer
-            #     if isinstance(segmentation_channel.layer.data, MultiScaleData):
-            #         segmentation_channel_data =\
-            #             segmentation_channel_layer.data[0]
-            #     else:
-            #         segmentation_channel_data = segmentation_channel_layer.data
-
-            # if isinstance(self._transaction, ts.Transaction):
-            #     self._transaction.commit_async()
-            # elif (self._active_label.position is not None
-            #       and segmentation_channel_data is not None):
-            #     segmentation_channel_data[self._active_label.position] =\
-            #         edit_data
             self._write_label_data(edit_data)
 
         viewer = napari.current_viewer()
