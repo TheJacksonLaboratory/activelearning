@@ -1,0 +1,6 @@
+# LayerChannel { #napari_activelearning.LayerChannel }
+
+```python
+LayerChannel(self, layer, channel=0, source_axes='TZYX')
+```
+

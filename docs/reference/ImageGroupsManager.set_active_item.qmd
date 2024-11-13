@@ -1,0 +1,6 @@
+# ImageGroupsManager.set_active_item { #napari_activelearning.ImageGroupsManager.set_active_item }
+
+```python
+ImageGroupsManager.set_active_item(item=None)
+```
+

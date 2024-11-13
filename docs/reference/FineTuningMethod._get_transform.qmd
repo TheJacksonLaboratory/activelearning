@@ -1,0 +1,6 @@
+# FineTuningMethod._get_transform { #napari_activelearning.FineTuningMethod._get_transform }
+
+```python
+FineTuningMethod._get_transform()
+```
+

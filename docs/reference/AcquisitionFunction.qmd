@@ -1,0 +1,11 @@
+# AcquisitionFunction { #napari_activelearning.AcquisitionFunction }
+
+```python
+AcquisitionFunction(
+    self
+    image_groups_manager
+    labels_manager
+    tunable_segmentation_method
+)
+```
+

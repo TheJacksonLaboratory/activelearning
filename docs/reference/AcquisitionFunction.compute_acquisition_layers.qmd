@@ -1,0 +1,10 @@
+# AcquisitionFunction.compute_acquisition_layers { #napari_activelearning.AcquisitionFunction.compute_acquisition_layers }
+
+```python
+AcquisitionFunction.compute_acquisition_layers(
+    run_all=False
+    segmentation_group_name='segmentation'
+    segmentation_only=False
+)
+```
+

@@ -1,4 +1,5 @@
 from typing import Optional, Iterable, Tuple, Callable, Union
+from functools import partial
 import random
 from pathlib import Path
 import numpy as np
@@ -94,7 +95,7 @@ def add_multiscale_output_layer(
         root,
         source_axes=axes,
         data_group=data_group,
-        scale=4,
+        scale=2,
         num_scales=5,
         reference_source_axes=reference_source_axes,
         reference_scale=reference_scale

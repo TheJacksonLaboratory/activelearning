@@ -74,7 +74,7 @@ def test_downsample_image(single_scale_type_variant_array):
                           int(np.log(min_spatial_shape) / np.log(scale)))
 
     expected_shapes = [
-        [int(np.ceil(ax_s / (scale ** s))) if ax in "ZYX" else ax_s
+        [int(np.ceil(ax_s / (scale ** s))) if ax in "YX" else ax_s
          for ax, ax_s in zip("TCZYX", array_shape)
          ]
         for s in range(expected_scales)
@@ -114,7 +114,9 @@ def test_save_zarr(sample_layer, output_group):
     assert (not is_multiscale
             or len(out_grp[group_name]) == len(layer.data))
     assert (isinstance(out_grp.store, zarr.MemoryStore)
-            or "image-label" in out_grp[group_name].attrs)
+            or layer.data.dtype in (np.float32, np.float64)
+            or (layer.data.dtype in (np.int8, np.int32, np.int64)
+                and "image-label" in out_grp[group_name].attrs))
 
 
 def test_validate_name():

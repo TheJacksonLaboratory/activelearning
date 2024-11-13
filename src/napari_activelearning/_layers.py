@@ -1505,4 +1505,9 @@ class ImageGroupsManager:
             with open(self._active_image_group.group_dir
                       / (self._active_image_group.group_name
                          + "_metadata.json"), "w") as fp:
-                fp.write(json.dumps(self._active_image_group.metadata))
+                try:
+                    fp.write(json.dumps(self._active_image_group.metadata))
+                except TypeError:
+                    raise ValueError("Some images in this group are arrays, "
+                                     "save them as zarr files to generate the"
+                                     "metadata file.")

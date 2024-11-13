@@ -366,7 +366,9 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
             overwrite=True
         )
 
-    if not isinstance(out_grp.store, zarr.MemoryStore):
+    if (is_label and not isinstance(out_grp.store, zarr.MemoryStore)
+       and data_ms[0] is not None
+       and data_ms[0].dtype in (np.int8, np.int32, np.int64)):
         write_label_metadata(out_grp, group_name, **metadata)
 
     return out_grp
@@ -378,17 +380,7 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                      reference_units=None):
     if isinstance(z_root, (Path, str)):
         source_arr = da.from_zarr(z_root, component=data_group)
-
-        spec = {
-            'driver': 'zarr',
-            'kvstore': {
-                'driver': 'file',
-                'path': str(Path(z_root) / data_group),
-            },
-        }
-
-        ts_array = ts.open(spec).result()
-        z_ms = [ts_array]
+        z_ms = [source_arr]
 
     elif isinstance(z_root, np.ndarray):
         source_arr = da.from_array(z_root)
@@ -415,7 +407,7 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                                      / np.log(scale)))
 
     downscale_selection = tuple(
-        slice(None, None, scale) if ax in "ZYX" and ax_s > 1 else slice(None)
+        slice(None, None, scale) if ax in "YX" and ax_s > 1 else slice(None)
         for ax, ax_s in zip(source_axes, source_arr.shape)
     )
 
@@ -444,10 +436,15 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
 
     for s in range(1, num_scales):
         target_arr = source_arr[downscale_selection]
-        target_arr = target_arr.rechunk()
+        target_arr = target_arr.rechunk(
+            tuple(
+                (chk // scale) if ax in "XY" else chk
+                for chk, ax in zip(source_arr.chunksize, reference_scale_axes)
+            )
+        )
 
         if isinstance(z_root, (Path, str)):
-            z_ms.append(z_ms[-1][downscale_selection])
+            z_ms.append(target_arr)
 
             target_arr.to_zarr(z_root,
                                component=groups_root % s,
@@ -461,7 +458,7 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                 "coordinateTransformations": [
                     {"type": "scale",
                      "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
-                               if ax in "ZYX" else 1.0
+                               if ax in "YX" else 1.0
                                for ax in source_axes]
                      }],
                 "path": str(s)

@@ -1,0 +1,11 @@
+# FineTuningMethod.fine_tune { #napari_activelearning.FineTuningMethod.fine_tune }
+
+```python
+FineTuningMethod.fine_tune(
+    dataset_metadata_list
+    train_data_proportion=0.8
+    patch_sizes=256
+    model_axes='YXC'
+)
+```
+

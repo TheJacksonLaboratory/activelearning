@@ -1,0 +1,6 @@
+# ImageGroupsManager.add_layers_to_group { #napari_activelearning.ImageGroupsManager.add_layers_to_group }
+
+```python
+ImageGroupsManager.add_layers_to_group()
+```
+

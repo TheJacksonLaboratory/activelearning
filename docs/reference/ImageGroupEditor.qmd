@@ -1,0 +1,6 @@
+# ImageGroupEditor { #napari_activelearning.ImageGroupEditor }
+
+```python
+ImageGroupEditor(self)
+```
+
