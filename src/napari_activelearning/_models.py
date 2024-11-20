@@ -91,8 +91,12 @@ try:
             x = self._transform(img)
 
             with torch.no_grad():
-                y, _ = core.run_net(self._model_dropout.net, x)
-                logits = torch.from_numpy(y[:, :, 2])
+                try:
+                    y, _ = core.run_net(self._model_dropout.net, x)
+                    logits = torch.from_numpy(y[:, :, 2])
+                except ValueError:
+                    y, _ = core.run_net(self._model_dropout.net, x[None, ...])
+                    logits = torch.from_numpy(y[0, :, :, 2])
                 probs = logits.sigmoid().numpy()
 
             return probs
