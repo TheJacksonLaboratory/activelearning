@@ -94,11 +94,10 @@ class LabelGroupRoot(QTreeWidgetItem):
 
     def add_managed_label_group(self, label_group: LabelGroup):
         layer = label_group.layer_channel.layer
+        layers_group = label_group.layer_channel.parent()
+        image_group = layers_group.parent()
 
-        if layer not in self.managed_layers:
-            self.managed_layers[layer] = []
-
-        self.managed_layers[layer].append(label_group)
+        self.managed_layers[layer] = (label_group, image_group)
 
         viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
@@ -108,21 +107,11 @@ class LabelGroupRoot(QTreeWidgetItem):
     def remove_managed_label_group(self, label_group: LabelGroup):
         layer = label_group.layer_channel.layer
 
-        if (layer in self.managed_layers
-           and label_group in self.managed_layers[layer]):
-            self.managed_layers[layer].remove(label_group)
+        if layer in self.managed_layers:
+            (label_group,
+             image_group) = self.managed_layers.pop(layer)
 
-            layers_group = label_group.layer_channel.parent()
-            image_group = None
-            if layers_group is not None:
-                image_group = layers_group.parent()
-
-            if (image_group is not None
-               and label_group == image_group.labels_group):
-                image_group.labels_group = None
-
-            if not self.managed_layers[layer]:
-                self.managed_layers.pop(layer)
+            image_group.labels_group = None
 
         self.setSelected(True)
 
@@ -442,8 +431,6 @@ class LabelsManager:
         return True
 
     def commit(self):
-        segmentation_channel_layer = None
-
         edit_data = None
 
         if self._requires_commit:
@@ -457,10 +444,10 @@ class LabelsManager:
            and self._active_edit_layer in viewer.layers):
             viewer.layers.remove(self._active_edit_layer)
 
-        if segmentation_channel_layer:
-            segmentation_channel_layer.refresh()
-            segmentation_channel_layer.visible = True
-            viewer.layers.selection.add(segmentation_channel_layer)
+        if self._active_layer_channel:
+            self._active_layer_channel.layer.refresh()
+            self._active_layer_channel.visible = True
+            self._active_layer_channel.selected = True
 
         self._transaction = None
         self._active_edit_layer = None

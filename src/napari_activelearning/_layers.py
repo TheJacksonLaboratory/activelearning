@@ -144,10 +144,11 @@ class LayerChannel(QTreeWidgetItem):
     @selected.setter
     def selected(self, is_selected: bool):
         viewer = napari.current_viewer()
-        if is_selected:
-            viewer.layers.selection.add(self.layer)
-        else:
-            viewer.layers.selection.remove(self.layer)
+        if self.layer in viewer.layers:
+            if is_selected:
+                viewer.layers.selection.add(self.layer)
+            else:
+                viewer.layers.selection.remove(self.layer)
 
 
 class LayersGroup(QTreeWidgetItem):
@@ -869,13 +870,13 @@ class ImageGroupRoot(QTreeWidgetItem):
             if not image_group.childCount():
                 self.removeChild(image_group)
 
-            if image_group.labels_group:
-                if image_group.labels_group.parent():
-                    image_group.labels_group.parent().removeChild(
-                        image_group.labels_group
-                    )
+            # if image_group.labels_group:
+            #     if image_group.labels_group.parent():
+            #         image_group.labels_group.parent().removeChild(
+            #             image_group.labels_group
+            #         )
 
-                image_group.labels_group = None
+            #     image_group.labels_group = None
 
         if not self.managed_layers[removed_layer]:
             self.managed_layers.pop(removed_layer)
