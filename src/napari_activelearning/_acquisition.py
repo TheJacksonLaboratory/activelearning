@@ -691,16 +691,14 @@ class AcquisitionFunction:
             image_group.setSelected(True)
 
             input_layers_group_idx = image_group.input_layers_group
-
-            segmentation_layers_group = image_group.getLayersGroup(
-                layers_group_name="segmentation"
-            )
+            label_layers_group_idx = image_group.labels_layers_group
 
             if (input_layers_group_idx is None
-               or segmentation_layers_group is None):
+               or label_layers_group_idx is None):
                 continue
 
             input_layers_group = image_group.child(input_layers_group_idx)
+            label_layers_group = image_group.child(label_layers_group_idx)
 
             displayed_source_axes = input_layers_group.source_axes
             displayed_shape = input_layers_group.shape
@@ -718,7 +716,7 @@ class AcquisitionFunction:
                  displayed_source_axes,
                  displayed_shape,
                  [(input_layers_group, "images"),
-                  (segmentation_layers_group, "labels")]
+                  (label_layers_group, "labels")]
                 )
 
             dataset_metadata_list.append((dataset_metadata,
