@@ -170,6 +170,9 @@ try:
                 model_name=self._model_name
             )
 
+            if isinstance(self._pretrained_model, tuple):
+                self._pretrained_model = self._pretrained_model[0]
+
             self.refresh_model = True
 
     USING_CELLPOSE = True
