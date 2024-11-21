@@ -95,7 +95,10 @@ class LabelGroupRoot(QTreeWidgetItem):
     def add_managed_label_group(self, label_group: LabelGroup):
         layer = label_group.layer_channel.layer
         layers_group = label_group.layer_channel.parent()
-        image_group = layers_group.parent()
+        if layers_group is not None:
+            image_group = layers_group.parent()
+        else:
+            image_group = None
 
         self.managed_layers[layer] = (label_group, image_group)
 
@@ -111,7 +114,8 @@ class LabelGroupRoot(QTreeWidgetItem):
             (label_group,
              image_group) = self.managed_layers.pop(layer)
 
-            image_group.labels_group = None
+            if image_group is not None:
+                image_group.labels_group = None
 
         self.setSelected(True)
 

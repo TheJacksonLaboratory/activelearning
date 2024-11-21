@@ -660,9 +660,12 @@ class AcquisitionFunction:
                 add_func=viewer.add_labels
             )
 
-            segmentation_channel.parent().use_as_input_labels = True
+            if segmentation_channel.parent() is not None:
+                segmentation_channel.parent().use_as_input_labels = True
 
-            if not segmentation_only and image_group.labels_group is None:
+            if (not segmentation_only
+               and image_group is not None
+               and image_group.labels_group is None):
                 new_label_group = self.labels_manager.add_labels(
                     segmentation_channel,
                     img_sampling_positions
