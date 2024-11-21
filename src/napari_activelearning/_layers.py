@@ -155,11 +155,13 @@ class LayersGroup(QTreeWidgetItem):
     def __init__(self, layers_group_name: str,
                  source_axes: Optional[str] = None,
                  use_as_input_image: Optional[bool] = False,
+                 use_as_input_labels: Optional[bool] = False,
                  use_as_sampling_mask: Optional[bool] = False
                  ):
 
         self._layers_group_name = None
         self._use_as_input_image = False
+        self._use_as_input_labels = False
         self._use_as_sampling_mask = False
 
         self._source_axes_no_channels = None
@@ -171,6 +173,7 @@ class LayersGroup(QTreeWidgetItem):
 
         self.layers_group_name = layers_group_name
         self.use_as_input_image = use_as_input_image
+        self.use_as_input_labels = use_as_input_labels
         self.use_as_sampling_mask = use_as_sampling_mask
         self.source_axes = source_axes
 
@@ -375,6 +378,19 @@ class LayersGroup(QTreeWidgetItem):
             if isinstance(child, LayerChannel):
                 child.selected = is_selected
 
+    def _set_usage(self):
+        use_as = []
+        if self._use_as_input_image:
+            use_as.append("Input")
+
+        if self._use_as_input_labels:
+            use_as.append("Labels")
+
+        if self._use_as_sampling_mask:
+            use_as.append("Sampling mask")
+
+        self.setText(1, "/".join(use_as))
+
     @property
     def use_as_input_image(self):
         return self._use_as_input_image
@@ -383,14 +399,17 @@ class LayersGroup(QTreeWidgetItem):
     def use_as_input_image(self, use_it: bool):
         self._use_as_input_image = use_it
 
-        use_as = []
-        if self.use_as_input_image:
-            use_as.append("Input")
+        self._set_usage()
 
-        if self.use_as_sampling_mask:
-            use_as.append("Sampling mask")
+    @property
+    def use_as_input_labels(self):
+        return self._use_as_input_labels
 
-        self.setText(1, "/".join(use_as))
+    @use_as_input_labels.setter
+    def use_as_input_labels(self, use_it: bool):
+        self._use_as_input_labels = use_it
+
+        self._set_usage()
 
     @property
     def use_as_sampling_mask(self):
@@ -400,14 +419,7 @@ class LayersGroup(QTreeWidgetItem):
     def use_as_sampling_mask(self, use_it: bool):
         self._use_as_sampling_mask = use_it
 
-        use_as = []
-        if self.use_as_input_image:
-            use_as.append("Input")
-
-        if self.use_as_sampling_mask:
-            use_as.append("Sampling mask")
-
-        self.setText(1, "/".join(use_as))
+        self._set_usage()
 
     def add_layer(self, layer: Layer, channel: Optional[int] = None,
                   source_axes: Optional[str] = None):
@@ -642,6 +654,30 @@ class ImageGroup(QTreeWidgetItem):
             self.child(input_idx).use_as_input_image = True
 
     @property
+    def labels_layers_group(self):
+        layers_group_index = list(filter(
+            lambda idx:
+            self.child(idx).use_as_input_labels,
+            range(self.childCount())
+        ))
+
+        if layers_group_index:
+            layers_group_index = layers_group_index[0]
+
+        else:
+            layers_group_index = None
+
+        return layers_group_index
+
+    @labels_layers_group.setter
+    def labels_layers_group(self, input_idx: Union[int, None]):
+        for idx in range(self.childCount()):
+            self.child(idx).use_as_input_labels = False
+
+        if input_idx is not None:
+            self.child(input_idx).use_as_input_labels = True
+
+    @property
     def sampling_mask_layers_group(self):
         layers_group_index = list(filter(
             lambda idx:
@@ -711,6 +747,7 @@ class ImageGroup(QTreeWidgetItem):
     def add_layers_group(self, layers_group_name: Optional[str] = None,
                          source_axes: Optional[str] = None,
                          use_as_input_image: Optional[bool] = None,
+                         use_as_input_labels: Optional[bool] = False,
                          use_as_sampling_mask: Optional[bool] = False,
                          ):
         if use_as_input_image is None:
@@ -719,6 +756,8 @@ class ImageGroup(QTreeWidgetItem):
         if layers_group_name is None:
             if use_as_input_image:
                 layers_group_name = "images"
+            elif use_as_input_labels:
+                layers_group_name = "labels"
             elif use_as_sampling_mask:
                 layers_group_name = "masks"
 
@@ -726,6 +765,7 @@ class ImageGroup(QTreeWidgetItem):
             layers_group_name,
             source_axes=source_axes,
             use_as_input_image=use_as_input_image,
+            use_as_input_labels=use_as_input_labels,
             use_as_sampling_mask=use_as_sampling_mask
         )
 
@@ -870,14 +910,6 @@ class ImageGroupRoot(QTreeWidgetItem):
             if not image_group.childCount():
                 self.removeChild(image_group)
 
-            # if image_group.labels_group:
-            #     if image_group.labels_group.parent():
-            #         image_group.labels_group.parent().removeChild(
-            #             image_group.labels_group
-            #         )
-
-            #     image_group.labels_group = None
-
         if not self.managed_layers[removed_layer]:
             self.managed_layers.pop(removed_layer)
 
@@ -941,6 +973,7 @@ class ImageGroupEditor(PropertiesEditor):
         self._edit_scale = None
         self._edit_translate = None
         self._use_as_input = None
+        self._use_as_labels = None
         self._use_as_sampling = None
         self._edit_channel = None
         self._output_dir = None
@@ -1054,6 +1087,22 @@ class ImageGroupEditor(PropertiesEditor):
 
         elif self._active_image_group.input_layers_group == layers_group_idx:
             self._active_image_group.input_layers_group = None
+
+    def update_use_as_labels(self, use_it: bool):
+        if not self._active_layers_group:
+            return
+
+        self._use_as_labels = use_it
+
+        layers_group_idx = self.active_image_group.indexOfChild(
+            self._active_layers_group
+        )
+
+        if self._use_as_labels:
+            self._active_image_group.labels_layers_group = layers_group_idx
+
+        elif self._active_image_group.labels_layers_group == layers_group_idx:
+            self._active_image_group.labels_layers_group = None
 
     def update_use_as_sampling(self, use_it: bool):
         if not self._active_layers_group:
