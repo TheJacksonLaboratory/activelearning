@@ -292,8 +292,12 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.edit_axes_le.setEnabled(False)
         self.layers_group_name_cmb.setEnabled(False)
         self.use_as_input_chk.setEnabled(False)
+        self.use_as_input_chk.setChecked(False)
         self.use_as_labels_chk.setEnabled(False)
+        self.use_as_labels_chk.setChecked(False)
         self.use_as_sampling_chk.setEnabled(False)
+        self.use_as_sampling_chk.setChecked(False)
+
         self.edit_scale_mdspn.axes = ""
         self.edit_translate_mdspn.axes = ""
 

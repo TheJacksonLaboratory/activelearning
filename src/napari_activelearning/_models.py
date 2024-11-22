@@ -60,7 +60,7 @@ try:
             self._model = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=self._pretrained_model
+                pretrained_model=str(self._pretrained_model)
             )
             self._model.mkldnn = False
             self._model.net.mkldnn = False
@@ -68,7 +68,7 @@ try:
             self._model_dropout = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=self._pretrained_model
+                pretrained_model=str(self._pretrained_model)
             )
             self._model_dropout.mkldnn = False
             self._model_dropout.net.mkldnn = False
@@ -134,6 +134,9 @@ try:
             self._model_name = None
 
         def _get_transform(self):
+            if self._transform is None:
+                self._transform = CellposeTransform(self._channels,
+                                                    self._channel_axis)
             return self._transform
 
         def _fine_tune(self, train_data, train_labels, test_data, test_labels):
