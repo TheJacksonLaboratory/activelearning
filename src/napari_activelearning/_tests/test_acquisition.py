@@ -101,6 +101,7 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
     reference_scale = [1, 1, 1, 1, 1]
     contrast_limits = [0, 1]
     colormap = "gray"
+    use_as_input_labels = False
     viewer = make_napari_viewer()
     add_func = viewer.add_image
 
@@ -117,6 +118,7 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
         output_filename,
         contrast_limits,
         colormap,
+        use_as_input_labels,
         add_func
     )
 
