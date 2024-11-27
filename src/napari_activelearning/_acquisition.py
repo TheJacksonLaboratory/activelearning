@@ -3,6 +3,7 @@ from functools import partial
 import random
 from pathlib import Path
 import numpy as np
+import math
 
 import zarrdataset as zds
 import dask.array as da
@@ -368,13 +369,17 @@ class AcquisitionFunction:
 
             if layer_type in ["images", "labels", "masks"]:
                 dataset_metadata[layer_type]["roi"] = [tuple(
-                    slice(0, ax_s - ax_s % self._patch_sizes.get(ax, 1))
+                    slice(0, math.ceil(
+                        lyr_s / ax_s
+                        * (ax_s - ax_s % self._patch_sizes.get(ax, 1))
+                    ))
                     if (ax != "C"
                         and (ax in self.model_axes
                              or ax_s > self._patch_sizes.get(ax, 1)))
                     else slice(None)
-                    for ax, ax_s in zip(displayed_source_axes,
-                                        displayed_shape)
+                    for ax, ax_s, lyr_s in zip(displayed_source_axes,
+                                               displayed_shape,
+                                               layers_group.shape)
                     if (layer_type == "images"
                         or (layer_type in ["labels", "masks"] and ax != "C"))
                 )]
