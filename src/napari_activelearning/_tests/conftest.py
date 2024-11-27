@@ -256,6 +256,7 @@ def multiscale_layers_group(multiscale_layer_channel):
     layers_group_mock = LayersGroup("segmentation",
                                     source_axes="TZYX",
                                     use_as_input_image=False,
+                                    use_as_input_labels=True,
                                     use_as_sampling_mask=False)
     layers_group_mock.addChild(multiscale_layer_channel)
     layers_group_mock.source_axes = "TZYX"

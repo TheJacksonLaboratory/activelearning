@@ -218,6 +218,12 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.update_use_as_input
         )
 
+        self.use_as_labels_chk = QCheckBox("Use as labels")
+        self.use_as_labels_chk.setEnabled(False)
+        self.use_as_labels_chk.toggled.connect(
+            self.update_use_as_labels
+        )
+
         self.use_as_sampling_chk = QCheckBox("Use as sampling mask")
         self.use_as_sampling_chk.setEnabled(False)
         self.use_as_sampling_chk.toggled.connect(
@@ -251,7 +257,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         editor_grid_lyt.addWidget(self.output_dir_le, 3, 1, 1, 3)
         editor_grid_lyt.addWidget(self.output_dir_btn, 3, 3)
         editor_grid_lyt.addWidget(self.use_as_input_chk, 4, 0)
-        editor_grid_lyt.addWidget(self.use_as_sampling_chk, 4, 1)
+        editor_grid_lyt.addWidget(self.use_as_labels_chk, 4, 1)
+        editor_grid_lyt.addWidget(self.use_as_sampling_chk, 4, 2)
         editor_grid_lyt.addWidget(QLabel("Layer scale"), 5, 0)
         editor_grid_lyt.addWidget(self.edit_scale_mdspn, 5, 1)
         editor_grid_lyt.addWidget(QLabel("Layer translate"), 5, 2)
@@ -285,7 +292,12 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.edit_axes_le.setEnabled(False)
         self.layers_group_name_cmb.setEnabled(False)
         self.use_as_input_chk.setEnabled(False)
+        self.use_as_input_chk.setChecked(False)
+        self.use_as_labels_chk.setEnabled(False)
+        self.use_as_labels_chk.setChecked(False)
         self.use_as_sampling_chk.setEnabled(False)
+        self.use_as_sampling_chk.setChecked(False)
+
         self.edit_scale_mdspn.axes = ""
         self.edit_translate_mdspn.axes = ""
 
@@ -331,6 +343,9 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.use_as_input_chk.setChecked(
                 self._active_layers_group.use_as_input_image
             )
+            self.use_as_labels_chk.setChecked(
+                self._active_layers_group.use_as_input_labels
+            )
             self.use_as_sampling_chk.setChecked(
                 self._active_layers_group.use_as_sampling_mask
             )
@@ -338,6 +353,7 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.layers_group_name_cmb.setEnabled(True)
             self.edit_axes_le.setEnabled(True)
             self.use_as_input_chk.setEnabled(True)
+            self.use_as_labels_chk.setEnabled(True)
             self.use_as_sampling_chk.setEnabled(True)
 
         self._fill_layer()
@@ -397,6 +413,9 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
 
     def update_use_as_input(self):
         super().update_use_as_input(self.use_as_input_chk.isChecked())
+
+    def update_use_as_labels(self):
+        super().update_use_as_labels(self.use_as_labels_chk.isChecked())
 
     def update_use_as_sampling(self):
         super().update_use_as_sampling(self.use_as_sampling_chk.isChecked())
