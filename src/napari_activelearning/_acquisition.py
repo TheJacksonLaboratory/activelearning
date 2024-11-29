@@ -103,12 +103,19 @@ def add_multiscale_output_layer(
         reference_scale=reference_scale
     )
 
+    is_multiscale = False
+    if len(output_fun_ms) > 1:
+        is_multiscale = True
+    else:
+        output_fun_ms = output_fun_ms[0]
+
     func_args = dict(
         data=output_fun_ms,
         name=group_name,
-        multiscale=True,
+        multiscale=is_multiscale,
         opacity=0.8,
         scale=scale,
+        translate=tuple(scl / 2.0 if scl > 1 else 0 for scl in scale),
         blending="translucent_no_depth",
     )
 
@@ -234,8 +241,7 @@ class FineTuningMethod:
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
 
-    def fine_tune(self, dataset_metadata_list: Iterable[
-        Tuple[dict, Iterable[Iterable[int]]]],
+    def fine_tune(self, dataset_metadata_list: Iterable[dict],
                   train_data_proportion: float = 0.8,
                   patch_sizes: Union[dict, int] = 256,
                   model_axes="YXC"):
@@ -246,19 +252,12 @@ class FineTuningMethod:
 
         transform = self._get_transform()
 
-        for dataset_metadata, top_lefts in dataset_metadata_list:
-            if top_lefts is not None:
-                patch_sampler = StaticPatchSampler(
-                    patch_size=patch_sizes,
-                    top_lefts=top_lefts,
-                    spatial_axes=dataset_metadata["labels"]["axes"]
-                )
-            else:
-                patch_sampler = zds.PatchSampler(
-                    patch_size=patch_sizes,
-                    spatial_axes=dataset_metadata["labels"]["axes"],
-                    min_area=0.05
-                )
+        for dataset_metadata in dataset_metadata_list:
+            patch_sampler = zds.PatchSampler(
+                patch_size=patch_sizes,
+                spatial_axes=dataset_metadata["labels"]["axes"],
+                min_area=0.05
+            )
 
             dataset = zds.ZarrDataset(
                 list(dataset_metadata.values()),
@@ -358,7 +357,6 @@ class AcquisitionFunction:
             displayed_shape: Iterable[int],
             layer_types: Iterable[Tuple[LayersGroup, str]]):
         dataset_metadata = {}
-        sampling_positions = None
 
         for layers_group, layer_type in layer_types:
             if layers_group is None:
@@ -366,6 +364,12 @@ class AcquisitionFunction:
 
             dataset_metadata[layer_type] = layers_group.metadata
             dataset_metadata[layer_type]["roi"] = None
+
+            (reference_source_axes,
+             reference_shape) = list(zip(*[
+                 (ax, ax_s)
+                 for ax, ax_s in zip(displayed_source_axes, displayed_shape)
+                 if layer_type not in ["labels", "masks"] or ax != "C"]))
 
             if layer_type in ["images", "labels", "masks"]:
                 dataset_metadata[layer_type]["roi"] = [tuple(
@@ -377,11 +381,9 @@ class AcquisitionFunction:
                         and (ax in self.model_axes
                              or ax_s > self._patch_sizes.get(ax, 1)))
                     else slice(None)
-                    for ax, ax_s, lyr_s in zip(displayed_source_axes,
-                                               displayed_shape,
+                    for ax, ax_s, lyr_s in zip(reference_source_axes,
+                                               reference_shape,
                                                layers_group.shape)
-                    if (layer_type == "images"
-                        or (layer_type in ["labels", "masks"] and ax != "C"))
                 )]
 
             if isinstance(dataset_metadata[layer_type]["filenames"],
@@ -425,14 +427,11 @@ class AcquisitionFunction:
                     labels
                 )
 
-                sampling_positions = list(spatial_pos)
-
-        return dataset_metadata, sampling_positions
+        return dataset_metadata
 
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
-                            sampling_positions=None,
                             segmentation_only=False):
         model_spatial_axes = [
             ax
@@ -449,7 +448,6 @@ class AcquisitionFunction:
         input_spatial_axes = "".join(input_spatial_axes)
 
         dl = get_dataloader(dataset_metadata, patch_size=self._patch_sizes,
-                            sampling_positions=sampling_positions,
                             spatial_axes=input_spatial_axes,
                             model_input_axes=self.model_axes,
                             shuffle=True)
@@ -516,7 +514,12 @@ class AcquisitionFunction:
             segmentation_max = max(segmentation_max, seg_out.max())
 
             if sampled_mask is not None:
-                sampled_mask[pos_u_lab] = True
+                scaled_pos_u_lab = tuple(
+                    slice(pos.get(ax, 1).start // self._patch_sizes.get(ax, 1),
+                          pos.get(ax, 1).stop // self._patch_sizes.get(ax, 1))
+                    for ax in input_spatial_axes
+                )
+                sampled_mask[scaled_pos_u_lab] = True
 
             img_sampling_positions.append(
                 LabelItem(acquisition_val, position=pos_u_lab)
@@ -623,8 +626,7 @@ class AcquisitionFunction:
                 f"labels/{segmentation_group_name}/0"
             ]
 
-            (dataset_metadata,
-             sampling_positions) = self._prepare_datasets_metadata(
+            dataset_metadata = self._prepare_datasets_metadata(
                  image_group,
                  output_axes,
                  displayed_source_axes,
@@ -633,11 +635,19 @@ class AcquisitionFunction:
                   (sampling_mask_layers_group, "masks")]
                 )
 
-            if sampling_positions is None:
+            if "sampled_positions" not in segmentation_root["labels"].keys():
+                (sampling_output_shape,
+                 sampling_output_scale) = list(zip(*[
+                    (math.ceil(ax_s // self._patch_sizes.get(ax, 1)),
+                     ax_scl * self._patch_sizes.get(ax, 1))
+                    for ax, ax_s, ax_scl in zip(output_axes,
+                                                output_shape,
+                                                output_scale)]))
+
                 sampled_root = save_zarr(
                     output_filename,
                     data=None,
-                    shape=output_shape,
+                    shape=sampling_output_shape,
                     chunk_size=True,
                     name="sampled_positions",
                     dtype=bool,
@@ -655,7 +665,6 @@ class AcquisitionFunction:
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
                 sampled_mask=sampled_grp,
-                sampling_positions=sampling_positions,
                 segmentation_only=segmentation_only
             )
 
@@ -687,7 +696,7 @@ class AcquisitionFunction:
                 add_multiscale_output_layer(
                     sampled_root,
                     axes=output_axes,
-                    scale=output_scale,
+                    scale=sampling_output_scale,
                     data_group="labels/sampled_positions/0",
                     group_name=group_name + " sampled positions",
                     layers_group_name="sampled positions",
@@ -776,8 +785,7 @@ class AcquisitionFunction:
                 output_axes.remove("C")
                 output_axes = "".join(output_axes)
 
-            (dataset_metadata,
-             sampling_positions) = self._prepare_datasets_metadata(
+            dataset_metadata = self._prepare_datasets_metadata(
                  image_group,
                  output_axes,
                  displayed_source_axes,
@@ -785,8 +793,7 @@ class AcquisitionFunction:
                  layer_types,
                 )
 
-            dataset_metadata_list.append((dataset_metadata,
-                                          sampling_positions))
+            dataset_metadata_list.append(dataset_metadata)
 
         self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,

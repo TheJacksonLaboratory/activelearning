@@ -213,7 +213,6 @@ class StaticPatchSampler(zds.PatchSampler):
 
 def get_dataloader(
         dataset_metadata, patch_size: dict,
-        sampling_positions: Optional[Iterable[Iterable[int]]] = None,
         shuffle: bool = True,
         num_workers: int = 0,
         batch_size: int = 1,
@@ -237,14 +236,9 @@ def get_dataloader(
             modality="superpixels"
         )
 
-    if sampling_positions:
-        patch_sampler = StaticPatchSampler(patch_size=patch_size,
-                                           top_lefts=sampling_positions,
-                                           spatial_axes=spatial_axes)
-    else:
-        patch_sampler = zds.PatchSampler(patch_size=patch_size,
-                                         spatial_axes=spatial_axes,
-                                         min_area=0.05)
+    patch_sampler = zds.PatchSampler(patch_size=patch_size,
+                                     spatial_axes=spatial_axes,
+                                     min_area=0.05)
 
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),

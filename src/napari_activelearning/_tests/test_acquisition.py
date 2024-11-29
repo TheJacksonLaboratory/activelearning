@@ -54,7 +54,6 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
     }
     acquisition_fun = np.zeros((1, 1, 10, 10))
     segmentation_out = np.zeros((1, 1, 10, 10))
-    sampling_positions = None
     segmentation_only = False
 
     acquisition_function.input_axes = "TZYX"
@@ -78,9 +77,10 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
             ]
 
         result = acquisition_function.compute_acquisition(
-            dataset_metadata, acquisition_fun, segmentation_out,
-            sampling_positions,
-            segmentation_only
+            dataset_metadata,
+            acquisition_fun=acquisition_fun,
+            segmentation_out=segmentation_out,
+            segmentation_only=segmentation_only
         )
 
         assert len(result) == 1
@@ -152,16 +152,13 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     layer_types = [(layers_group, "images")]
 
     # Call the method
-    (dataset_metadata,
-     sampling_positions) = acquisition_function._prepare_datasets_metadata(
+    dataset_metadata = acquisition_function._prepare_datasets_metadata(
          image_group,
          output_axes,
          displayed_source_axes,
          displayed_shape,
-         layer_types
-         )
+         layer_types)
 
-    assert sampling_positions is None
     expected_dataset_metadata = {
         "images": {
             "filenames": layers_group.source_data,
