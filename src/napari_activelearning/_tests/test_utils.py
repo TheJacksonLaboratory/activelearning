@@ -3,6 +3,7 @@ from pathlib import Path
 import operator
 
 import numpy as np
+import zarrdataset as zds
 import zarr
 
 from napari.layers._multiscale_data import MultiScaleData
@@ -167,7 +168,6 @@ def test_get_basename():
 
 def test_get_dataloader(dataset_metadata):
     patch_size = {"Y": 64, "X": 64}
-    sampling_positions = [[0, 0], [0, 64], [64, 0], [64, 64]]
     shuffle = True
     num_workers = 4
     batch_size = 8
@@ -177,7 +177,6 @@ def test_get_dataloader(dataset_metadata):
     dataloader = get_dataloader(
         dataset_metadata,
         patch_size=patch_size,
-        sampling_positions=sampling_positions,
         shuffle=shuffle,
         num_workers=num_workers,
         batch_size=batch_size,
@@ -186,10 +185,9 @@ def test_get_dataloader(dataset_metadata):
     )
 
     if USING_PYTORCH:
-        assert isinstance(dataloader.dataset._patch_sampler,
-                          StaticPatchSampler)
+        assert isinstance(dataloader.dataset._patch_sampler, zds.PatchSampler)
     else:
-        assert isinstance(dataloader._patch_sampler, StaticPatchSampler)
+        assert isinstance(dataloader._patch_sampler, zds.PatchSampler)
 
 
 def test_compute_chunks(image_collection):
