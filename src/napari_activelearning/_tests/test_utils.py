@@ -62,7 +62,7 @@ def test_downsample_image(single_scale_type_variant_array):
         scale=scale,
         num_scales=num_scales,
         reference_source_axes="TCZYX",
-        reference_scale=(1, 1, 1, 1, 1),
+        reference_scale={"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1},
         reference_units=None
     )
 
@@ -100,7 +100,7 @@ def test_downsample_image(single_scale_type_variant_array):
 def test_save_zarr(sample_layer, output_group):
     layer, source_data, input_filename, data_group = sample_layer
     name = "test_data"
-    group_name = "labels/" + name
+    group_name = name
 
     is_multiscale = isinstance(layer.data, (MultiScaleData, list))
 
@@ -116,8 +116,12 @@ def test_save_zarr(sample_layer, output_group):
             or len(out_grp[group_name]) == len(layer.data))
     assert (isinstance(out_grp.store, zarr.MemoryStore)
             or layer.data.dtype in (np.float32, np.float64)
-            or (layer.data.dtype in (np.int8, np.int32, np.int64)
-                and "image-label" in out_grp[group_name].attrs))
+            or (isinstance(out_grp.store, (zarr.MemoryStore,
+                                           zarr.DirectoryStore))
+                and "image-label" in out_grp[group_name].attrs)
+            or (not isinstance(out_grp.store, (zarr.MemoryStore,
+                                               zarr.DirectoryStore))
+                and "image-label" not in out_grp[group_name].attrs))
 
 
 def test_validate_name():

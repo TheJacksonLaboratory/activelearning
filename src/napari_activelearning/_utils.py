@@ -6,6 +6,7 @@ import tensorstore as ts
 import zarr
 import zarrdataset as zds
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
+from ome_zarr.format import FormatV04
 import dask.array as da
 
 from skimage.transform import resize
@@ -326,8 +327,6 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
         chunks_size_axes = chunk_size
 
     group_name = name
-    if is_label:
-        group_name = "labels/" + group_name
 
     if isinstance(data, MultiScaleData):
         data_ms = data
@@ -360,10 +359,9 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
             overwrite=True
         )
 
-    if (is_label and not isinstance(out_grp.store, zarr.MemoryStore)
-       and data_ms[0] is not None
-       and data_ms[0].dtype in (np.int8, np.int32, np.int64)):
-        write_label_metadata(out_grp, group_name, **metadata)
+    if (is_label and isinstance(out_grp.store, (zarr.MemoryStore,
+                                                zarr.DirectoryStore))):
+        write_label_metadata(out_grp, group_name, fmt=FormatV04(), **metadata)
 
     return out_grp
 
@@ -409,11 +407,6 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         reference_source_axes = source_axes
         reference_scale = [1.0] * len(source_axes)
 
-    reference_scale_axes = {
-        ax: ax_scl
-        for ax, ax_scl in zip(reference_source_axes, reference_scale)
-    }
-
     if not reference_units:
         reference_units = {
             ax: None
@@ -423,7 +416,12 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
     datasets = [{
         "coordinateTransformations": [{
             "type": "scale",
-            "scale": [reference_scale_axes.get(ax, 1.0) for ax in source_axes]
+            "scale": [reference_scale.get(ax, 1.0) for ax in source_axes],
+            "translation": [
+                0.5 * (1 + reference_scale[ax])
+                if ax in "YX" and reference_scale.get(ax, 1) > 1 else 0.0
+                for ax in source_axes
+            ]
         }],
         "path": "0"
     }]
@@ -432,8 +430,8 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         target_arr = source_arr[downscale_selection]
         target_arr = target_arr.rechunk(
             tuple(
-                (chk // scale) if ax in "XY" else chk
-                for chk, ax in zip(source_arr.chunksize, reference_scale_axes)
+                max(1, chk // reference_scale[ax]) if ax in "XY" else chk
+                for chk, ax in zip(source_arr.chunksize, source_axes)
             )
         )
 
@@ -447,13 +445,18 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                                overwrite=True)
 
             source_arr = da.from_zarr(z_root, component=groups_root % s)
-
             datasets.append({
                 "coordinateTransformations": [
                     {"type": "scale",
-                     "scale": [4.0 ** s * reference_scale_axes.get(ax, 1.0)
+                     "scale": [4.0 ** s * reference_scale.get(ax, 1.0)
                                if ax in "YX" else 1.0
-                               for ax in source_axes]
+                               for ax in source_axes],
+                     "translation": [
+                         0.5 * (1 + 4.0 ** s * reference_scale[ax])
+                         if ax in "YX" and reference_scale.get(ax, 1) > 1
+                         else 0
+                         for ax in source_axes
+                         ]
                      }],
                 "path": str(s)
             })
@@ -465,6 +468,8 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
     if isinstance(z_root, Path):
         z_grp = zarr.open(z_root / data_group, mode="a")
         write_multiscales_metadata(z_grp, datasets,
+                                   fmt=FormatV04(),
+                                   name=data_group,
                                    axes=list(source_axes.lower()))
 
     return z_ms
