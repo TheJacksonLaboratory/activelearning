@@ -184,7 +184,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     assert (expected_dataset_metadata["images"]["axes"]
             == dataset_metadata["images"]["axes"])
     assert (expected_dataset_metadata["images"]["roi"]
-            == dataset_metadata["images"]["roi"]), (expected_dataset_metadata["images"]["roi"], dataset_metadata["images"]["roi"])
+            == dataset_metadata["images"]["roi"])
     assert (expected_dataset_metadata["images"]["modality"]
             == dataset_metadata["images"]["modality"])
     assert (expected_dataset_metadata["images"]["add_to_output"]
