@@ -44,9 +44,11 @@ class LabelItem(QTreeWidgetItem):
             new_position
         )))
 
-        self._center = list(map(lambda tl, br: (tl + br) / 2,
-                                top_left,
-                                bottom_right))
+        self._center = list(map(
+            lambda tl, br:
+            (tl + br) / 2 if tl is not None and br is not None else 0.5,
+            top_left,
+            bottom_right))
 
         self.setText(1, "(" + ", ".join(map(str, self._center)) + ")")
         self.setText(2, "(" + ", ".join(map(str, top_left)) + ")")

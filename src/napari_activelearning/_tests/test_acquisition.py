@@ -50,10 +50,10 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
 
     dataset_metadata = {
         "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
-        "masks": {"source_axes": "TZYX", "axes": "TZYX"}
+        "masks": {"source_axes": "TCZYX", "axes": "TCZYX"}
     }
-    acquisition_fun = np.zeros((1, 1, 10, 10))
-    segmentation_out = np.zeros((1, 1, 10, 10))
+    acquisition_fun = np.zeros((1, 1, 1, 10, 10))
+    segmentation_out = np.zeros((1, 1, 1, 10, 10))
     segmentation_only = False
 
     acquisition_function.input_axes = "TZYX"
@@ -94,11 +94,11 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
     output_filename = input_filename
 
     axes = "TCZYX"
-    scale = [1, 1, 1, 1, 1]
+    scale = {"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1}
     group_name = "group"
     layers_group_name = "layers_group"
     reference_source_axes = "TCZYX"
-    reference_scale = [1, 1, 1, 1, 1]
+    reference_scale = {"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1}
     contrast_limits = [0, 1]
     colormap = "gray"
     use_as_input_labels = False
@@ -146,7 +146,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     # Define the input parameters for the method
     output_axes = "TCZYX"
     displayed_source_axes = "TCZYX"
-    displayed_shape = [1, 3, 10, 10, 10]
+    displayed_shape = {"T": 1, "C": 3, "Z": 10, "Y": 10, "X": 10}
 
     layers_group = image_group.child(0)
     layer_types = [(layers_group, "images")]
@@ -165,14 +165,30 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
             "data_group": layers_group.data_group,
             "source_axes": "TCZYX",
             "axes": "TZYXC",
-            "roi": [(slice(None), slice(None), slice(0, 10), slice(0, 10),
+            "roi": [(slice(0, 1), slice(0, 3), slice(0, 10), slice(0, 10),
                      slice(0, 10))],
             "modality": "images",
             'add_to_output': True
         }
     }
-    for k, v in expected_dataset_metadata.items():
-        assert dataset_metadata[k] == v
+
+    assert ((isinstance(expected_dataset_metadata["images"]["filenames"], str)
+             and (expected_dataset_metadata["images"]["filenames"]
+                  == dataset_metadata["images"]["filenames"]))
+            or (expected_dataset_metadata["images"]["filenames"]
+                == dataset_metadata["images"]["filenames"]).all())
+    assert (expected_dataset_metadata["images"]["data_group"]
+            == dataset_metadata["images"]["data_group"])
+    assert (expected_dataset_metadata["images"]["source_axes"]
+            == dataset_metadata["images"]["source_axes"])
+    assert (expected_dataset_metadata["images"]["axes"]
+            == dataset_metadata["images"]["axes"])
+    assert (expected_dataset_metadata["images"]["roi"]
+            == dataset_metadata["images"]["roi"])
+    assert (expected_dataset_metadata["images"]["modality"]
+            == dataset_metadata["images"]["modality"])
+    assert (expected_dataset_metadata["images"]["add_to_output"]
+            == dataset_metadata["images"]["add_to_output"])
 
 
 def test_compute_acquisition_layers(image_groups_manager, labels_manager,

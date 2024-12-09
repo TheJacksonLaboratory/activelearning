@@ -76,13 +76,13 @@ def compute_segmentation(tunable_segmentation_method, img, labels_offset=0):
 def add_multiscale_output_layer(
         root,
         axes: str,
-        scale: Iterable[float],
+        scale: dict,
         data_group: str,
         group_name: str,
         layers_group_name: str,
         image_group: ImageGroup,
         reference_source_axes: str,
-        reference_scale: Iterable[float],
+        reference_scale: dict,
         output_filename: Optional[Path] = None,
         contrast_limits: Optional[Iterable[float]] = None,
         colormap: Optional[str] = None,
@@ -114,8 +114,12 @@ def add_multiscale_output_layer(
         name=group_name,
         multiscale=is_multiscale,
         opacity=0.8,
-        scale=scale,
-        translate=tuple(scl / 2.0 if scl > 1 else 0 for scl in scale),
+        scale=list(scale.values()),
+        translate=tuple(
+            reference_scale.get(ax, 1) / 2.0
+            if reference_scale.get(ax, 1) > 1 else 0
+            for ax in reference_source_axes
+            ),
         blending="translucent_no_depth",
     )
 
@@ -256,7 +260,7 @@ class FineTuningMethod:
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
                 spatial_axes=dataset_metadata["labels"]["axes"],
-                min_area=0.05
+                min_area=0.01
             )
 
             dataset = zds.ZarrDataset(
@@ -354,36 +358,46 @@ class AcquisitionFunction:
             image_group: ImageGroup,
             output_axes: str,
             displayed_source_axes: str,
-            displayed_shape: Iterable[int],
+            displayed_shape: dict,
             layer_types: Iterable[Tuple[LayersGroup, str]]):
         dataset_metadata = {}
 
-        for layers_group, layer_type in layer_types:
+        reference_axes = None
+
+        # Make sure that the "images" layers are prepared first, so the
+        # reference axes are computed from it.
+        layers_groups, layers_types = list(zip(*layer_types))
+        layers_types = list(layers_types)
+        layers_groups = list(layers_groups)
+        images_idx = layers_types.index("images")
+
+        layers_types = [layers_types.pop(images_idx)] + layers_types
+        layers_groups = [layers_groups.pop(images_idx)] + layers_groups
+
+        for layers_group, layer_type in zip(layers_groups, layers_types):
             if layers_group is None:
                 continue
+
+            layers_group_shape = {
+                ax: ax_s
+                for ax, ax_s in zip(layers_group.source_axes,
+                                    layers_group.shape)
+            }
 
             dataset_metadata[layer_type] = layers_group.metadata
             dataset_metadata[layer_type]["roi"] = None
 
-            (reference_source_axes,
-             reference_shape) = list(zip(*[
-                 (ax, ax_s)
-                 for ax, ax_s in zip(displayed_source_axes, displayed_shape)
-                 if layer_type not in ["labels", "masks"] or ax != "C"]))
-
             if layer_type in ["images", "labels", "masks"]:
                 dataset_metadata[layer_type]["roi"] = [tuple(
-                    slice(0, math.ceil(
-                        lyr_s / ax_s
-                        * (ax_s - ax_s % self._patch_sizes.get(ax, 1))
-                    ))
-                    if (ax != "C"
+                    slice(0, math.ceil(ax_s / displayed_shape[ax]
+                                       * (displayed_shape[ax]
+                                          - displayed_shape[ax]
+                                          % self._patch_sizes.get(ax, 1))))
+                    if (ax in displayed_shape
                         and (ax in self.model_axes
                              or ax_s > self._patch_sizes.get(ax, 1)))
-                    else slice(None)
-                    for ax, ax_s, lyr_s in zip(reference_source_axes,
-                                               reference_shape,
-                                               layers_group.shape)
+                    else slice(0, 1, None)
+                    for ax, ax_s in layers_group_shape.items()
                 )]
 
             if isinstance(dataset_metadata[layer_type]["filenames"],
@@ -398,34 +412,25 @@ class AcquisitionFunction:
 
             dataset_metadata[layer_type]["modality"] = layer_type
 
-            model_spatial_axes = list(filter(
-                lambda ax: ax not in self.model_axes,
-                dataset_metadata[layer_type]["source_axes"]
-            ))
+            if reference_axes is None:
+                # Add axes that are not used by the model.
+                # These are removed later in the acquisition function.
+                model_spatial_axes = list(filter(
+                    lambda ax: ax not in self.model_axes,
+                    layers_group.source_axes
+                ))
 
-            model_spatial_axes += list(self.model_axes)
-            if "images" not in layer_type and "C" in model_spatial_axes:
-                model_spatial_axes.remove("C")
+                model_spatial_axes += list(self.model_axes)
+                model_spatial_axes = "".join(model_spatial_axes)
+                reference_axes = model_spatial_axes
 
-            model_spatial_axes = "".join(model_spatial_axes)
+            else:
+                model_spatial_axes = list(reference_axes)
+                if "C" in reference_axes:
+                    model_spatial_axes.remove("C")
+                model_spatial_axes = "".join(model_spatial_axes)
 
             dataset_metadata[layer_type]["axes"] = model_spatial_axes
-
-            if "images" in layer_type and image_group.labels_group:
-                # Remove non-input axes from sampled positions
-                labels = map(
-                    lambda idx: image_group.labels_group.child(idx),
-                    range(image_group.labels_group.childCount())
-                )
-
-                spatial_pos = map(
-                    lambda child: [
-                        ax_pos.start
-                        for ax, ax_pos in zip(output_axes, child.position)
-                        if ax in model_spatial_axes
-                    ],
-                    labels
-                )
 
         return dataset_metadata
 
@@ -447,6 +452,8 @@ class AcquisitionFunction:
         ]
         input_spatial_axes = "".join(input_spatial_axes)
 
+        output_axes = "TCZYX"
+
         dl = get_dataloader(dataset_metadata, patch_size=self._patch_sizes,
                             spatial_axes=input_spatial_axes,
                             model_input_axes=self.model_axes,
@@ -457,7 +464,7 @@ class AcquisitionFunction:
 
         pred_sel = tuple(
             slice(None) if ax in model_spatial_axes else None
-            for ax in input_spatial_axes
+            for ax in output_axes
         )
 
         drop_axis = tuple(
@@ -479,6 +486,7 @@ class AcquisitionFunction:
                 img = img[0].numpy()
                 img_sp = img_sp[0].numpy()
 
+            img_shape = img.shape
             if len(drop_axis):
                 img = img.squeeze(drop_axis)
 
@@ -486,12 +494,17 @@ class AcquisitionFunction:
                 img_sp = img_sp.squeeze(drop_axis_sp)
 
             pos = {
-                ax: slice(pos_ax[0], pos_ax[1])
-                for ax, pos_ax in zip(
-                    dataset_metadata["images"]["axes"], pos)
+                ax: slice(pos_ax[0],
+                          pos_ax[1] if pos_ax[1] > 0 else ax_s)
+                for ax, ax_s, pos_ax in zip(
+                    dataset_metadata["images"]["axes"], img_shape, pos)
             }
 
-            pos_u_lab = tuple(pos[ax] for ax in input_spatial_axes)
+            pos_u_lab = tuple(
+                pos.get(ax, slice(0, 1))
+                if ax != "C" else slice(0, 1)
+                for ax in output_axes
+            )
 
             if not segmentation_only:
                 u_sp_lab = compute_acquisition_fun(
@@ -515,9 +528,12 @@ class AcquisitionFunction:
 
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
-                    slice(pos.get(ax, 1).start // self._patch_sizes.get(ax, 1),
-                          pos.get(ax, 1).stop // self._patch_sizes.get(ax, 1))
-                    for ax in input_spatial_axes
+                    slice(pos[ax].start
+                          // self._patch_sizes.get(ax, 1),
+                          pos[ax].stop
+                          // self._patch_sizes.get(ax, 1))
+                    if ax in pos and ax != "C" else slice(0, 1)
+                    for ax in output_axes
                 )
                 sampled_mask[scaled_pos_u_lab] = True
 
@@ -579,20 +595,23 @@ class AcquisitionFunction:
                 )
 
             displayed_source_axes = input_layers_group.source_axes
-            displayed_shape = input_layers_group.shape
-            displayed_scale = input_layers_group.scale
+            displayed_shape = {
+                ax: ax_s
+                for ax, ax_s in zip(displayed_source_axes,
+                                    input_layers_group.shape)
+            }
+            displayed_scale = {
+                ax: ax_scl
+                for ax, ax_scl in zip(displayed_source_axes,
+                                      input_layers_group.scale)
+            }
 
-            (output_axes,
-             output_shape,
-             output_scale) = list(zip(*[
-                 (ax, ax_s, ax_scl)
-                 for ax, ax_s, ax_scl in zip(displayed_source_axes,
-                                             displayed_shape,
-                                             displayed_scale)
-                 if ax != "C"
-                 ]))
-
-            output_axes = "".join(output_axes)
+            output_axes = "TCZYX"
+            output_shape = [
+                displayed_shape.get(ax, 1)
+                if ax != "C" else 1
+                for ax in output_axes
+            ]
 
             if not segmentation_only:
                 acquisition_root = save_zarr(
@@ -602,11 +621,11 @@ class AcquisitionFunction:
                     chunk_size=True,
                     name="acquisition_fun",
                     dtype=np.float32,
-                    is_label=True,
+                    is_label=False,
                     is_multiscale=True
                 )
 
-                acquisition_fun_grp = acquisition_root["labels/"
+                acquisition_fun_grp = acquisition_root[""
                                                        "acquisition_fun/0"]
             else:
                 acquisition_fun_grp = None
@@ -623,7 +642,7 @@ class AcquisitionFunction:
             )
 
             segmentation_grp = segmentation_root[
-                f"labels/{segmentation_group_name}/0"
+                f"{segmentation_group_name}/0"
             ]
 
             dataset_metadata = self._prepare_datasets_metadata(
@@ -635,14 +654,18 @@ class AcquisitionFunction:
                   (sampling_mask_layers_group, "masks")]
                 )
 
-            if "sampled_positions" not in segmentation_root["labels"].keys():
-                (sampling_output_shape,
-                 sampling_output_scale) = list(zip(*[
-                    (math.ceil(ax_s // self._patch_sizes.get(ax, 1)),
-                     ax_scl * self._patch_sizes.get(ax, 1))
-                    for ax, ax_s, ax_scl in zip(output_axes,
-                                                output_shape,
-                                                output_scale)]))
+            if "sampled_positions" not in segmentation_root.keys():
+                sampling_output_shape = [
+                    math.ceil(displayed_shape.get(ax, 1)
+                              // self._patch_sizes.get(ax, 1))
+                    if ax != "C" else 1
+                    for ax in output_axes
+                ]
+                sampling_output_scale = {
+                    ax: (displayed_scale.get(ax, 1)
+                         * self._patch_sizes.get(ax, 1))
+                    for ax in output_axes
+                }
 
                 sampled_root = save_zarr(
                     output_filename,
@@ -650,12 +673,12 @@ class AcquisitionFunction:
                     shape=sampling_output_shape,
                     chunk_size=True,
                     name="sampled_positions",
-                    dtype=bool,
+                    dtype=np.uint8,
                     is_label=True,
                     is_multiscale=True
                 )
 
-                sampled_grp = sampled_root["labels/sampled_positions/0"]
+                sampled_grp = sampled_root["sampled_positions/0"]
             else:
                 sampled_grp = None
 
@@ -677,8 +700,8 @@ class AcquisitionFunction:
                 add_multiscale_output_layer(
                     acquisition_root,
                     axes=output_axes,
-                    scale=output_scale,
-                    data_group="labels/acquisition_fun/0",
+                    scale=displayed_scale,
+                    data_group="acquisition_fun/0",
                     group_name=group_name + " acquisition function",
                     layers_group_name="acquisition",
                     image_group=image_group,
@@ -697,12 +720,12 @@ class AcquisitionFunction:
                     sampled_root,
                     axes=output_axes,
                     scale=sampling_output_scale,
-                    data_group="labels/sampled_positions/0",
+                    data_group="sampled_positions/0",
                     group_name=group_name + " sampled positions",
                     layers_group_name="sampled positions",
                     image_group=image_group,
-                    reference_source_axes=displayed_source_axes,
-                    reference_scale=displayed_scale,
+                    reference_source_axes=output_axes,
+                    reference_scale=sampling_output_scale,
                     output_filename=output_filename,
                     add_func=viewer.add_labels
                 )
@@ -710,8 +733,8 @@ class AcquisitionFunction:
             segmentation_channel = add_multiscale_output_layer(
                 segmentation_root,
                 axes=output_axes,
-                scale=output_scale,
-                data_group=f"labels/{segmentation_group_name}/0",
+                scale=displayed_scale,
+                data_group=f"{segmentation_group_name}/0",
                 group_name=group_name + f" {segmentation_group_name}",
                 layers_group_name=segmentation_group_name,
                 image_group=image_group,
@@ -777,7 +800,11 @@ class AcquisitionFunction:
                 layer_types.append((sampling_mask_layers_group, "masks"))
 
             displayed_source_axes = input_layers_group.source_axes
-            displayed_shape = input_layers_group.shape
+            displayed_shape = {
+                ax: ax_s
+                for ax, ax_s in zip(displayed_source_axes,
+                                    input_layers_group.shape)
+            }
 
             output_axes = displayed_source_axes
             if "C" in output_axes:

@@ -192,10 +192,10 @@ class LayersGroup(QTreeWidgetItem):
         else:
             self._source_axes_no_channels = self._source_axes
 
-        if "C" in self._source_axes and not self.childCount():
-            self._source_axes = self._source_axes_no_channels
+        # if "C" in self._source_axes and not self.childCount():
+        #     self._source_axes = self._source_axes_no_channels
 
-        elif "C" not in self._source_axes and self.childCount() > 1:
+        if "C" not in self._source_axes and self.childCount() > 1:
             self._source_axes = "C" + self._source_axes
 
         for idx in range(self.childCount()):
@@ -427,7 +427,7 @@ class LayersGroup(QTreeWidgetItem):
             channel = self.childCount()
 
         if source_axes is None:
-            source_axes = self._source_axes_no_channels
+            source_axes = self._source_axes
 
         if not self._layers_group_name:
             self.layers_group_name = get_basename(layer.name)
@@ -526,7 +526,7 @@ class LayersGroup(QTreeWidgetItem):
                         source_data))
         )
 
-        is_label = not self._use_as_input_image
+        is_label = self._use_as_input_labels or self._use_as_sampling_mask
 
         save_zarr(
             output_filename,
@@ -542,8 +542,7 @@ class LayersGroup(QTreeWidgetItem):
 
         for idx in range(self.childCount()):
             self.child(idx).source_data = str(output_filename)
-            self.child(idx).data_group = (("labels/" if is_label else "")
-                                          + name
+            self.child(idx).data_group = (name
                                           + ("/0" if is_multiscale else ""))
 
         self.updated = True
@@ -1224,27 +1223,42 @@ class MaskGenerator(PropertiesEditor):
         self._active_layer_channel = self._active_layers_group.child(0)
         masks_group_name = "mask"
 
+        reference_shape = {
+            ax: ax_s
+            for ax, ax_s in zip(self._im_source_axes, self._im_shape)
+        }
+        reference_scale = {
+            ax: ax_scl
+            for ax, ax_scl in zip(self._im_source_axes, self._im_scale)
+        }
+        reference_translate = {
+            ax: ax_trans
+            for ax, ax_trans in zip(self._im_source_axes, self._im_translate)
+        }
+        reference_patch_sizes = {
+            ax: ax_ps
+            for ax, ax_ps in zip(self._im_source_axes, self._patch_sizes)
+        }
+
         mask_shape = [
-            max(1, ax_s // ax_ps)
-            for ax_ps, ax_s, ax in zip(self._patch_sizes, self._im_shape,
-                                       self._im_source_axes)
-            if ax in self._mask_axes
+            max(1, reference_shape.get(ax, 1)
+                // reference_patch_sizes.get(ax, 1))
+            for ax in "TCZYX"
         ]
 
-        mask_translate = tuple(map(
-            lambda ax_ps, ax_s, ax_scl, ax_trans:
-            ax_trans + ((ax_scl * (ax_ps - 1) / 2.0)
-                        if ax_s // ax_ps >= 1 else 0),
-            self._patch_sizes, self._im_shape, self._im_scale,
-            self._im_translate
-        ))
+        mask_translate = tuple([
+            (reference_translate.get(ax, 0)
+             + (reference_scale.get(ax, 1)
+                * (reference_patch_sizes.get(ax, 1) - 1) / 2.0))
+            if ax in self._im_source_axes else 0
+            for ax in "TCZYX"
+        ])
 
-        mask_scale = tuple(map(
-            lambda ax_ps, ax_s, ax_scl:
-            (ax_scl * ax_ps)
-            if ax_s // ax_ps >= 1 else ax_scl,
-            self._patch_sizes, self._im_shape, self._im_scale
-        ))
+        mask_scale = tuple([
+            (reference_scale.get(ax, 1) * reference_patch_sizes.get(ax, 1))
+            if ax in self._mask_axes else 1
+            for ax in "TCZYX"
+        ])
 
         if self._active_image_group.group_dir:
             mask_output_filename = (self._active_image_group.group_dir
@@ -1261,7 +1275,7 @@ class MaskGenerator(PropertiesEditor):
                 is_multiscale=True
             )
 
-            mask_grp = mask_root[f"labels/{masks_group_name}/0"]
+            mask_grp = mask_root[f"{masks_group_name}/0"]
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None
@@ -1281,7 +1295,7 @@ class MaskGenerator(PropertiesEditor):
         if masks_layers_group is None:
             masks_layers_group = self._active_image_group.add_layers_group(
                 masks_group_name,
-                source_axes=self._mask_axes,
+                source_axes="TCZYX",
                 use_as_sampling_mask=True
             )
 
@@ -1289,7 +1303,7 @@ class MaskGenerator(PropertiesEditor):
 
         if mask_output_filename:
             masks_layer_channel.source_data = str(mask_output_filename)
-            masks_layer_channel.data_group = f"labels/{masks_group_name}/0"
+            masks_layer_channel.data_group = f"{masks_group_name}/0"
 
         return new_mask_layer
 
