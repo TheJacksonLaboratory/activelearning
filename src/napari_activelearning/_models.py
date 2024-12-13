@@ -60,7 +60,9 @@ try:
             self._model = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=str(self._pretrained_model)
+                pretrained_model=(str(self._pretrained_model)
+                                  if self._pretrained_model is not None
+                                  else None)
             )
             self._model.mkldnn = False
             self._model.net.mkldnn = False

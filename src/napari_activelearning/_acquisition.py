@@ -272,6 +272,7 @@ class FineTuningMethod:
             )
 
             dataset.add_transform("images", zds.ToDtype(np.float32))
+            dataset.add_transform("labels", zds.ToDtype(np.int32))
 
             if USING_PYTORCH:
                 dataloader = DataLoader(
@@ -289,6 +290,13 @@ class FineTuningMethod:
                 if ax != "C" and ax not in model_axes
             )
 
+            drop_label_axis = tuple(
+                ax_idx
+                for ax_idx, ax in enumerate(
+                    dataset_metadata["labels"]["axes"])
+                if ax != "C" and ax not in model_axes
+            )
+
             for img, lab in dataloader:
                 if USING_PYTORCH:
                     img = img[0].numpy()
@@ -296,7 +304,9 @@ class FineTuningMethod:
 
                 if len(drop_axis):
                     img = img.squeeze(drop_axis)
-                    lab = lab.squeeze(drop_axis)
+
+                if len(drop_label_axis):
+                    lab = lab.squeeze(drop_label_axis)
 
                 img = transform(img)
 
@@ -355,9 +365,6 @@ class AcquisitionFunction:
 
     def _prepare_datasets_metadata(
             self,
-            image_group: ImageGroup,
-            output_axes: str,
-            displayed_source_axes: str,
             displayed_shape: dict,
             layer_types: Iterable[Tuple[LayersGroup, str]]):
         dataset_metadata = {}
@@ -646,9 +653,6 @@ class AcquisitionFunction:
             ]
 
             dataset_metadata = self._prepare_datasets_metadata(
-                 image_group,
-                 output_axes,
-                 displayed_source_axes,
                  displayed_shape,
                  [(input_layers_group, "images"),
                   (sampling_mask_layers_group, "masks")]
@@ -813,9 +817,6 @@ class AcquisitionFunction:
                 output_axes = "".join(output_axes)
 
             dataset_metadata = self._prepare_datasets_metadata(
-                 image_group,
-                 output_axes,
-                 displayed_source_axes,
                  displayed_shape,
                  layer_types,
                 )
