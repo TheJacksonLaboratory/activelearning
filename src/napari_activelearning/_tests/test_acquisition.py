@@ -144,8 +144,6 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     acquisition_function.model_axes = "YXC"
 
     # Define the input parameters for the method
-    output_axes = "TCZYX"
-    displayed_source_axes = "TCZYX"
     displayed_shape = {"T": 1, "C": 3, "Z": 10, "Y": 10, "X": 10}
 
     layers_group = image_group.child(0)
@@ -153,9 +151,6 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 
     # Call the method
     dataset_metadata = acquisition_function._prepare_datasets_metadata(
-         image_group,
-         output_axes,
-         displayed_source_axes,
          displayed_shape,
          layer_types)
 
