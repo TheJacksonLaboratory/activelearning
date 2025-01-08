@@ -834,10 +834,10 @@ class TunableMethodWidget(TunableMethod, QWidget):
 class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
     def __init__(self, image_groups_manager: ImageGroupsManagerWidget,
                  labels_manager: LabelsManagerWidget,
-                 tunable_segmentation_method: TunableMethodWidget):
+                 tunable_segmentation_methods: dict):
 
         super().__init__(image_groups_manager, labels_manager,
-                         tunable_segmentation_method)
+                         tunable_segmentation_methods)
 
         self.patch_sizes_mspn = MultiSpinBox()
 
@@ -855,7 +855,6 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         patch_sizes_chk = QCheckBox("Edit patch sizes")
         patch_sizes_chk.setChecked(False)
-        patch_sizes_chk.toggled.connect(self._show_patch_sizes)
 
         spatial_input_axes = self.input_axes
         if "C" in spatial_input_axes:
@@ -864,41 +863,33 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
             spatial_input_axes = "".join(spatial_input_axes)
 
         self.patch_sizes_mspn.axes = spatial_input_axes
-        self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
 
         self.max_samples_spn = QSpinBox(minimum=1, maximum=10000,
                                         value=self._max_samples,
                                         singleStep=10)
-        self.max_samples_spn.valueChanged.connect(self._set_max_samples)
 
         self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100,
                                            value=self._MC_repetitions,
                                            singleStep=10)
-        self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
 
         self.input_axes_le = QLineEdit()
-        self.input_axes_le.textChanged.connect(self._set_input_axes)
         self.input_axes_le.setText(self.input_axes)
 
         self.model_axes_le = QLineEdit()
-        self.model_axes_le.textChanged.connect(self._set_model_axes)
         self.model_axes_le.setText(self.model_axes)
 
-        self.execute_selected_btn = QPushButton("Run on selected image groups")
-        self.execute_selected_btn.clicked.connect(
-            partial(self.compute_acquisition_layers, run_all=False)
-        )
+        self.methods_cmb = QComboBox()
+        self.methods_cmb.setEditable(False)
+        for method_name in tunable_segmentation_methods.keys():
+            self.methods_cmb.addItem(method_name)
 
+        self.execute_selected_btn = QPushButton("Run on selected image groups")
         self.execute_all_btn = QPushButton("Run on all image groups")
-        self.execute_all_btn.clicked.connect(
-            partial(self.compute_acquisition_layers, run_all=True)
-        )
 
         self.image_pb = QProgressBar()
         self.patch_pb = QProgressBar()
 
         self.finetuning_btn = QPushButton("Fine tune model")
-        self.finetuning_btn.clicked.connect(self.fine_tune)
 
         acquisition_lyt = QGridLayout()
         acquisition_lyt.addWidget(patch_sizes_chk, 0, 0)
@@ -911,17 +902,32 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         acquisition_lyt.addWidget(self.input_axes_le, 4, 1)
         acquisition_lyt.addWidget(QLabel("Model axes"), 4, 2)
         acquisition_lyt.addWidget(self.model_axes_le, 4, 3)
-        acquisition_lyt.addWidget(self.tunable_segmentation_method, 5, 0, 1, 4)
-        acquisition_lyt.addWidget(self.execute_selected_btn, 6, 0)
-        acquisition_lyt.addWidget(self.execute_all_btn, 6, 1)
-        acquisition_lyt.addWidget(self.finetuning_btn, 7, 1)
-        acquisition_lyt.addWidget(QLabel("Image queue:"), 8, 0, 1, 1)
-        acquisition_lyt.addWidget(self.image_pb, 8, 1, 1, 3)
-        acquisition_lyt.addWidget(QLabel("Patch queue:"), 9, 0, 1, 1)
-        acquisition_lyt.addWidget(self.patch_pb, 9, 1, 1, 3)
+        acquisition_lyt.addWidget(self.methods_cmb, 5, 0, 1, 4)
+        acquisition_lyt.addWidget(self.execute_selected_btn, 7, 0)
+        acquisition_lyt.addWidget(self.execute_all_btn, 7, 1)
+        acquisition_lyt.addWidget(self.finetuning_btn, 8, 1)
+        acquisition_lyt.addWidget(QLabel("Image queue:"), 9, 0, 1, 1)
+        acquisition_lyt.addWidget(self.image_pb, 9, 1, 1, 3)
+        acquisition_lyt.addWidget(QLabel("Patch queue:"), 10, 0, 1, 1)
+        acquisition_lyt.addWidget(self.patch_pb, 10, 1, 1, 3)
 
         self.setLayout(acquisition_lyt)
         self.patch_sizes_widget.setVisible(False)
+
+        patch_sizes_chk.toggled.connect(self._show_patch_sizes)
+        self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
+        self.max_samples_spn.valueChanged.connect(self._set_max_samples)
+        self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
+        self.input_axes_le.textChanged.connect(self._set_input_axes)
+        self.model_axes_le.textChanged.connect(self._set_model_axes)
+        self.methods_cmb.currentIndexChanged.connect(self._set_model)
+        self.execute_selected_btn.clicked.connect(
+            partial(self.compute_acquisition_layers, run_all=False)
+        )
+        self.execute_all_btn.clicked.connect(
+            partial(self.compute_acquisition_layers, run_all=True)
+        )
+        self.finetuning_btn.clicked.connect(self.fine_tune)
 
     def _show_patch_sizes(self, show: bool):
         self.patch_sizes_widget.setVisible(show)
@@ -955,3 +961,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_model_axes(self):
         self.model_axes = self.model_axes_le.text()
+
+    def _set_model(self, selected_model_index: int):
+        if self.tunable_segmentation_method is not None:
+            self.layout().removeWidget(self.tunable_segmentation_method)
+            self.tunable_segmentation_method.deleteLater()
+
+        self.set_model(self.methods_cmb.itemText(selected_model_index))
+        self.layout().addWidget(self.tunable_segmentation_method, 6, 0, 1, 4)

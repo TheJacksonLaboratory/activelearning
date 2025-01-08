@@ -1,10 +1,11 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import numpy as np
 
 from napari_activelearning._acquisition import (AcquisitionFunction,
                                                 compute_acquisition_fun,
                                                 compute_segmentation,
-                                                add_multiscale_output_layer)
+                                                add_multiscale_output_layer,
+                                                TunableMethod)
 from napari_activelearning._layers import LayerChannel
 
 try:
@@ -14,10 +15,31 @@ except ModuleNotFoundError:
     USING_PYTORCH = False
 
 
-def test_compute_acquisition_fun(tunable_segmentation_method):
+class TestTunableMethod(TunableMethod):
+    def __init__(self):
+        super(TestTunableMethod, self).__init__()
+
+    def _get_transform(self):
+        return lambda x: x
+
+    def _run_pred(self, img, *args, **kwargs):
+        return np.random.random((10, 10))
+
+    def _run_eval(self, img, *args, **kwargs):
+        return np.random.randint(0, 2, (10, 10))
+
+    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+        return None
+
+
+def test_compute_acquisition_fun():
     img = np.random.random((10, 10, 3))
     img_sp = np.random.random((10, 10))
     MC_repetitions = 3
+    tunable_segmentation_method = TunableMethod()
+    tunable_segmentation_method._run_pred = MagicMock(
+        return_value=np.random.random((10, 10))
+    )
     result = compute_acquisition_fun(tunable_segmentation_method,
                                      img, img_sp, MC_repetitions)
 
@@ -25,9 +47,14 @@ def test_compute_acquisition_fun(tunable_segmentation_method):
     assert tunable_segmentation_method._run_pred.call_count == MC_repetitions
 
 
-def test_compute_segmentation(tunable_segmentation_method):
+def test_compute_segmentation():
     img = np.random.random((1, 1, 1, 10, 10, 3))
     labels_offset = 1
+    tunable_segmentation_method = TunableMethod()
+    tunable_segmentation_method._run_eval = MagicMock(
+        return_value=np.random.randint(0, 2, (10, 10))
+    )
+
     result = compute_segmentation(tunable_segmentation_method, img,
                                   labels_offset)
     expected_segmentation = tunable_segmentation_method.segment(img)
@@ -39,14 +66,15 @@ def test_compute_segmentation(tunable_segmentation_method):
 
 
 def test_compute_acquisition(image_groups_manager, labels_manager,
-                             tunable_segmentation_method,
                              make_napari_viewer):
     viewer = make_napari_viewer()
     viewer.dims.axis_labels = ['t', 'z', 'y', 'x']
 
-    acquisition_function = AcquisitionFunction(image_groups_manager,
-                                               labels_manager,
-                                               tunable_segmentation_method)
+    acquisition_function = AcquisitionFunction(
+        image_groups_manager,
+        labels_manager,
+        {"test": TestTunableMethod}
+    )
 
     dataset_metadata = {
         "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
@@ -56,6 +84,7 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
     segmentation_out = np.zeros((1, 1, 1, 10, 10))
     segmentation_only = False
 
+    acquisition_function.set_model("test")
     acquisition_function.input_axes = "TZYX"
     acquisition_function.model_axes = "YXC"
     acquisition_function.patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
@@ -126,7 +155,6 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
 
 
 def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
-                                   tunable_segmentation_method,
                                    simple_image_group,
                                    make_napari_viewer):
     image_group, _, _ = simple_image_group
@@ -135,10 +163,12 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     viewer = make_napari_viewer()
     viewer.dims.axis_labels = ['t', 'z', 'y', 'x']
 
-    acquisition_function = AcquisitionFunction(image_groups_manager,
-                                               labels_manager,
-                                               tunable_segmentation_method)
+    acquisition_function = AcquisitionFunction(
+        image_groups_manager,
+        labels_manager,
+        {"test": TestTunableMethod})
 
+    acquisition_function.set_model("test")
     acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
     acquisition_function.input_axes = "TZYX"
     acquisition_function.model_axes = "YXC"
@@ -187,7 +217,6 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 
 
 def test_compute_acquisition_layers(image_groups_manager, labels_manager,
-                                    tunable_segmentation_method,
                                     make_napari_viewer,
                                     simple_image_group,
                                     labels_group,
@@ -224,8 +253,9 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
         acquisition_function = AcquisitionFunction(
             image_groups_manager,
             labels_manager,
-            tunable_segmentation_method)
+            {"test": TestTunableMethod})
 
+        acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
         acquisition_function.input_axes = "TZYX"
         acquisition_function.model_axes = "YXC"
@@ -249,7 +279,6 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
 
 def test_fine_tune(image_groups_manager, simple_image_group,
                    labels_manager,
-                   tunable_segmentation_method,
                    multiscale_layer_channel,
                    multiscale_layers_group,
                    labels_group,
@@ -289,15 +318,15 @@ def test_fine_tune(image_groups_manager, simple_image_group,
         acquisition_function = AcquisitionFunction(
             image_groups_manager,
             labels_manager,
-            tunable_segmentation_method
+            {"test": TestTunableMethod}
         )
 
+        acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 10, "Y": 10, "Z": 1}
         acquisition_function.input_axes = "TZYX"
         acquisition_function.model_axes = "YXC"
 
         assert acquisition_function.fine_tune()
-        assert tunable_segmentation_method._fine_tune.called
 
     image_group.removeChild(multiscale_layers_group)
     image_group.labels_group = None

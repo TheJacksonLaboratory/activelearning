@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from pathlib import Path, PureWindowsPath
 import numpy as np
 import zarr
@@ -7,24 +7,12 @@ import zarrdataset as zds
 
 from napari.layers import Image
 from napari.layers._source import Source
-from napari.layers._multiscale_data import MultiScaleData
 
 from napari_activelearning._layers import (LayerChannel,
                                            LayersGroup,
                                            ImageGroup,
                                            ImageGroupsManager)
 from napari_activelearning._labels import LabelsManager, LabelGroup, LabelItem
-from napari_activelearning._acquisition import AcquisitionFunction
-from napari_activelearning._models import SimpleTunable
-
-
-@pytest.fixture(scope="package")
-def tunable_segmentation_method():
-    method = SimpleTunable()
-    method._run_pred = MagicMock(return_value=np.random.random((10, 10)))
-    method._run_eval = MagicMock(return_value=np.random.randint(0, 2, (10, 10)))
-    method._fine_tune = MagicMock(return_value=None)
-    return method
 
 
 @pytest.fixture(scope="package")

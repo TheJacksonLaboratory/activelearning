@@ -5,10 +5,10 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
 
 from functools import partial
-from ._models import USING_CELLPOSE, SimpleTunable
+from ._models_impl import USING_CELLPOSE, SimpleTunable
 
 if USING_CELLPOSE:
-    from ._models import CellposeTunable
+    from ._models_impl import CellposeTunable
 
     def cellpose_segmentation_parameters_widget():
         @magicgui(auto_call=True)

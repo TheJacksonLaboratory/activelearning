@@ -1,5 +1,4 @@
 from typing import Optional, Iterable, Tuple, Callable, Union
-from functools import partial
 import random
 from pathlib import Path
 import numpy as np
@@ -20,8 +19,7 @@ from napari.layers._multiscale_data import MultiScaleData
 
 from ._layers import ImageGroupsManager, ImageGroup, LayersGroup
 from ._labels import LabelsManager, LabelItem
-from ._utils import (get_dataloader, save_zarr, downsample_image,
-                     StaticPatchSampler)
+from ._utils import get_dataloader, save_zarr, downsample_image
 
 
 def compute_BALD(probs):
@@ -232,7 +230,7 @@ class SegmentationMethod:
         return out
 
 
-class FineTuningMethod:
+class TunableMethod(SegmentationMethod):
     def __init__(self):
         self._num_workers = 0
         super().__init__()
@@ -328,15 +326,10 @@ class FineTuningMethod:
         return train_data, train_labels, test_data, test_labels
 
 
-class TunableMethod(SegmentationMethod, FineTuningMethod):
-    def __init__(self):
-        super().__init__()
-
-
 class AcquisitionFunction:
     def __init__(self, image_groups_manager: ImageGroupsManager,
                  labels_manager: LabelsManager,
-                 tunable_segmentation_method: TunableMethod):
+                 tunable_segmentation_methods: dict):
         self._patch_sizes = {}
         self._max_samples = 1
         self._MC_repetitions = 3
@@ -347,7 +340,8 @@ class AcquisitionFunction:
 
         self.image_groups_manager = image_groups_manager
         self.labels_manager = labels_manager
-        self.tunable_segmentation_method = tunable_segmentation_method
+        self.tunable_segmentation_method = None
+        self._tunable_segmentation_methods = tunable_segmentation_methods
 
         super().__init__()
 
@@ -441,10 +435,23 @@ class AcquisitionFunction:
 
         return dataset_metadata
 
+    def set_model(self, selected_model):
+        tunable_segmentation_method_cls =\
+            self._tunable_segmentation_methods.get(selected_model, None)
+
+        if tunable_segmentation_method_cls is not None:
+            self.tunable_segmentation_method =\
+                tunable_segmentation_method_cls()
+        else:
+            self.tunable_segmentation_method = None
+
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
                             segmentation_only=False):
+        if self.tunable_segmentation_method is None:
+            return
+
         model_spatial_axes = [
             ax
             for ax in self.model_axes
@@ -563,6 +570,9 @@ class AcquisitionFunction:
             segmentation_group_name: Optional[str] = "segmentation",
             segmentation_only: bool = False,
             ):
+        if self.tunable_segmentation_method is None:
+            return
+
         if run_all:
             for idx in range(self.image_groups_manager.groups_root.childCount()
                              ):
@@ -769,6 +779,8 @@ class AcquisitionFunction:
                 self.image_groups_manager.groups_root.child(idx),
                 range(self.image_groups_manager.groups_root.childCount()))
         ))
+        if self.tunable_segmentation_method is None:
+            return
 
         if not image_groups:
             return False
