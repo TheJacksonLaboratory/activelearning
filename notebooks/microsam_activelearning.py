@@ -23,6 +23,18 @@ class TunableMicroSAM(al.TunableMethodWidget):
             stability_score_offset=1.0
         )
 
+        (self._sam_predictor_dropout,
+         self._sam_instance_segmenter_dropout) =\
+            msas.get_predictor_and_segmenter(
+                model_type='vit_t',
+                device=util.get_device("cpu"),
+                amg=True,
+                checkpoint=None,
+                stability_score_offset=1.0)
+
+        al.add_dropout(self._sam_predictor_dropout.model)
+
+
     def _get_transform(self):
         return lambda x: x
 
@@ -43,8 +55,8 @@ class TunableMicroSAM(al.TunableMethodWidget):
         self._model_init()
 
         segmentation_mask = msas.automatic_instance_segmentation(
-            predictor=self._sam_predictor,
-            segmenter=self._sam_instance_segmenter,
+            predictor=self._sam_predictor_dropout,
+            segmenter=self._sam_instance_segmenter_dropout,
             input_path=img,
             ndim=2,
             verbose=False

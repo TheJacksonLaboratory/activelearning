@@ -197,7 +197,35 @@ if USING_PYTORCH:
         for module in net.modules():
             if isinstance(module, torch.nn.Sequential):
                 for l_idx, layer in enumerate(module):
-                    if isinstance(layer, torch.nn.ReLU):
+                    if isinstance(layer, (torch.nn.Threshold,
+                                          torch.nn.ReLU,
+                                          torch.nn.RReLU,
+                                          torch.nn.Hardtanh,
+                                          torch.nn.ReLU6,
+                                          torch.nn.Sigmoid,
+                                          torch.nn.Hardsigmoid,
+                                          torch.nn.Tanh,
+                                          torch.nn.SiLU,
+                                          torch.nn.Mish,
+                                          torch.nn.Hardswish,
+                                          torch.nn.ELU,
+                                          torch.nn.CELU,
+                                          torch.nn.SELU,
+                                          torch.nn.GLU,
+                                          torch.nn.GELU,
+                                          torch.nn.Hardshrink,
+                                          torch.nn.LeakyReLU,
+                                          torch.nn.LogSigmoid,
+                                          torch.nn.Softplus,
+                                          torch.nn.Softshrink,
+                                          torch.nn.MultiheadAttention,
+                                          torch.nn.PReLU,
+                                          torch.nn.Softsign,
+                                          torch.nn.Tanhshrink,
+                                          torch.nn.Softmin,
+                                          torch.nn.Softmax,
+                                          torch.nn.Softmax2d,
+                                          torch.nn.LogSoftmax)):
                         break
                 else:
                     continue
