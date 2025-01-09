@@ -46,6 +46,9 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
     for sp_l in super_pixel_indices:
         mask = super_pixel_labels == sp_l
         u_val = np.sum(mutual_info[mask]) / np.sum(mask)
+        if np.isnan(u_val):
+            u_val = 0.0
+
         u_sp_lab = np.where(mask, u_val, u_sp_lab)
 
     return u_sp_lab
@@ -232,6 +235,7 @@ if USING_PYTORCH:
 
                 dropout_layer = torch.nn.Dropout(p=p, inplace=True)
                 module.insert(l_idx + 1, DropoutEvalOverrider(dropout_layer))
+
 else:
     def add_dropout(net, p=0.05):
         pass
