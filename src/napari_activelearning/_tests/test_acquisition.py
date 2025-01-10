@@ -20,7 +20,7 @@ class TestTunableMethod(TunableMethod):
         super(TestTunableMethod, self).__init__()
 
     def _get_transform(self):
-        return lambda x: x
+        return lambda x: x, None
 
     def _run_pred(self, img, *args, **kwargs):
         return np.random.random((10, 10))
@@ -28,8 +28,9 @@ class TestTunableMethod(TunableMethod):
     def _run_eval(self, img, *args, **kwargs):
         return np.random.randint(0, 2, (10, 10))
 
-    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
-        return None
+    # def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+    def _fine_tune(self, train_dataloader, val_dataloader):
+        return True
 
 
 def test_compute_acquisition_fun():
@@ -131,6 +132,7 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
     contrast_limits = [0, 1]
     colormap = "gray"
     use_as_input_labels = False
+    use_as_sampling_mask = False
     viewer = make_napari_viewer()
     add_func = viewer.add_image
 
@@ -148,6 +150,7 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
         contrast_limits,
         colormap,
         use_as_input_labels,
+        use_as_sampling_mask,
         add_func
     )
 

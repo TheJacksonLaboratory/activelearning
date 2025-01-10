@@ -929,6 +929,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         )
         self.finetuning_btn.clicked.connect(self.fine_tune)
 
+        self.patch_sizes_mspn.update_spin_boxes()
+
     def _show_patch_sizes(self, show: bool):
         self.patch_sizes_widget.setVisible(show)
 

@@ -1,10 +1,10 @@
-import os
 import numpy as np
+import random
 import skimage
 
 import zarrdataset as zds
 
-from ._acquisition import TunableMethod, add_dropout
+from ._acquisition import TunableMethod, add_dropout, USING_PYTORCH
 
 try:
     import cellpose
@@ -135,10 +135,37 @@ try:
             if self._transform is None:
                 self._transform = CellposeTransform(self._channels,
                                                     self._channel_axis)
-            return self._transform
+            return self._transform, None
 
-        def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+        # def _preload_data(self, data_loader,
+        #                   train_data_proportion: float = 0.8):
+        def _preload_data(self, dataloader):
+            raw_data = []
+            label_data = []
+            for img, lab in dataloader:
+                if USING_PYTORCH:
+                    img = img[0].numpy()
+                    lab = lab[0].numpy()
+
+                    raw_data.append(img)
+                    label_data.append(lab)
+
+            return raw_data, label_data
+
+        # def _fine_tune(self, data_loader,
+        #                train_data_proportion: float = 0.8) -> bool:
+        def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
             self._model_init()
+
+            (train_data,
+             train_labels) = self._preload_data(
+                 train_dataloader
+             )
+
+            (test_data,
+             test_labels) = self._preload_data(
+                 val_dataloader
+             )
 
             self._pretrained_model = train.train_seg(
                 self._model.net,
@@ -175,6 +202,8 @@ try:
                 self._pretrained_model = self._pretrained_model[0]
 
             self.refresh_model = True
+
+            return True
 
     USING_CELLPOSE = True
 
@@ -236,8 +265,12 @@ class SimpleTunable(TunableMethod):
         if self._transform is None:
             self._model_init()
 
-        return self._transform
+        return self._transform, None
 
-    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+    # def _fine_tune(self, data_loader,
+    #                train_data_proportion: float = 0.8) -> bool:
+    def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         if self._transform is None:
             self._model_init()
+
+        return True

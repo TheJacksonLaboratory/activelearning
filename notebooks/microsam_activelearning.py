@@ -1,3 +1,5 @@
+from typing import Iterable, Union
+
 import numpy as np
 import torch
 import time
@@ -43,7 +45,7 @@ class TunableMicroSAM(al.TunableMethodWidget):
 
 
     def _get_transform(self):
-        return lambda x: x
+        return lambda x: x, None
 
     def _run_pred(self, img, *args, **kwargs):
         self._model_init()
@@ -100,9 +102,47 @@ class TunableMicroSAM(al.TunableMethodWidget):
 
         return segmentation_mask
 
-    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+    # def _fine_tune(self, data_loader,
+    #                train_data_proportion: float = 0.8) -> bool:
+    def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         self._model_init()
-        return None
+
+        # self._pretrained_model = train.train_seg(
+        #     self._model.net,
+        #     train_data=train_data,
+        #     train_labels=train_labels,
+        #     train_probs=None,
+        #     test_data=test_data,
+        #     test_labels=test_labels,
+        #     test_probs=None,
+        #     load_files=False,
+        #     batch_size=self._batch_size,
+        #     learning_rate=self._learning_rate,
+        #     n_epochs=self._n_epochs,
+        #     weight_decay=self._weight_decay,
+        #     momentum=self._momentum,
+        #     SGD=self._SGD,
+        #     channels=self._channels,
+        #     channel_axis=self._channel_axis,
+        #     rgb=self._rgb,
+        #     normalize=self._normalize,
+        #     compute_flows=self._compute_flows,
+        #     save_path=self._save_path,
+        #     save_every=self._save_every,
+        #     nimg_per_epoch=self._nimg_per_epoch,
+        #     nimg_test_per_epoch=self._nimg_test_per_epoch,
+        #     rescale=self._rescale,
+        #     scale_range=self._scale_range,
+        #     bsize=self._bsize,
+        #     min_train_masks=self._min_train_masks,
+        #     model_name=self._model_name
+        # )
+
+        # if isinstance(self._pretrained_model, tuple):
+        #     self._pretrained_model = self._pretrained_model[0]
+
+        # self.refresh_model = True
+        return True
 
 
 def register_microsam():

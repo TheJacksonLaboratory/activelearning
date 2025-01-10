@@ -259,9 +259,10 @@ if USING_CELLPOSE:
         def _show_finetuning_parameters(self, show: bool):
             self._finetuning_parameters_scr.setVisible(show)
 
-        def _fine_tune(self, train_data, train_labels, test_data, test_labels):
-            super()._fine_tune(train_data, train_labels, test_data,
-                               test_labels)
+        # def _fine_tune(self, data_loader, train_data_proportion: float = 0.8):
+        #     super()._fine_tune(data_loader, train_data_proportion)
+        def _fine_tune(self, train_dataloader, val_dataloader):
+            super()._fine_tune(train_dataloader, val_dataloader)
             self._segmentation_parameters.pretrained_model.value =\
                 self._pretrained_model
 
