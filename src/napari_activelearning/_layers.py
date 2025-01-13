@@ -30,7 +30,7 @@ class LayerChannel(QTreeWidgetItem):
 
         self.channel = channel
         source_axes = list(source_axes)
-        source_axes = source_axes[-self.layer.ndim:]
+        source_axes = source_axes[-self.layer.data.ndim:]
         self.source_axes = "".join(source_axes)
 
     def _update_name(self, event):
@@ -88,7 +88,7 @@ class LayerChannel(QTreeWidgetItem):
 
     @source_axes.setter
     def source_axes(self, source_axes: str):
-        if "C" in source_axes and self.layer.ndim != len(source_axes):
+        if "C" in source_axes and self.layer.data.ndim != len(source_axes):
             source_axes = list(source_axes)
             source_axes.remove("C")
             source_axes = "".join(source_axes)
@@ -110,7 +110,7 @@ class LayerChannel(QTreeWidgetItem):
 
     @property
     def ndim(self):
-        return self.layer.ndim
+        return self.layer.data.ndim
 
     @property
     def scale(self):
