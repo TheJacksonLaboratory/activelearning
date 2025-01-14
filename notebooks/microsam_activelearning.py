@@ -1,11 +1,12 @@
-from typing import Iterable, Union
-
 import numpy as np
 import torch
 import time
 
+from torch_em.transform.label import PerObjectDistanceTransform
+
 from micro_sam import util
 from micro_sam import automatic_segmentation as msas
+import micro_sam.training as sam_training
 import napari_activelearning as al
 
 
@@ -43,9 +44,13 @@ class TunableMicroSAM(al.TunableMethodWidget):
 
         al.add_dropout(self._sam_predictor_dropout.model)
 
-
     def _get_transform(self):
-        return lambda x: x, None
+        label_transform = PerObjectDistanceTransform(
+            distances=True, boundary_distances=True, directed_distances=False,
+            foreground=True, instances=True, min_size=25
+        )
+
+        return lambda x: (255.0 * x).astype(np.uint8), label_transform
 
     def _run_pred(self, img, *args, **kwargs):
         self._model_init()
@@ -102,46 +107,26 @@ class TunableMicroSAM(al.TunableMethodWidget):
 
         return segmentation_mask
 
-    # def _fine_tune(self, data_loader,
-    #                train_data_proportion: float = 0.8) -> bool:
     def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         self._model_init()
 
-        # self._pretrained_model = train.train_seg(
-        #     self._model.net,
-        #     train_data=train_data,
-        #     train_labels=train_labels,
-        #     train_probs=None,
-        #     test_data=test_data,
-        #     test_labels=test_labels,
-        #     test_probs=None,
-        #     load_files=False,
-        #     batch_size=self._batch_size,
-        #     learning_rate=self._learning_rate,
-        #     n_epochs=self._n_epochs,
-        #     weight_decay=self._weight_decay,
-        #     momentum=self._momentum,
-        #     SGD=self._SGD,
-        #     channels=self._channels,
-        #     channel_axis=self._channel_axis,
-        #     rgb=self._rgb,
-        #     normalize=self._normalize,
-        #     compute_flows=self._compute_flows,
-        #     save_path=self._save_path,
-        #     save_every=self._save_every,
-        #     nimg_per_epoch=self._nimg_per_epoch,
-        #     nimg_test_per_epoch=self._nimg_test_per_epoch,
-        #     rescale=self._rescale,
-        #     scale_range=self._scale_range,
-        #     bsize=self._bsize,
-        #     min_train_masks=self._min_train_masks,
-        #     model_name=self._model_name
-        # )
+        train_dataloader.shuffle = True
+        val_dataloader.shuffle = False
 
-        # if isinstance(self._pretrained_model, tuple):
-        #     self._pretrained_model = self._pretrained_model[0]
+        # Run training.
+        sam_training.train_sam(
+            name="microsam_activelearning",
+            model_type="vit_t",
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            n_epochs=2,
+            n_objects_per_batch=25,
+            with_segmentation_decoder=True,
+            device=util.get_device("cuda"
+                                   if torch.cuda.is_available()
+                                   else "cpu"),
+        )
 
-        # self.refresh_model = True
         return True
 
 

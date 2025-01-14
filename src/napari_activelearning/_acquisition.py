@@ -264,6 +264,14 @@ class SegmentationMethod:
         return out
 
 
+class MyZarrDataset(zds.ZarrDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __len__(self):
+        return len(self._toplefts)
+
+
 class TunableMethod(SegmentationMethod):
     def __init__(self):
         self._num_workers = 0
@@ -315,7 +323,7 @@ class TunableMethod(SegmentationMethod):
 
             dataset_metadata_list[0]["masks"]["filenames"] = train_mask
 
-            train_datasets = zds.ZarrDataset(
+            train_datasets = MyZarrDataset(
                 list(dataset_metadata_list[0].values()),
                 return_positions=False,
                 draw_same_chunk=False,
@@ -325,7 +333,7 @@ class TunableMethod(SegmentationMethod):
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
 
-            val_datasets = zds.ZarrDataset(
+            val_datasets = MyZarrDataset(
                 list(dataset_metadata_list[0].values()),
                 return_positions=False,
                 draw_same_chunk=False,
@@ -361,13 +369,13 @@ class TunableMethod(SegmentationMethod):
             ).tolist()
 
             for idx, dataset_metadata in enumerate(dataset_metadata_list):
-                patch_sampler = zds.PatchSampler(
+                patch_sampler = MyZarrDataset(
                     patch_size=patch_sizes,
                     spatial_axes=dataset_metadata["labels"]["axes"],
                     min_area=0.01
                 )
 
-                dataset = zds.ZarrDataset(
+                dataset = MyZarrDataset(
                     list(dataset_metadata.values()),
                     return_positions=False,
                     draw_same_chunk=False,
@@ -726,8 +734,7 @@ class AcquisitionFunction:
                     is_multiscale=True
                 )
 
-                acquisition_fun_grp = acquisition_root[""
-                                                       "acquisition_fun/0"]
+                acquisition_fun_grp = acquisition_root["acquisition_fun/0"]
             else:
                 acquisition_fun_grp = None
 
