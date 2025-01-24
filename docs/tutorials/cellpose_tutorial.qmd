@@ -1,5 +1,5 @@
 ---
-title: "Tutorial: How to fine tune a Cellpose model"
+title: "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari"
 author: Fernando Cervantes (fernando.cervantes@jax.org)
 format:
   revealjs:
@@ -11,11 +11,11 @@ format:
 jupyter: python3
 ---
 
-# 1 Image groups management
+# 1. Image groups management
 
-## 1.1 Load a sample image
+## 1.1. Load a sample image
 
-You can use the cells 3D image sample from the napari's built-in samples.
+You can use the cells 3D image sample from napari's built-in samples.
 
 ```
 File > Open Sample > napari builtins > Cells (3D+2Ch)
@@ -32,6 +32,7 @@ import zarr
 ``` {python}
 #| echo: false
 viewer = napari.Viewer()
+viewer.window._qt_window.showMaximized()
 _ = viewer.open_sample(plugin="napari", sample="cells3d")
 ```
 ``` {python}
@@ -39,9 +40,9 @@ _ = viewer.open_sample(plugin="napari", sample="cells3d")
 nbscreenshot(viewer)
 ```
 
-## 1.2 Add the _Image Groups Manager_ widget to napari's window
+## 1.2. Add the _Image Groups Manager_ widget to napari's window
 
-You can find the _Image group manager_ under the _Active Learning_ plugin in the napari's plugins menu.
+You can find the _Image groups manager_ under the _Active Learning_ plugin in napari's plugins menu.
 
 ```
 Plugins > Active Learning > Image groups manager
@@ -60,7 +61,7 @@ image_groups_mgr_dw = viewer.window.add_dock_widget(image_groups_mgr)
 nbscreenshot(viewer)
 ```
 
-## 1.3 Create an _Image Group_ containing _nuclei_ and _membrane_ layers
+## 1.3. Create an _Image Group_ containing _nuclei_ and _membrane_ layers
 
 - Select the _nuclei_ and _membrane_ layer and click the _New Image Group_ button on the _Image Groups Manager_ widget.
 
@@ -76,7 +77,7 @@ image_groups_mgr.create_group()
 nbscreenshot(viewer)
 ```
 
-## 1.4 Edit the image group properties
+## 1.4. Edit the image group properties
 
 :::: {.columns}
 
@@ -121,15 +122,21 @@ cropped_image
 
 ::::
 
-# 2 Segment the managed image groups
+# 2. Segmentation on image groups
 
-## 2.1 Add the _Acquisition function configuration_ widget to napari's window
+## 2.1. Add the _Acquisition function configuration_ widget to napari's window
 
-The _Acquisition function configuration_ is under the _Active Learning_ plugin in the napari's plugins menu.
+The _Acquisition function configuration_ is under the _Active Learning_ plugin in napari's plugins menu.
 
 ```
 Plugins > Active Learning > Acquisition function configuration
 ```
+
+::: {.callout-caution}
+The _Acquisition function configuration_ widget will be docked under the _Image groups manager_ widget, which might reduce the space to show the content of both widgets properly.
+However, these widgets can be _un-docked_ from their current place and docked into another more convenient location within napari's window.
+Also, these can be _re-docked_ as tabs as is illustrated in this tutorial.
+:::
 
 ``` {python}
 #| echo: false
@@ -148,12 +155,13 @@ acquisition_fun_cfg_dw.raise_()
 nbscreenshot(viewer)
 ```
 
-## 2.2 Define sampling configuration
+## 2.2. Define sampling configuration
 
 :::: {.columns}
 
 ::: {.column width=0.3}
-### 2.2.1 Set the axes of the sampling space
+
+### 2.2.1. Set the axes of the sampling space
 
 1. Make sure "Input axes" are set to "ZYX"
 
@@ -162,6 +170,10 @@ This specifies that the samples will be taken from those axes.
 :::
 
 2. Change the "Model axes" to "CYX"
+
+::: {.callout-note}
+And this specifies that sample's axes will be permuted to match the "Model axes" order.
+:::
 
 :::
 
@@ -215,7 +227,7 @@ cropped_image
 
 ---
 
-### 2.2.2 Set the size of the sampling patch
+### 2.2.2. Set the size of the sampling patch
 
 :::: {.columns}
 
@@ -264,11 +276,11 @@ This directs the Active Learning plugin to sample at random patches of size $256
 
 ::::
 
-## 2.3 Define the maximum number of samples to extract
+## 2.3. Define the maximum number of samples to extract
 
 :::: {.columns}
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 
 ``` {python}
 #| echo: false
@@ -293,12 +305,12 @@ draw = ImageDraw.Draw(cropped_image)
 draw.rectangle([60, 740, 405, 770], outline="white", width=5)
 draw.rectangle([60, 740, 405, 770], outline="green", width=2)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7*0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 
 :::
 
-::: {.column width=0.30}
+::: {.column width=0.6}
 - Set the "Maximum samples" to $4$ and press _Enter_
 
 :::{.callout-note}
@@ -310,17 +322,18 @@ This tells the Active Learning plugin to process at most _four_ samples at rando
 ::::
 
 
-## 2.4 Configure the segmentation method
+## 2.4. Configure the segmentation method
 
 :::: {.columns}
 
-::: {.column width=0.3}
+::: {.column width=0.6}
 
-1. Use the "Model" dropdown to select the `cellpose` method
+1. Use the "Model" dropdown list to select the `cellpose` method
 
 2. Click the "Advanced segmentation parameters" checkbox
 
 3. Change the "Channel axis" to $0$
+
 ::: {.callout-note}
 This makes `cellpose` to use the first axis as "Color" channel.
 :::
@@ -331,12 +344,12 @@ This makes `cellpose` to use the first axis as "Color" channel.
 This tells `cellpose` to segment the first channel ($0$) and use the second channel ($1$) as help channel.
 :::
 
-5. Choose the "nuclei" model from the dropdown
+5. Choose the "nuclei" model from the dropdown list
 
 
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 ``` {python}
 #| echo: false
 acquisition_fun_cfg.methods_cmb.setCurrentIndex(2)
@@ -406,17 +419,17 @@ draw.text(position, "5", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "5", fill="white", font=font)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 :::
 
 ::::
 
-## 2.5 Execute the segmentation method on all image groups
+## 2.5. Execute the segmentation method on all image groups
 
 :::: {.columns}
 
-::: {.column width=0.3}
+::: {.column width=0.6}
 - Click the "Run on all image groups"
 
 ::: {.callout-note}
@@ -425,7 +438,7 @@ To execute the segmentation only on specific image groups, select the desired im
 
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
@@ -445,7 +458,7 @@ draw = ImageDraw.Draw(cropped_image)
 draw.rectangle([245, 850, 405, 880], outline="white", width=5)
 draw.rectangle([245, 850, 405, 880], outline="green", width=2)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -455,7 +468,7 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 
 ::::
 
-## 2.6 Inspect the segmentation layer
+## 2.6. Inspect the segmentation layer
 
 ::: {.callout-note}
 Because the input image is 3D, you might have to slide the Z index on the bottom of napari's window to look at the samples that have been segmented.
@@ -483,19 +496,19 @@ image
 ```
 
 
-# 3 Segment masked regions only
+# 3. Segment masked regions only
 
-## 3.1 Create a mask to restrict the sampling space
+## 3.1. Create a mask to restrict the sampling space
 
-### 3.1.1 Add a mask layer to the image group
+### 3.1.1. Add a mask layer to the image group
 
 :::: {.columns}
-::: {.column width=0.3}
+::: {.column width=0.6}
 - Switch to the "Image groups manager" tab
 - Click the "Edit mask properties" checkbox
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 ``` {python}
 #| echo: false
 image_groups_mgr_dw.raise_()
@@ -531,22 +544,22 @@ image_groups_mgr.mask_generator._show_editor(True)
 
 ---
 
-### 3.1.2 Create a low resolution mask for its corresponding image
+### 3.1.2. Create a low resolution mask for its corresponding image
 
 :::: {.columns}
-:::{.column width=0.3}
+:::{.column width=0.6}
 1. Set the mask scale to $256$ for the "X" and "Y" axes, and a scale of $1$ for the "Z" axis
 
 2. Click the "Create mask" button
 
 :::{.callout-note}
-This creates a low-resolution mask where each pixel corresponds to a $256\times256$ pixels region in the input image.
-Because the mask is low-resolution, it uses less space (in memory RAM and disk).
+This creates a low-resolution mask where each of its pixels corresponds to a $256\times256$ pixels region in the input image.
+Because the mask is low-resolution, it uses less space in memory RAM and/or disk.
 :::
 
 :::
 
-:::{.column width=0.7}
+:::{.column width=0.4}
 ``` {python}
 #| echo: false
 image_groups_mgr.mask_generator.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
@@ -592,9 +605,9 @@ cropped_image
 ::::
 
 
-## 3.1.3 Specify the samplable regions
+## 3.1.3. Specify the samplable regions
 
-- Draw a mask on slices $27$ to $30$ in the "Z" axis.
+- Draw a mask that covers slices $27$ to $30$ in the "Z" axis.
 
 :::{.callout-note}
 You can move the slider at the bottom of napari's window to navigate between slices in the "Z" axis.
@@ -618,10 +631,10 @@ image
 ```
 
 
-## 3.2 Execute the segmentation process on the masked regions
+## 3.2. Execute the segmentation process on the masked regions
 
 :::: {.columns}
-::: {.column width=0.3}
+::: {.column width=0.6}
 - Go back to the "Acquisition function configuration" widget
 - Click the "Run on all image groups" button again
 
@@ -631,7 +644,7 @@ Because the image group has a defined mask, samples will be extracted at random 
 
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 ``` {python}
 #| echo: false
 acquisition_fun_cfg_dw.raise_()
@@ -655,7 +668,7 @@ draw = ImageDraw.Draw(cropped_image)
 draw.rectangle([245, 850, 400, 890], outline="white", width=5)
 draw.rectangle([245, 850, 400, 890], outline="green", width=2)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -666,7 +679,7 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 
 ::::
 
-## 3.3 Inspect the masked segmentation output
+## 3.3. Inspect the masked segmentation output
 
 ``` {python}
 #| echo: false
@@ -678,9 +691,9 @@ image
 
 # 4. Fine tune the segmentation model
 
-## 4.1 Add the _Label groups manager_ widget to napari's window
+## 4.1. Add the _Label groups manager_ widget to napari's window
 
-You can find the _Label groups manager_ under the _Active Learning_ plugin in the napari's plugins menu.
+You can find the _Label groups manager_ under the _Active Learning_ plugin in napari's plugins menu.
 
 ```
 Plugins > Active Learning > Label groups manager
@@ -706,7 +719,7 @@ image
 ```
 
 
-## 4.2 Edit segmented patches
+## 4.2. Edit segmented patches
 
 ### 4.2.1. Select a segmented patch to edit
 
@@ -744,8 +757,8 @@ image
 draw = ImageDraw.Draw(image)
 
 # Draw a red rectangle
-draw.rectangle([5, 20, 280, 450], outline="white", width=5)
-draw.rectangle([5, 20, 280, 450], outline="green", width=2)
+draw.rectangle([5, 20, 280, 430], outline="white", width=5)
+draw.rectangle([5, 20, 280, 430], outline="green", width=2)
 
 image
 ```
@@ -755,21 +768,15 @@ image
 ### 4.2.3. Commit changes to the labels layer
 
 :::: {.columns}
-::: {.column width=0.3}
+::: {.column width=0.6}
 
 - Once you have finished editing the labels, click the "Commit changes" button on the _Label groups manager_
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 ``` {python}
 #| echo: false
 z_tmp = zarr.open(r"C:\Users\cervaf\Documents\Logging\activelearning_logs\membrane.zarr\segmentation\0", mode="r")
-```
-``` {python}
-#| echo: false
-labels_mgr.labels_group_root.child(1).child(3)._position
-viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(3)._position]
-labels_mgr.commit()
 ```
 ``` {python}
 #| echo: false
@@ -790,15 +797,22 @@ draw = ImageDraw.Draw(cropped_image)
 draw.rectangle([305, 900, 570, 940], outline="white", width=5)
 draw.rectangle([305, 900, 570, 940], outline="green", width=2)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
+``` {python}
+#| echo: false
+labels_mgr.labels_group_root.child(1).child(3)._position
+viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(3)._position]
+labels_mgr.commit()
+```
+
 :::
 ::::
 
-## 4.3 Navigate between segmented patches
+## 4.3. Navigate between segmented patches
 
 :::: {.columns}
-::: {.column width=0.3}
+::: {.column width=0.6}
 
 1. Expand the second group of labels 
 
@@ -809,7 +823,7 @@ cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resam
 4. Continue editing the segmentation in the current patch and commit the changes when finish
 :::
 
-::: {.column width=0.7}
+::: {.column width=0.4}
 
 ``` {python}
 #| echo: false
@@ -873,7 +887,7 @@ draw.text(position, "4", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "4", fill="white", font=font)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -892,15 +906,23 @@ for c_idx in range(labels_mgr.labels_group_root.child(1).childCount()):
 
 ::::
 
-## 4.4 Setup fine tuning configuration
+## 4.4. Setup fine tuning configuration
 
-### 4.4.1 Use the _Acquisition function configuration_ widget to set the configuration for executing the fine tuning process
+### 4.4.1. Use the _Acquisition function configuration_ widget to configure the parameters for the fine tuning process
+
+:::: {.columns}
+
+::: {.column width=0.6}
 
 1. Go to the "Acquisition function configuration" widget
 
 2. Click the "Advanced fine tuning parameters" checkbox
 
 3. Change the "save path" to a location where you want to store the fine tuned model
+
+:::
+
+::: {.column width=0.4}
 
 ``` {python}
 #| echo: false
@@ -954,12 +976,20 @@ draw.text(position, "3", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "3", fill="white", font=font)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
+
+:::
+
+::::
 
 ---
 
-### 4.4.2 Set the *learning rate* and *batch size*
+### 4.4.2. Set the *learning rate* and *batch size*
+
+:::: {.columns}
+
+::: {.column width=0.6}
 
 1. Scroll the _Advanced fine tuning parameters_ widget down to show more parameters
 
@@ -972,6 +1002,10 @@ cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resam
 ::: {.callout-note}
 You can modify other parameters for the training process here, such as the number of training epochs.
 :::
+
+:::
+
+::: {.column width=0.4}
 
 ``` {python}
 #| echo: false
@@ -1034,16 +1068,27 @@ draw.text(position, "4", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=34)
 draw.text(position, "4", fill="white", font=font)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 
-## 4.5 Execute the fine tuning process
+:::
 
+::::
+
+## 4.5. Execute the fine tuning process
+
+:::: {.columns}
+
+::: {.column width=0.6}
 - Click the "Fine tune model" button to run the training process.
 
 ::: {.callout-note}
 Depending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead.
 :::
+
+:::
+
+::: {.column width=0.4}
 
 ``` {python}
 #| echo: false
@@ -1064,14 +1109,18 @@ draw = ImageDraw.Draw(cropped_image)
 draw.rectangle([245, 880, 405, 920], outline="white", width=5)
 draw.rectangle([245, 880, 405, 920], outline="green", width=2)
 
-cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
 acquisition_fun_cfg.fine_tune()
 ```
 
-## 4.6 Review the fine tuned segmentation
+:::
+
+::::
+
+## 4.6. Review the fine tuned segmentation
 
 ``` {python}
 #| echo: false

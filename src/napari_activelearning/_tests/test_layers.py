@@ -190,9 +190,10 @@ def test_layers_group_properties(single_scale_layer, make_napari_viewer):
     layers_group.layers_group_name = "sample_layers_group"
 
     assert layers_group.layers_group_name == "sample_layers_group"
+    assert image_group.group_name == "sample_layers_group"
+
     layers_group.layers_group_name = "new_sample_layers_group"
     assert layers_group.layers_group_name == "new_sample_layers_group"
-    assert image_group.group_name == "new_sample_layers_group"
 
     assert not layers_group.use_as_input_image
     assert not layers_group.use_as_sampling_mask

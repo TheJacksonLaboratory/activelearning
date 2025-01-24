@@ -15,6 +15,9 @@ contributions:
     - id: napari-activelearning.make_label_groups_manager_widget
       python_name: napari_activelearning:get_label_groups_manager_widget
       title: Label groups manager
+    - id: napari-activelearning.make_activelearning_widget
+      python_name: napari_activelearning:get_active_learning_widget
+      title: Active learning widget
   widgets:
     - command: napari-activelearning.make_image_groups_manager_widget
       display_name: Image groups manager
@@ -22,3 +25,5 @@ contributions:
       display_name: Acquisition function configuration
     - command: napari-activelearning.make_label_groups_manager_widget
       display_name: Label groups manager
+    - command: napari-activelearning.make_activelearning_widget
+      display_name: Active learning widget
