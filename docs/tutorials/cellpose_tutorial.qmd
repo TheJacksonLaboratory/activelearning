@@ -8,13 +8,6 @@ format:
     controls: true
     fontsize: 22pt
 
-  ipynb:
-    roc: true
-
-execute:
-  echo:
-    true
-
 jupyter: python3
 ---
 
@@ -30,10 +23,11 @@ File > Open Sample > napari builtins > Cells (3D+2Ch)
 
 ``` {python}
 #| echo: false
-from PIL import Image, ImageDraw, ImageFont
 import napari
 from napari.utils import nbscreenshot
+from PIL import Image, ImageDraw, ImageFont
 import napari_activelearning as al
+import zarr
 ```
 ``` {python}
 #| echo: false
@@ -167,11 +161,7 @@ nbscreenshot(viewer)
 This specifies that the samples will be taken from those axes.
 :::
 
-2. Change the "Model axes" to "YXC"
-
-::: {.callout-note}
-The model axes are the axes on which the segmentation model is implemented. `Cellpose` (for 2D images) expects the input image to have "Y" and "X" spatial axes, and a trailing channel axes "C".
-:::
+2. Change the "Model axes" to "CYX"
 
 :::
 
@@ -181,7 +171,7 @@ The model axes are the axes on which the segmentation model is implemented. `Cel
 #| echo: false
 acquisition_fun_cfg.input_axes_le.setText("ZYX")
 acquisition_fun_cfg._set_input_axes()
-acquisition_fun_cfg.model_axes_le.setText("YXC")
+acquisition_fun_cfg.model_axes_le.setText("CYX")
 acquisition_fun_cfg._set_model_axes()
 ```
 ``` {python}
@@ -199,19 +189,19 @@ cropped_image = image.crop(roi)
 
 draw = ImageDraw.Draw(cropped_image)
 
-draw.rectangle([60, 435, 405, 475], outline="white", width=5)
-draw.rectangle([60, 435, 405, 475], outline="green", width=2)
+draw.rectangle([60, 390, 405, 425], outline="white", width=5)
+draw.rectangle([60, 390, 405, 425], outline="green", width=2)
 
-position = (250, 395)
+position = (250, 345)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "1", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "1", fill="white", font=font)
 
-draw.rectangle([405, 435, 570, 475], outline="white", width=5)
-draw.rectangle([405, 435, 570, 475], outline="green", width=2)
+draw.rectangle([405, 390, 570, 425], outline="white", width=5)
+draw.rectangle([405, 390, 570, 425], outline="green", width=2)
 
-position = (490, 395)
+position = (490, 345)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "2", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
@@ -253,8 +243,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([70, 270, 470, 700], outline="white", width=5)
-draw.rectangle([70, 270, 470, 700], outline="green", width=2)
+draw.rectangle([70, 240, 470, 600], outline="white", width=5)
+draw.rectangle([70, 240, 470, 600], outline="green", width=2)
 
 cropped_image
 ```
@@ -300,8 +290,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([60, 855, 405, 890], outline="white", width=5)
-draw.rectangle([60, 855, 405, 890], outline="green", width=2)
+draw.rectangle([60, 740, 405, 770], outline="white", width=5)
+draw.rectangle([60, 740, 405, 770], outline="green", width=2)
 
 cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
 ```
@@ -326,15 +316,23 @@ This tells the Active Learning plugin to process at most _four_ samples at rando
 
 ::: {.column width=0.3}
 
-1. Use the dropdown with label "None selected" to select the `cellpose` method
+1. Use the "Model" dropdown to select the `cellpose` method
 
 2. Click the "Advanced segmentation parameters" checkbox
 
-3. Change the second channel to 1 (the right spin box in the "channels" row)
+3. Change the "Channel axis" to $0$
+::: {.callout-note}
+This makes `cellpose` to use the first axis as "Color" channel.
+:::
+
+4. Change the second channel to $1$ (the right spin box in the "channels" row)
 
 ::: {.callout-note}
 This tells `cellpose` to segment the first channel ($0$) and use the second channel ($1$) as help channel.
 :::
+
+5. Choose the "nuclei" model from the dropdown
+
 
 :::
 
@@ -343,7 +341,9 @@ This tells `cellpose` to segment the first channel ($0$) and use the second chan
 #| echo: false
 acquisition_fun_cfg.methods_cmb.setCurrentIndex(2)
 acquisition_fun_cfg.tunable_segmentation_method.advanced_segmentation_options_chk.setChecked(True)
+acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.channel_axis.value = 0
 acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.channels.value = (0, 1)
+acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
 ```
 ``` {python}
 #| echo: false
@@ -361,32 +361,50 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([55, 550, 570, 580], outline="white", width=5)
-draw.rectangle([55, 550, 570, 580], outline="green", width=2)
+draw.rectangle([55, 490, 570, 520], outline="white", width=5)
+draw.rectangle([55, 490, 570, 520], outline="green", width=2)
 
-position = (550, 580)
+position = (550, 450)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "1", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "1", fill="white", font=font)
 
-draw.rectangle([65, 585, 310, 620], outline="white", width=5)
-draw.rectangle([65, 585, 310, 620], outline="green", width=2)
+draw.rectangle([65, 525, 310, 560], outline="white", width=5)
+draw.rectangle([65, 525, 310, 560], outline="green", width=2)
 
-position = (320, 580)
+position = (320, 525)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "2", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "2", fill="white", font=font)
 
-draw.rectangle([390, 750, 550, 780], outline="white", width=5)
-draw.rectangle([390, 750, 550, 780], outline="green", width=2)
+draw.rectangle([390, 655, 550, 690], outline="white", width=5)
+draw.rectangle([390, 655, 550, 690], outline="green", width=2)
 
-position = (450, 710)
+position = (400, 545)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "3", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "3", fill="white", font=font)
+
+draw.rectangle([235, 580, 550, 615], outline="white", width=5)
+draw.rectangle([235, 580, 550, 615], outline="green", width=2)
+
+position = (450, 615)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "4", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "4", fill="white", font=font)
+
+draw.rectangle([70, 725, 550, 765], outline="white", width=5)
+draw.rectangle([70, 725, 550, 765], outline="green", width=2)
+
+position = (450, 770)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "5", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "5", fill="white", font=font)
 
 cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
 ```
@@ -424,8 +442,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([225, 970, 385, 1005], outline="white", width=5)
-draw.rectangle([225, 970, 385, 1005], outline="green", width=2)
+draw.rectangle([245, 850, 405, 880], outline="white", width=5)
+draw.rectangle([245, 850, 405, 880], outline="green", width=2)
 
 cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
 ```
@@ -498,8 +516,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([45, 375, 220, 410], outline="white", width=5)
-draw.rectangle([45, 375, 220, 410], outline="green", width=2)
+draw.rectangle([65, 380, 225, 415], outline="white", width=5)
+draw.rectangle([65, 380, 225, 415], outline="green", width=2)
 
 cropped_image
 ```
@@ -511,7 +529,9 @@ image_groups_mgr.mask_generator._show_editor(True)
 
 ::::
 
-### 3.1.2 Create a low resolution mask for the associated image
+---
+
+### 3.1.2 Create a low resolution mask for its corresponding image
 
 :::: {.columns}
 :::{.column width=0.3}
@@ -548,8 +568,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([60, 450, 550, 640], outline="white", width=5)
-draw.rectangle([60, 450, 550, 640], outline="green", width=2)
+draw.rectangle([60, 450, 550, 600], outline="white", width=5)
+draw.rectangle([60, 450, 550, 600], outline="green", width=2)
 
 position = (500, 400)
 font = ImageFont.truetype("arialbd.ttf", size=36)
@@ -557,10 +577,10 @@ draw.text(position, "1", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
 draw.text(position, "1", fill="white", font=font)
 
-draw.rectangle([50, 675, 560, 710], outline="white", width=5)
-draw.rectangle([50, 675, 560, 710], outline="green", width=2)
+draw.rectangle([70, 620, 560, 650], outline="white", width=5)
+draw.rectangle([70, 620, 560, 650], outline="green", width=2)
 
-position = (530, 640)
+position = (530, 650)
 font = ImageFont.truetype("arialbd.ttf", size=36)
 draw.text(position, "2", fill="green", font=font)
 font = ImageFont.truetype("arial.ttf", size=36)
@@ -632,8 +652,8 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([225, 970, 385, 1005], outline="white", width=5)
-draw.rectangle([225, 970, 385, 1005], outline="green", width=2)
+draw.rectangle([245, 850, 400, 890], outline="white", width=5)
+draw.rectangle([245, 850, 400, 890], outline="green", width=2)
 
 cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
 ```
@@ -652,6 +672,410 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 
+image = Image.fromarray(screenshot)
+image
+```
+
+# 4. Fine tune the segmentation model
+
+## 4.1 Add the _Label groups manager_ widget to napari's window
+
+You can find the _Label groups manager_ under the _Active Learning_ plugin in the napari's plugins menu.
+
+```
+Plugins > Active Learning > Label groups manager
+```
+
+``` {python}
+#| echo: false
+labels_mgr_dw = viewer.window.add_dock_widget(labels_mgr)
+viewer.window._qt_window.tabifyDockWidget(acquisition_fun_cfg_dw, labels_mgr_dw)
+
+labels_mgr_dw.setWindowTitle("Label groups manager")
+```
+``` {python}
+#| echo: false
+labels_mgr_dw.raise_()
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+image
+```
+
+
+## 4.2 Edit segmented patches
+
+### 4.2.1. Select a segmented patch to edit
+
+- You can double click on any segmented patch in the viewer 
+(e.g. on slice $27$)
+
+``` {python}
+#| echo: false
+labels_mgr.labels_table_tw.setCurrentItem(labels_mgr.labels_group_root.child(1).child(3), 0)
+labels_mgr.focus_region(
+  labels_mgr.labels_group_root.child(1).child(3),
+  edit_focused_label=True
+)
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+image
+```
+
+---
+
+### 4.2.2. Use napari's layer controls to make changes on the objects of the current patch
+
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+image
+
+
+draw = ImageDraw.Draw(image)
+
+# Draw a red rectangle
+draw.rectangle([5, 20, 280, 450], outline="white", width=5)
+draw.rectangle([5, 20, 280, 450], outline="green", width=2)
+
+image
+```
+
+---
+
+### 4.2.3. Commit changes to the labels layer
+
+:::: {.columns}
+::: {.column width=0.3}
+
+- Once you have finished editing the labels, click the "Commit changes" button on the _Label groups manager_
+:::
+
+::: {.column width=0.7}
+``` {python}
+#| echo: false
+z_tmp = zarr.open(r"C:\Users\cervaf\Documents\Logging\activelearning_logs\membrane.zarr\segmentation\0", mode="r")
+```
+``` {python}
+#| echo: false
+labels_mgr.labels_group_root.child(1).child(3)._position
+viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(3)._position]
+labels_mgr.commit()
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+
+org_height, org_width = screenshot.shape[:2]
+
+roi = (org_width * 0.7, 0, org_width, org_height)
+
+# Crop the image
+cropped_image = image.crop(roi)
+
+draw = ImageDraw.Draw(cropped_image)
+
+# Draw a red rectangle
+draw.rectangle([305, 900, 570, 940], outline="white", width=5)
+draw.rectangle([305, 900, 570, 940], outline="green", width=2)
+
+cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+```
+:::
+::::
+
+## 4.3 Navigate between segmented patches
+
+:::: {.columns}
+::: {.column width=0.3}
+
+1. Expand the second group of labels 
+
+2. Double-click on any of the nested items to open it for editing
+
+3. Use the navigation buttons to move between segmented patches
+
+4. Continue editing the segmentation in the current patch and commit the changes when finish
+:::
+
+::: {.column width=0.7}
+
+``` {python}
+#| echo: false
+labels_mgr.labels_table_tw.expandItem(labels_mgr.labels_group_root.child(1))
+labels_mgr.labels_table_tw.setCurrentItem(labels_mgr.labels_group_root.child(1).child(0), 0)
+labels_mgr.focus_region(
+  labels_mgr.labels_group_root.child(1).child(0),
+  edit_focused_label=True
+)
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+
+org_height, org_width = image.height, image.width
+
+roi = (org_width * 0.7, 0, org_width, org_height)
+
+# Crop the image
+cropped_image = image.crop(roi)
+
+draw = ImageDraw.Draw(cropped_image)
+
+# Draw a red rectangle
+draw.rectangle([70, 115, 270, 140], outline="white", width=5)
+draw.rectangle([70, 115, 270, 140], outline="green", width=2)
+
+position = (50, 105)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "1", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "1", fill="white", font=font)
+
+draw.rectangle([110, 135, 560, 215], outline="white", width=5)
+draw.rectangle([110, 135, 560, 215], outline="green", width=2)
+
+position = (80, 150)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "2", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "2", fill="white", font=font)
+
+draw.rectangle([60, 870, 570, 905], outline="white", width=5)
+draw.rectangle([60, 870, 570, 905], outline="green", width=2)
+
+position = (290, 820)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "3", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "3", fill="white", font=font)
+
+# Draw a red rectangle
+draw.rectangle([305, 900, 570, 940], outline="white", width=5)
+draw.rectangle([305, 900, 570, 940], outline="green", width=2)
+
+position = (270, 905)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "4", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "4", fill="white", font=font)
+
+cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+```
+``` {python}
+#| echo: false
+for c_idx in range(labels_mgr.labels_group_root.child(1).childCount()):
+    labels_mgr.focus_region(
+        labels_mgr.labels_group_root.child(1).child(c_idx),
+        edit_focused_label=True
+    )
+    labels_mgr.labels_group_root.child(1).child(c_idx)._position
+    viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(c_idx)._position]
+    labels_mgr.commit()
+
+```
+
+:::
+
+::::
+
+## 4.4 Setup fine tuning configuration
+
+### 4.4.1 Use the _Acquisition function configuration_ widget to set the configuration for executing the fine tuning process
+
+1. Go to the "Acquisition function configuration" widget
+
+2. Click the "Advanced fine tuning parameters" checkbox
+
+3. Change the "save path" to a location where you want to store the fine tuned model
+
+``` {python}
+#| echo: false
+acquisition_fun_cfg_dw.raise_()
+```
+``` {python}
+#| echo: false
+acquisition_fun_cfg.tunable_segmentation_method.advanced_finetuning_options_chk.setChecked(True)
+acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.save_path.value = "C:/Users/Public/Documents/models"
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+
+org_height, org_width = image.height, image.width
+
+roi = (org_width * 0.7, 0, org_width, org_height)
+
+# Crop the image
+cropped_image = image.crop(roi)
+
+draw = ImageDraw.Draw(cropped_image)
+
+# Draw a red rectangle
+draw.rectangle([185, 965, 385, 1000], outline="white", width=5)
+draw.rectangle([185, 965, 385, 1000], outline="green", width=2)
+
+position = (200, 920)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "1", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "1", fill="white", font=font)
+
+draw.rectangle([75, 690, 540, 725], outline="white", width=5)
+draw.rectangle([75, 690, 540, 725], outline="green", width=2)
+
+position = (40, 490)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "2", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "2", fill="white", font=font)
+
+draw.rectangle([65, 495, 300, 535], outline="white", width=5)
+draw.rectangle([65, 495, 300, 535], outline="green", width=2)
+
+position = (50, 690)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "3", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "3", fill="white", font=font)
+
+cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+```
+
+---
+
+### 4.4.2 Set the *learning rate* and *batch size*
+
+1. Scroll the _Advanced fine tuning parameters_ widget down to show more parameters
+
+3. Change the "model name" to "nuclei_ft"
+
+3. Set the "batch size" to $3$
+
+4. Change the "learning rate" to $0.0001$
+
+::: {.callout-note}
+You can modify other parameters for the training process here, such as the number of training epochs.
+:::
+
+``` {python}
+#| echo: false
+vertical_scroll_bar = acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters_scr.verticalScrollBar()
+vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
+ 
+acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.model_name.value = "nuclei_ft"
+acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.batch_size.value = 3
+acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.learning_rate.value = 0.0001
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+
+org_height, org_width = image.height, image.width
+
+roi = (org_width * 0.7, 0, org_width, org_height)
+
+# Crop the image
+cropped_image = image.crop(roi)
+
+draw = ImageDraw.Draw(cropped_image)
+
+# Draw a red rectangle
+draw.rectangle([535, 525, 565, 845], outline="white", width=5)
+draw.rectangle([535, 525, 565, 845], outline="green", width=2)
+
+position = (515, 480)
+font = ImageFont.truetype("arialbd.ttf", size=36)
+draw.text(position, "1", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=36)
+draw.text(position, "1", fill="white", font=font)
+
+draw.rectangle([50, 725, 540, 755], outline="white", width=5)
+draw.rectangle([50, 725, 540, 755], outline="green", width=2)
+
+position = (20, 720)
+font = ImageFont.truetype("arialbd.ttf", size=34)
+draw.text(position, "2", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=34)
+draw.text(position, "2", fill="white", font=font)
+
+draw.rectangle([50, 755, 540, 780], outline="white", width=5)
+draw.rectangle([50, 755, 540, 780], outline="green", width=2)
+
+position = (20, 750)
+font = ImageFont.truetype("arialbd.ttf", size=34)
+draw.text(position, "3", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=34)
+draw.text(position, "3", fill="white", font=font)
+
+draw.rectangle([50, 780, 540, 810], outline="white", width=5)
+draw.rectangle([50, 780, 540, 810], outline="green", width=2)
+
+position = (20, 780)
+font = ImageFont.truetype("arialbd.ttf", size=34)
+draw.text(position, "4", fill="green", font=font)
+font = ImageFont.truetype("arial.ttf", size=34)
+draw.text(position, "4", fill="white", font=font)
+
+cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+```
+
+## 4.5 Execute the fine tuning process
+
+- Click the "Fine tune model" button to run the training process.
+
+::: {.callout-note}
+Depending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead.
+:::
+
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+
+image = Image.fromarray(screenshot)
+
+org_height, org_width = image.height, image.width
+
+roi = (org_width * 0.7, 0, org_width, org_height)
+
+# Crop the image
+cropped_image = image.crop(roi)
+
+draw = ImageDraw.Draw(cropped_image)
+
+# Draw a red rectangle
+draw.rectangle([245, 880, 405, 920], outline="white", width=5)
+draw.rectangle([245, 880, 405, 920], outline="green", width=2)
+
+cropped_image.resize((int(0.15 * org_width), int(org_height * 0.5)), Image.Resampling.LANCZOS)
+```
+``` {python}
+#| echo: false
+acquisition_fun_cfg.fine_tune()
+```
+
+## 4.6 Review the fine tuned segmentation
+
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
 image = Image.fromarray(screenshot)
 image
 ```

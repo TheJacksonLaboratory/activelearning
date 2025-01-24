@@ -165,8 +165,8 @@ def test_update_source_data(single_scale_layer):
 
 
 def test_layers_group_default_initialization():
-    group = LayersGroup(layers_group_name="default_group")
-    assert group.layers_group_name == "default_group"
+    group = LayersGroup()
+    assert group.layers_group_name is None
     assert group.use_as_input_image is False
     assert group.use_as_sampling_mask is False
     assert group._source_axes_no_channels is None
@@ -181,11 +181,13 @@ def test_layers_group_properties(single_scale_layer, make_napari_viewer):
     viewer = make_napari_viewer()
     viewer.layers.append(layer)
 
-    layers_group = LayersGroup("sample_layers_group")
+    layers_group = LayersGroup()
     layers_group.add_layer(layer, channel=0, source_axes="TCZYX")
 
     image_group = ImageGroup()
     image_group.addChild(layers_group)
+
+    layers_group.layers_group_name = "sample_layers_group"
 
     assert layers_group.layers_group_name == "sample_layers_group"
     layers_group.layers_group_name = "new_sample_layers_group"
@@ -244,7 +246,8 @@ def test_update_layers_group_source_data(single_scale_memory_layer,
     viewer = make_napari_viewer()
     viewer.layers.append(layer)
 
-    layers_group = LayersGroup("sample_layers_group")
+    layers_group = LayersGroup()
+    layers_group.layers_group_name = "sample_layers_group"
     layers_group.add_layer(layer, 0, "TCZYX")
     layers_group.add_layer(layer, 1, "TCZYX")
 
@@ -263,7 +266,8 @@ def test_update_layers_group_channels(single_scale_memory_layer,
     viewer = make_napari_viewer()
     viewer.layers.append(layer)
 
-    layers_group = LayersGroup("sample_layers_group")
+    layers_group = LayersGroup()
+    layers_group.layers_group_name = "sample_layers_group"
     layer_channel_1 = layers_group.add_layer(layer, 0, "TCZYX")
     layer_channel_2 = layers_group.add_layer(layer, 1, "TCZYX")
 
@@ -322,11 +326,13 @@ def test_managed_layers_image_group_root(single_scale_memory_layer,
     image_group = ImageGroup("image_group")
     group_root.addChild(image_group)
 
-    layers_group_1 = LayersGroup("layers_group_1")
+    layers_group_1 = LayersGroup()
     image_group.addChild(layers_group_1)
+    layers_group_1.layers_group_name = "layers_group_1"
 
-    layers_group_2 = LayersGroup("layers_group_2")
+    layers_group_2 = LayersGroup()
     image_group.addChild(layers_group_2)
+    layers_group_2.layers_group_name = "layers_group_2"
 
     layer_channel_1 = layers_group_1.add_layer(layer, 0, "TCZYX")
     layer_channel_2 = layers_group_2.add_layer(layer, 0, "TCZYX")

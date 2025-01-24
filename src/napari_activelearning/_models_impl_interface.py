@@ -105,7 +105,7 @@ if USING_CELLPOSE:
           learning_rate: Annotated[float, {"widget_type": "FloatSpinBox",
                                            "min": 1e-10,
                                            "max": 1.0,
-                                           "step": 1e-3}] = 0.005,
+                                           "step": 1e-10}] = 0.005,
           n_epochs: Annotated[int, {"widget_type": "SpinBox",
                                     "min": 1,
                                     "max": 10000}] = 20):
@@ -259,10 +259,9 @@ if USING_CELLPOSE:
         def _show_finetuning_parameters(self, show: bool):
             self._finetuning_parameters_scr.setVisible(show)
 
-        # def _fine_tune(self, data_loader, train_data_proportion: float = 0.8):
-        #     super()._fine_tune(data_loader, train_data_proportion)
         def _fine_tune(self, train_dataloader, val_dataloader):
             super()._fine_tune(train_dataloader, val_dataloader)
+            self._segmentation_parameters.model_type.value = "custom"
             self._segmentation_parameters.pretrained_model.value =\
                 self._pretrained_model
 

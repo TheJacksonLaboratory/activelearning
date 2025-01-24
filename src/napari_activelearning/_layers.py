@@ -152,17 +152,8 @@ class LayerChannel(QTreeWidgetItem):
                 viewer.layers.selection.remove(self.layer)
 
 
-class LayersGroupSignals(QObject):
-    updated_usage = Signal((int,))
-
-
 class LayersGroup(QTreeWidgetItem):
-    def __init__(self, layers_group_name: str,
-                 source_axes: Optional[str] = None,
-                 use_as_input_image: Optional[bool] = False,
-                 use_as_input_labels: Optional[bool] = False,
-                 use_as_sampling_mask: Optional[bool] = False
-                 ):
+    def __init__(self):
 
         self._layers_group_name = None
         self._use_as_input_image = False
@@ -176,14 +167,7 @@ class LayersGroup(QTreeWidgetItem):
 
         super().__init__()
 
-        self.layers_group_signals = LayersGroupSignals()
         self._signal_emited = False
-
-        self.layers_group_name = layers_group_name
-        self.use_as_input_image = use_as_input_image
-        self.use_as_input_labels = use_as_input_labels
-        self.use_as_sampling_mask = use_as_sampling_mask
-        self.source_axes = source_axes
 
         self.updated = True
 
@@ -390,17 +374,27 @@ class LayersGroup(QTreeWidgetItem):
         use_as = []
         if self._use_as_input_image:
             use_as.append("Input")
+            if not self._signal_emited and self.parent() is not None:
+                current_idx = self.parent().indexOfChild(self)
+                self._signal_emited = True
+                self.parent().input_layers_group = current_idx
+                self._signal_emited = False
 
         if self._use_as_input_labels:
             use_as.append("Labels")
+            if not self._signal_emited and self.parent() is not None:
+                current_idx = self.parent().indexOfChild(self)
+                self._signal_emited = True
+                self.parent().labels_layers_group = current_idx
+                self._signal_emited = False
 
         if self._use_as_sampling_mask:
             use_as.append("Sampling mask")
 
             if not self._signal_emited and self.parent() is not None:
-                sampling_mask_idx = self.parent().indexOfChild(self)
+                current_idx = self.parent().indexOfChild(self)
                 self._signal_emited = True
-                self.layers_group_signals.updated_usage.emit(sampling_mask_idx)
+                self.parent().sampling_mask_layers_group = current_idx
                 self._signal_emited = False
 
         self.setText(1, "/".join(use_as))
@@ -714,10 +708,6 @@ class ImageGroup(QTreeWidgetItem):
         if sampling_mask_idx is not None:
             self.child(sampling_mask_idx).use_as_sampling_mask = True
 
-    @Slot(int)
-    def _update_sampling_mask_layers_group(self, sampling_mask_idx):
-        self.sampling_mask_layers_group = sampling_mask_idx
-
     @property
     def labels_group(self):
         return self._labels_group
@@ -743,9 +733,6 @@ class ImageGroup(QTreeWidgetItem):
     def takeChild(self, index: int):
         child = super(ImageGroup, self).takeChild(index)
         if isinstance(child, LayersGroup):
-            child.layers_group_signals.updated_usage.disconnect(
-                partial(self._update_sampling_mask_layers_group, self)
-            )
             child.takeChildren()
 
         return child
@@ -754,18 +741,12 @@ class ImageGroup(QTreeWidgetItem):
         children = super(ImageGroup, self).takeChildren()
         for child in children:
             if isinstance(child, LayersGroup):
-                child.layers_group_signals.updated_usage.disconnect(
-                    partial(self._update_sampling_mask_layers_group, self)
-                )
                 child.takeChildren()
 
         return children
 
     def removeChild(self, child: QTreeWidgetItem):
         if isinstance(child, LayersGroup):
-            child.layers_group_signals.updated_usage.disconnect(
-                partial(self._update_sampling_mask_layers_group, self)
-            )
             child.takeChildren()
 
         super(ImageGroup, self).removeChild(child)
@@ -787,19 +768,15 @@ class ImageGroup(QTreeWidgetItem):
             elif use_as_sampling_mask:
                 layers_group_name = "masks"
 
-        new_layers_group = LayersGroup(
-            layers_group_name,
-            source_axes=source_axes,
-            use_as_input_image=use_as_input_image,
-            use_as_input_labels=use_as_input_labels,
-            use_as_sampling_mask=use_as_sampling_mask
-        )
+        new_layers_group = LayersGroup()
 
         self.addChild(new_layers_group)
+        new_layers_group.layers_group_name = layers_group_name
+        new_layers_group.source_axes = source_axes
 
-        new_layers_group.layers_group_signals.updated_usage.connect(
-            partial(self._update_sampling_mask_layers_group, self)
-        )
+        new_layers_group.use_as_input_image = use_as_input_image
+        new_layers_group.use_as_input_labels = use_as_input_labels
+        new_layers_group.use_as_sampling_mask = use_as_sampling_mask
 
         new_layers_group.setExpanded(True)
 
@@ -1037,7 +1014,7 @@ class ImageGroupEditor(PropertiesEditor):
         if not self._active_layer_channel or not self._active_layers_group:
             return
 
-        if channel:
+        if channel is not None:
             self._edit_channel = channel
 
         prev_channel = self._active_layer_channel.channel

@@ -132,28 +132,21 @@ try:
             return seg
 
         def _get_transform(self):
-            if self._transform is None:
-                self._transform = CellposeTransform(self._channels,
-                                                    self._channel_axis)
-            return self._transform, None
+            return lambda x: x, None
 
-        # def _preload_data(self, data_loader,
-        #                   train_data_proportion: float = 0.8):
         def _preload_data(self, dataloader):
             raw_data = []
             label_data = []
             for img, lab in dataloader:
                 if USING_PYTORCH:
-                    img = img[0].numpy()
-                    lab = lab[0].numpy()
+                    img = img[0].numpy().squeeze()
+                    lab = lab[0].numpy().squeeze()
 
                     raw_data.append(img)
                     label_data.append(lab)
 
             return raw_data, label_data
 
-        # def _fine_tune(self, data_loader,
-        #                train_data_proportion: float = 0.8) -> bool:
         def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
             self._model_init()
 

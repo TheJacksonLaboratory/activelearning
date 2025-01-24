@@ -137,18 +137,13 @@ def add_multiscale_output_layer(
     if isinstance(new_output_layer, list):
         new_output_layer = new_output_layer[0]
 
-    output_layers_group = image_group.getLayersGroup(
-        layers_group_name
+    output_layers_group = image_group.add_layers_group(
+        layers_group_name,
+        source_axes=axes,
+        use_as_input_image=False,
+        use_as_input_labels=use_as_input_labels,
+        use_as_sampling_mask=use_as_sampling_mask
     )
-
-    if output_layers_group is None:
-        output_layers_group = image_group.add_layers_group(
-            layers_group_name,
-            source_axes=axes,
-            use_as_input_image=False,
-            use_as_input_labels=use_as_input_labels,
-            use_as_sampling_mask=use_as_sampling_mask
-        )
 
     output_channel = output_layers_group.add_layer(
         new_output_layer
@@ -281,8 +276,6 @@ class TunableMethod(SegmentationMethod):
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
 
-    # def _fine_tune(self, dataset_metadata_list: Iterable[dict],
-    #                train_data_proportion: float = 0.8) -> bool:
     def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
@@ -364,7 +357,7 @@ class TunableMethod(SegmentationMethod):
             val_datasets = []
 
             training_indices = np.random.choice(
-                len(dataset_metadata_list), 
+                len(dataset_metadata_list),
                 int(train_data_proportion * len(dataset_metadata_list))
             ).tolist()
 
@@ -852,8 +845,8 @@ class AcquisitionFunction:
             )
 
             if (not segmentation_only
-               and image_group is not None
-               and image_group.labels_group is None):
+               and image_group is not None):
+               # and image_group.labels_group is None):
                 new_label_group = self.labels_manager.add_labels(
                     segmentation_channel,
                     img_sampling_positions
