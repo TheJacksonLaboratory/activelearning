@@ -362,7 +362,7 @@ class TunableMethod(SegmentationMethod):
             ).tolist()
 
             for idx, dataset_metadata in enumerate(dataset_metadata_list):
-                patch_sampler = MyZarrDataset(
+                patch_sampler = zds.PatchSampler(
                     patch_size=patch_sizes,
                     spatial_axes=dataset_metadata["labels"]["axes"],
                     min_area=0.01
