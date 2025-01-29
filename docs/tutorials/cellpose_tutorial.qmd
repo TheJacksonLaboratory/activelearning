@@ -1,15 +1,44 @@
 ---
 title: "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari"
-author: Fernando Cervantes (fernando.cervantes@jax.org)
+author: Fernando Cervantes
+
 format:
   revealjs:
+    output-file: cellpose_tutorial_presentation
     code-fold: false
     progress: true
     controls: true
-    fontsize: 22pt
+    fontsize: 18pt
+
+  html:
+    toc: true
+
+execute: 
+  cache: true
 
 jupyter: python3
 ---
+
+# 0. Install `napari` and the Active Learning plugin
+
+---
+
+### 0.1. Install `napari`
+
+Follow the instructions to install `napari` from its [official website](https://napari.org/stable/tutorials/fundamentals/installation.html#napari-installation).
+
+### 0.2. Install the `napari-activelearning` plugin using `pip`
+
+::: {.callout-important}
+If you installed `napari` using conda, activate that same environment before installing the _Active Learning_ plugin.
+:::
+
+Install the plugin adding `[cellpose]` to the command so all dependencies required for this tutorial are available.
+
+```
+python -m pip install "napari-activelearning[cellpose]"
+```
+
 
 # 1. Image groups management
 
@@ -24,11 +53,80 @@ File > Open Sample > napari builtins > Cells (3D+2Ch)
 ``` {python}
 #| echo: false
 import napari
-from napari.utils import nbscreenshot
 from PIL import Image, ImageDraw, ImageFont
 import napari_activelearning as al
 import zarr
 ```
+
+``` {python}
+#| echo: false
+def highlight_widget(draw, layout, item_idx,
+  item_number=None,
+  item_number_position=None,
+  item_number_fontsize=36,
+  offset_x=0,
+  offset_y=0):
+    main_window = viewer.window._qt_window
+    main_window_global = main_window.mapToGlobal(main_window.rect().topLeft())
+
+    if not isinstance(item_idx, tuple):
+        item_idx = (item_idx, item_idx)
+
+    focus_widget = layout().itemAt(item_idx[0]).widget()
+    tl = focus_widget.mapToGlobal(focus_widget.rect().topLeft())
+    tl_x, tl_y = tl.x() - main_window_global.x() - offset_x, tl.y() - main_window_global.y() - offset_y
+
+    focus_widget = layout().itemAt(item_idx[-1]).widget()
+    br = focus_widget.mapToGlobal(focus_widget.rect().bottomRight())
+    br_x, br_y = br.x() - main_window_global.x() - offset_x, br.y() - main_window_global.y() - offset_y
+
+    draw.rectangle([tl_x - 5, tl_y - 5, br_x + 5, br_y + 5], outline="white", width=5)
+    draw.rectangle([tl_x - 5, tl_y - 5, br_x + 5, br_y + 5], outline="green", width=2)
+
+    if item_number is not None:
+        if item_number_position == "N":
+            pos_x, pos_y = (br_x + tl_x) / 2, tl_y - 40
+        elif item_number_position == "S":
+            pos_x, pos_y = (br_x + tl_x) / 2, (br_y + tl_y) / 2
+        elif item_number_position == "E":
+            pos_x, pos_y = br_x + 20, (br_y + tl_y) / 2 - 20
+        elif item_number_position == "NE":
+            pos_x, pos_y = br_x - 40, tl_y - 40
+        elif item_number_position == "NW":
+            pos_x, pos_y = tl_x, tl_y - 40
+        elif item_number_position == "SE":
+            pos_x, pos_y = br_x - 40, br_y + 5
+        elif item_number_position == "SW":
+            pos_x, pos_y = tl_x, br_y + 5
+        else: # default or item_number_position == "W":
+            pos_x, pos_y = tl_x - 35, (br_y + tl_y) / 2 - 20
+
+        font = ImageFont.truetype("arialbd.ttf", size=item_number_fontsize + 1)
+        draw.text((pos_x - 1, pos_y - 1), str(item_number), fill="black", font=font)
+        draw.text((pos_x + 1, pos_y - 1), str(item_number), fill="black", font=font)
+        draw.text((pos_x + 1, pos_y + 1), str(item_number), fill="black", font=font)
+        draw.text((pos_x - 1, pos_y + 1), str(item_number), fill="black", font=font)
+        font = ImageFont.truetype("arial.ttf", size=item_number_fontsize)
+        draw.text((pos_x, pos_y), str(item_number), fill="white", font=font)
+
+
+def crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0):
+    image = Image.fromarray(screenshot)
+
+    org_height, org_width = screenshot.shape[:2]
+
+    roi = (org_width * width_prop, org_height * height_prop, org_width, org_height)
+
+    # Crop the image
+    cropped_image = image.crop(roi)
+
+    draw = ImageDraw.Draw(cropped_image)
+
+    return cropped_image, draw, org_width * width_prop, org_height * height_prop
+
+screenshot_scale = 0.5
+```
+
 ``` {python}
 #| echo: false
 viewer = napari.Viewer()
@@ -37,12 +135,15 @@ _ = viewer.open_sample(plugin="napari", sample="cells3d")
 ```
 ``` {python}
 #| echo: false
-nbscreenshot(viewer)
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+image = Image.fromarray(screenshot)
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ## 1.2. Add the _Image Groups Manager_ widget to napari's window
 
-You can find the _Image groups manager_ under the _Active Learning_ plugin in napari's plugins menu.
+The _Image groups manager_ can be found under the _Active Learning_ plugin in napari's plugins menu.
 
 ```
 Plugins > Active Learning > Image groups manager
@@ -50,7 +151,7 @@ Plugins > Active Learning > Image groups manager
 
 ``` {python}
 #| echo: false
-image_groups_mgr, acquisition_fun_cfg, labels_mgr = al.get_active_learning_widget()
+image_groups_mgr, acquisition_fun_cfg, label_groups_mgr = al.get_active_learning_widget()
 ```
 ``` {python}
 #| echo: false
@@ -58,23 +159,38 @@ image_groups_mgr_dw = viewer.window.add_dock_widget(image_groups_mgr)
 ```
 ``` {python}
 #| echo: false
-nbscreenshot(viewer)
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+image = Image.fromarray(screenshot)
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ## 1.3. Create an _Image Group_ containing _nuclei_ and _membrane_ layers
 
-- Select the _nuclei_ and _membrane_ layer and click the _New Image Group_ button on the _Image Groups Manager_ widget.
+1. Select the _nuclei_ and _membrane_ layer
+
+2. Click the _New Image Group_ button on the _Image Groups Manager_ widget
 
 ``` {python}
 #| echo: false
 viewer.layers.selection.clear()
 viewer.layers.selection.add(viewer.layers["nuclei"])
 viewer.layers.selection.add(viewer.layers["membrane"])
-image_groups_mgr.create_group()
 ```
 ``` {python}
 #| echo: false
-nbscreenshot(viewer)
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.0, height_prop=0.0)
+
+highlight_widget(draw, image_groups_mgr.layout, 0, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+``` {python}
+#| echo: false
+image_groups_mgr.create_group()
 ```
 
 ## 1.4. Edit the image group properties
@@ -82,17 +198,19 @@ nbscreenshot(viewer)
 :::: {.columns}
 
 ::: {.column width=0.3}
-- Select the newly created image group, it will appear as "images" in the _Image groups manager_ widget.
+1. Select the newly created image group, it will appear as "images" in the _Image groups manager_ widget.
 
-- Click the _Edit group properties_ checkbox.
+2. Click the _Edit group properties_ checkbox.
 
-- Make sure that _Axes order_ is "CZYX", otherwise, you can edit it and press _Enter_ to update the axes names.
+3. Make sure that _Axes order_ is "CZYX", otherwise, you can edit it and press _Enter_ to update the axes names.
 :::
 
 ::: {.column width=0.7}
 ``` {python}
 #| echo: false
-image_groups_mgr.image_groups_editor._show_editor(True)
+focus_widget = image_groups_mgr.image_groups_editor.layout().itemAt(0).widget()
+focus_widget.setChecked(True)
+
 image_groups_mgr._active_image_group.child(0).setSelected(True)
 image_groups_mgr.image_groups_editor.edit_axes_le.setText("CZYX")
 image_groups_mgr.image_groups_editor.update_source_axes()
@@ -100,23 +218,15 @@ image_groups_mgr.image_groups_editor.update_source_axes()
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, image_groups_mgr.image_groups_editor.layout, 0, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
+highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, (8, 9), item_number=3, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-# Draw a red rectangle
-draw.rectangle([70, 250, 310, 280], outline="white", width=5)
-draw.rectangle([70, 250, 310, 280], outline="green", width=2)
-
-cropped_image
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 :::
 
@@ -132,10 +242,8 @@ The _Acquisition function configuration_ is under the _Active Learning_ plugin i
 Plugins > Active Learning > Acquisition function configuration
 ```
 
-::: {.callout-caution}
-The _Acquisition function configuration_ widget will be docked under the _Image groups manager_ widget, which might reduce the space to show the content of both widgets properly.
-However, these widgets can be _un-docked_ from their current place and docked into another more convenient location within napari's window.
-Also, these can be _re-docked_ as tabs as is illustrated in this tutorial.
+::: {.callout-tip}
+All _Active Learning_ widgets can be _un-docked_ from their current place and _re-docked_ into other more convenient location within napari's window, or even as tabs, as illustrated in this tutorial.
 :::
 
 ``` {python}
@@ -152,7 +260,10 @@ acquisition_fun_cfg_dw.raise_()
 ```
 ``` {python}
 #| echo: false
-nbscreenshot(viewer)
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+image = Image.fromarray(screenshot)
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ## 2.2. Define sampling configuration
@@ -160,8 +271,6 @@ nbscreenshot(viewer)
 :::: {.columns}
 
 ::: {.column width=0.3}
-
-### 2.2.1. Set the axes of the sampling space
 
 1. Make sure "Input axes" are set to "ZYX"
 
@@ -189,45 +298,21 @@ acquisition_fun_cfg._set_model_axes()
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, (6, 7), item_number=1, item_number_position="N", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
+highlight_widget(draw, acquisition_fun_cfg.layout, (8, 9), item_number=2, item_number_position="N", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw.rectangle([60, 390, 405, 425], outline="white", width=5)
-draw.rectangle([60, 390, 405, 425], outline="green", width=2)
-
-position = (250, 345)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
-
-draw.rectangle([405, 390, 570, 425], outline="white", width=5)
-draw.rectangle([405, 390, 570, 425], outline="green", width=2)
-
-position = (490, 345)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "2", fill="white", font=font)
-
-cropped_image
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 :::
 
 ::::
 
----
-
-### 2.2.2. Set the size of the sampling patch
+## 2.3. Set the size of the sampling patch
 
 :::: {.columns}
 
@@ -235,38 +320,31 @@ cropped_image
 
 ``` {python}
 #| echo: false
-acquisition_fun_cfg._show_patch_sizes(True)
+focus_widget = acquisition_fun_cfg.layout().itemAt(0).widget()
+focus_widget.setChecked(True)
 
 acquisition_fun_cfg.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, 0, item_number=1, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
+highlight_widget(draw, acquisition_fun_cfg.layout, 1, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-# Draw a red rectangle
-draw.rectangle([70, 240, 470, 600], outline="white", width=5)
-draw.rectangle([70, 240, 470, 600], outline="green", width=2)
-
-cropped_image
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 :::
 
 ::: {.column width=0.30}
 
-- Click the "Edit patch size" checkbox
-- Change the patch size of "X" and "Y" to 256, and the "Z" axis to 1.
+1. Click the "Edit patch size" checkbox
+2. Change the patch size of "X" and "Y" to 256, and the "Z" axis to 1.
 
 :::{.callout-note}
 This directs the Active Learning plugin to sample at random patches of size $256\times256$ pixels, and $1$ slice of depth.
@@ -276,7 +354,7 @@ This directs the Active Learning plugin to sample at random patches of size $256
 
 ::::
 
-## 2.3. Define the maximum number of samples to extract
+## 2.4. Define the maximum number of samples to extract
 
 :::: {.columns}
 
@@ -289,23 +367,13 @@ acquisition_fun_cfg.max_samples_spn.setValue(4)
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, (2, 3), item_number=None, item_number_position="N", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([60, 740, 405, 770], outline="white", width=5)
-draw.rectangle([60, 740, 405, 770], outline="green", width=2)
-
-cropped_image.resize((int(0.7*0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 :::
@@ -322,7 +390,7 @@ This tells the Active Learning plugin to process at most _four_ samples at rando
 ::::
 
 
-## 2.4. Configure the segmentation method
+## 2.5. Configure the segmentation method
 
 :::: {.columns}
 
@@ -361,76 +429,32 @@ acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_t
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, (10, 11), item_number=1, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 0, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-# Draw a red rectangle
-draw.rectangle([55, 490, 570, 520], outline="white", width=5)
-draw.rectangle([55, 490, 570, 520], outline="green", width=2)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 0, item_number=3, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-position = (550, 450)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 1, item_number=4, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw.rectangle([65, 525, 310, 560], outline="white", width=5)
-draw.rectangle([65, 525, 310, 560], outline="green", width=2)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 3, item_number=5, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-position = (320, 525)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "2", fill="white", font=font)
-
-draw.rectangle([390, 655, 550, 690], outline="white", width=5)
-draw.rectangle([390, 655, 550, 690], outline="green", width=2)
-
-position = (400, 545)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "3", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "3", fill="white", font=font)
-
-draw.rectangle([235, 580, 550, 615], outline="white", width=5)
-draw.rectangle([235, 580, 550, 615], outline="green", width=2)
-
-position = (450, 615)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "4", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "4", fill="white", font=font)
-
-draw.rectangle([70, 725, 550, 765], outline="white", width=5)
-draw.rectangle([70, 725, 550, 765], outline="green", width=2)
-
-position = (450, 770)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "5", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "5", fill="white", font=font)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 :::
 
 ::::
 
-## 2.5. Execute the segmentation method on all image groups
+## 2.6. Execute the segmentation method on all image groups
 
 :::: {.columns}
 
 ::: {.column width=0.6}
-- Click the "Run on all image groups"
+- Click the "Run on all image groups" button
 
 ::: {.callout-note}
 To execute the segmentation only on specific image groups, select the desired image groups in the _Image groups manager_ widget and use the "Run on selected image groups" button instead.
@@ -442,23 +466,13 @@ To execute the segmentation only on specific image groups, select the desired im
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_number=None, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([245, 850, 405, 880], outline="white", width=5)
-draw.rectangle([245, 850, 405, 880], outline="green", width=2)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -468,149 +482,85 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 
 ::::
 
-## 2.6. Inspect the segmentation layer
+## 2.7. Inspect the segmentation layer
 
 ::: {.callout-note}
-Because the input image is 3D, you might have to slide the Z index on the bottom of napari's window to look at the samples that have been segmented.
+Because the input image is 3D, you might have to slide the Z index at the bottom of napari's window to look at the samples that have been segmented.
 :::
 
 ``` {python}
 #| echo: false
-labels_mgr.focus_region(
-  labels_mgr.labels_group_root.child(0).child(0)
+label_groups_mgr.focus_region(
+  label_groups_mgr.labels_group_root.child(0).child(0)
 )
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-
-draw = ImageDraw.Draw(image)
-
-# Draw a red rectangle
-draw.rectangle([295, 1080, 1380, 1110], outline="white", width=5)
-draw.rectangle([295, 1080, 1380, 1115], outline="green", width=2)
-
-image
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-
 
 # 3. Segment masked regions only
 
 ## 3.1. Create a mask to restrict the sampling space
 
-### 3.1.1. Add a mask layer to the image group
-
 :::: {.columns}
-::: {.column width=0.6}
-- Switch to the "Image groups manager" tab
-- Click the "Edit mask properties" checkbox
-:::
 
-::: {.column width=0.4}
-``` {python}
-#| echo: false
-image_groups_mgr_dw.raise_()
-```
-``` {python}
-#| echo: false
-screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
-org_height, org_width = screenshot.shape[:2]
-
-roi = (org_width * 0.7, 0, org_width, org_height)
-
-# Crop the image
-cropped_image = image.crop(roi)
-
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([65, 380, 225, 415], outline="white", width=5)
-draw.rectangle([65, 380, 225, 415], outline="green", width=2)
-
-cropped_image
-```
-``` {python}
-image_groups_mgr.mask_generator._show_editor(True)
-```
-
-:::
-
-::::
-
----
-
-### 3.1.2. Create a low resolution mask for its corresponding image
-
-:::: {.columns}
 :::{.column width=0.6}
-1. Set the mask scale to $256$ for the "X" and "Y" axes, and a scale of $1$ for the "Z" axis
+1. Switch to the "Image groups manager" tab
 
-2. Click the "Create mask" button
+2. Click the "Edit mask properties" checkbox
+
+3. Set the mask scale to $256$ for the "X" and "Y" axes, and a scale of $1$ for the "Z" axis
+
+4. Click the "Create mask" button
 
 :::{.callout-note}
 This creates a low-resolution mask where each of its pixels corresponds to a $256\times256$ pixels region in the input image.
-Because the mask is low-resolution, it uses less space in memory RAM and/or disk.
+Because the mask is low-resolution, it uses less space in memory and disk.
 :::
 
 :::
 
 :::{.column width=0.4}
+
 ``` {python}
 #| echo: false
+focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
+focus_widget.setChecked(True)
+
 image_groups_mgr.mask_generator.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
 image_groups_mgr.mask_generator.generate_mask_layer()
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, image_groups_mgr.mask_generator.layout, 0, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
+highlight_widget(draw, image_groups_mgr.mask_generator.edit_mask_widget.layout, 0, item_number=3, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-# Draw a red rectangle
-draw.rectangle([60, 450, 550, 600], outline="white", width=5)
-draw.rectangle([60, 450, 550, 600], outline="green", width=2)
+highlight_widget(draw, image_groups_mgr.mask_generator.edit_mask_widget.layout, 1, item_number=4, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-position = (500, 400)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
-
-draw.rectangle([70, 620, 560, 650], outline="white", width=5)
-draw.rectangle([70, 620, 560, 650], outline="green", width=2)
-
-position = (530, 650)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "2", fill="white", font=font)
-
-cropped_image
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
+
 :::
+
 ::::
 
 
-## 3.1.3. Specify the samplable regions
+## 3.2. Specify the samplable regions
 
 - Draw a mask that covers slices $27$ to $30$ in the "Z" axis.
 
 :::{.callout-note}
-You can move the slider at the bottom of napari's window to navigate between slices in the "Z" axis.
+Move the slider at the bottom of napari's window to navigate between slices in the "Z" axis.
 :::
 
 ``` {python}
@@ -624,19 +574,21 @@ viewer.layers["images mask"].refresh()
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-
-image
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 
-## 3.2. Execute the segmentation process on the masked regions
+## 3.3. Execute the segmentation process on the masked regions
 
 :::: {.columns}
+
 ::: {.column width=0.6}
-- Go back to the "Acquisition function configuration" widget
-- Click the "Run on all image groups" button again
+
+1. Go back to the "Acquisition function configuration" widget
+
+2. Click the "Run on all image groups" button again
 
 ::: {.callout-note}
 Because the image group has a defined mask, samples will be extracted at random inside those defined regions only.
@@ -645,6 +597,7 @@ Because the image group has a defined mask, samples will be extracted at random 
 :::
 
 ::: {.column width=0.4}
+
 ``` {python}
 #| echo: false
 acquisition_fun_cfg_dw.raise_()
@@ -652,23 +605,13 @@ acquisition_fun_cfg_dw.raise_()
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_number=2, item_number_position="E", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([245, 850, 400, 890], outline="white", width=5)
-draw.rectangle([245, 850, 400, 890], outline="green", width=2)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -679,14 +622,14 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 
 ::::
 
-## 3.3. Inspect the masked segmentation output
+## 3.4. Inspect the masked segmentation output
 
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-image
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 # 4. Fine tune the segmentation model
@@ -701,54 +644,55 @@ Plugins > Active Learning > Label groups manager
 
 ``` {python}
 #| echo: false
-labels_mgr_dw = viewer.window.add_dock_widget(labels_mgr)
-viewer.window._qt_window.tabifyDockWidget(acquisition_fun_cfg_dw, labels_mgr_dw)
+label_groups_mgr_dw = viewer.window.add_dock_widget(label_groups_mgr)
+viewer.window._qt_window.tabifyDockWidget(acquisition_fun_cfg_dw, label_groups_mgr_dw)
 
-labels_mgr_dw.setWindowTitle("Label groups manager")
+label_groups_mgr_dw.setWindowTitle("Label groups manager")
 ```
 ``` {python}
 #| echo: false
-labels_mgr_dw.raise_()
+label_groups_mgr_dw.raise_()
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-image
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 
-## 4.2. Edit segmented patches
+## 4.2. Select a segmented patch to edit
 
-### 4.2.1. Select a segmented patch to edit
-
-- You can double click on any segmented patch in the viewer 
+- Double click on any segmented patch in the viewer 
 (e.g. on slice $27$)
+
+::: {.callout-note}
+This creates a new editable "Labels edit" layer with a copy of the selected patch.
+:::
 
 ``` {python}
 #| echo: false
-labels_mgr.labels_table_tw.setCurrentItem(labels_mgr.labels_group_root.child(1).child(3), 0)
-labels_mgr.focus_region(
-  labels_mgr.labels_group_root.child(1).child(3),
+label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(1).child(3), 0)
+label_groups_mgr.focus_region(
+  label_groups_mgr.labels_group_root.child(1).child(3),
   edit_focused_label=True
 )
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-image
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
----
-
-### 4.2.2. Use napari's layer controls to make changes on the objects of the current patch
+## 4.3. Use napari's layer controls to make changes on the objects of the current patch
 
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 
 image = Image.fromarray(screenshot)
 image
@@ -757,23 +701,16 @@ image
 draw = ImageDraw.Draw(image)
 
 # Draw a red rectangle
-draw.rectangle([5, 20, 280, 430], outline="white", width=5)
-draw.rectangle([5, 20, 280, 430], outline="green", width=2)
+draw.rectangle([5, 20, 280, 385], outline="white", width=5)
+draw.rectangle([5, 20, 280, 385], outline="green", width=2)
 
 image
 ```
 
----
-
-### 4.2.3. Commit changes to the labels layer
-
-:::: {.columns}
-::: {.column width=0.6}
+## 4.4. Commit changes to the labels layer
 
 - Once you have finished editing the labels, click the "Commit changes" button on the _Label groups manager_
-:::
 
-::: {.column width=0.4}
 ``` {python}
 #| echo: false
 z_tmp = zarr.open(r"C:\Users\cervaf\Documents\Logging\activelearning_logs\membrane.zarr\segmentation\0", mode="r")
@@ -781,40 +718,27 @@ z_tmp = zarr.open(r"C:\Users\cervaf\Documents\Logging\activelearning_logs\membra
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
-
-image = Image.fromarray(screenshot)
-
 org_height, org_width = screenshot.shape[:2]
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.0, height_prop=0.0)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, label_groups_mgr.layout, 6, item_number=None, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([305, 900, 570, 940], outline="white", width=5)
-draw.rectangle([305, 900, 570, 940], outline="green", width=2)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
-labels_mgr.labels_group_root.child(1).child(3)._position
-viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(3)._position]
-labels_mgr.commit()
+label_groups_mgr.labels_group_root.child(1).child(3)._position
+viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(1).child(3)._position]
+label_groups_mgr.commit()
 ```
 
-:::
-::::
-
-## 4.3. Navigate between segmented patches
+## 4.5. Navigate between segmented patches
 
 :::: {.columns}
-::: {.column width=0.6}
 
-1. Expand the second group of labels 
+::: {.column width=0.6}
+1. Expand the second group of labels
 
 2. Double-click on any of the nested items to open it for editing
 
@@ -827,20 +751,19 @@ labels_mgr.commit()
 
 ``` {python}
 #| echo: false
-labels_mgr.labels_table_tw.expandItem(labels_mgr.labels_group_root.child(1))
-labels_mgr.labels_table_tw.setCurrentItem(labels_mgr.labels_group_root.child(1).child(0), 0)
-labels_mgr.focus_region(
-  labels_mgr.labels_group_root.child(1).child(0),
+label_groups_mgr.labels_table_tw.expandItem(label_groups_mgr.labels_group_root.child(1))
+label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(1).child(0), 0)
+label_groups_mgr.focus_region(
+  label_groups_mgr.labels_group_root.child(1).child(0),
   edit_focused_label=True
 )
 ```
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 
 image = Image.fromarray(screenshot)
-
-org_height, org_width = image.height, image.width
 
 roi = (org_width * 0.7, 0, org_width, org_height)
 
@@ -850,55 +773,48 @@ cropped_image = image.crop(roi)
 draw = ImageDraw.Draw(cropped_image)
 
 # Draw a red rectangle
-draw.rectangle([70, 115, 270, 140], outline="white", width=5)
-draw.rectangle([70, 115, 270, 140], outline="green", width=2)
+draw.rectangle([60, 115, 270, 140], outline="white", width=5)
+draw.rectangle([60, 115, 270, 140], outline="green", width=2)
 
-position = (50, 105)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
+pos_x, pos_y = (40, 105)
+font = ImageFont.truetype("arialbd.ttf", size=37)
+draw.text((pos_x-1, pos_y-1), "1", fill="black", font=font)
+draw.text((pos_x-1, pos_y+1), "1", fill="black", font=font)
+draw.text((pos_x+1, pos_y+1), "1", fill="black", font=font)
+draw.text((pos_x+1, pos_y-1), "1", fill="black", font=font)
+font = ImageFont.truetype("arial.ttf", size=37)
+draw.text((pos_x, pos_y), "1", fill="white", font=font)
+
+draw.rectangle([100, 135, 560, 215], outline="white", width=5)
+draw.rectangle([100, 135, 560, 215], outline="green", width=2)
+
+pos_x, pos_y = (75, 140)
+font = ImageFont.truetype("arialbd.ttf", size=37)
+draw.text((pos_x-1, pos_y-1), "2", fill="black", font=font)
+draw.text((pos_x-1, pos_y+1), "2", fill="black", font=font)
+draw.text((pos_x+1, pos_y+1), "2", fill="black", font=font)
+draw.text((pos_x+1, pos_y-1), "2", fill="black", font=font)
+
 font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
+draw.text((pos_x, pos_y), "2", fill="white", font=font)
 
-draw.rectangle([110, 135, 560, 215], outline="white", width=5)
-draw.rectangle([110, 135, 560, 215], outline="green", width=2)
+highlight_widget(draw, label_groups_mgr.layout, (1, 4), item_number=3, item_number_position="N", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-position = (80, 150)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "2", fill="white", font=font)
+highlight_widget(draw, label_groups_mgr.layout, 6, item_number=4, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-draw.rectangle([60, 870, 570, 905], outline="white", width=5)
-draw.rectangle([60, 870, 570, 905], outline="green", width=2)
-
-position = (290, 820)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "3", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "3", fill="white", font=font)
-
-# Draw a red rectangle
-draw.rectangle([305, 900, 570, 940], outline="white", width=5)
-draw.rectangle([305, 900, 570, 940], outline="green", width=2)
-
-position = (270, 905)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "4", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "4", fill="white", font=font)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
-for c_idx in range(labels_mgr.labels_group_root.child(1).childCount()):
-    labels_mgr.focus_region(
-        labels_mgr.labels_group_root.child(1).child(c_idx),
+for c_idx in range(label_groups_mgr.labels_group_root.child(1).childCount()):
+    label_groups_mgr.focus_region(
+        label_groups_mgr.labels_group_root.child(1).child(c_idx),
         edit_focused_label=True
     )
-    labels_mgr.labels_group_root.child(1).child(c_idx)._position
-    viewer.layers["Labels edit"].data[:] = z_tmp[labels_mgr.labels_group_root.child(1).child(c_idx)._position]
-    labels_mgr.commit()
+
+    label_groups_mgr.labels_group_root.child(1).child(c_idx)._position
+    viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(1).child(c_idx)._position]
+    label_groups_mgr.commit()
 
 ```
 
@@ -906,9 +822,7 @@ for c_idx in range(labels_mgr.labels_group_root.child(1).childCount()):
 
 ::::
 
-## 4.4. Setup fine tuning configuration
-
-### 4.4.1. Use the _Acquisition function configuration_ widget to configure the parameters for the fine tuning process
+## 4.6. Setup fine tuning configuration
 
 :::: {.columns}
 
@@ -936,68 +850,37 @@ acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.save_path
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 
-image = Image.fromarray(screenshot)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-org_height, org_width = image.height, image.width
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 1, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 6, item_number=3, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-# Crop the image
-cropped_image = image.crop(roi)
-
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([185, 965, 385, 1000], outline="white", width=5)
-draw.rectangle([185, 965, 385, 1000], outline="green", width=2)
-
-position = (200, 920)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
-
-draw.rectangle([75, 690, 540, 725], outline="white", width=5)
-draw.rectangle([75, 690, 540, 725], outline="green", width=2)
-
-position = (40, 490)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "2", fill="white", font=font)
-
-draw.rectangle([65, 495, 300, 535], outline="white", width=5)
-draw.rectangle([65, 495, 300, 535], outline="green", width=2)
-
-position = (50, 690)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "3", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "3", fill="white", font=font)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
+
 
 :::
 
 ::::
 
----
-
-### 4.4.2. Set the *learning rate* and *batch size*
+## 4.6. Setup fine tuning configuration
 
 :::: {.columns}
 
 ::: {.column width=0.6}
 
-1. Scroll the _Advanced fine tuning parameters_ widget down to show more parameters
+4. Change the "model name" to "nuclei_ft"
 
-3. Change the "model name" to "nuclei_ft"
+::: {.callout-note}
+Scroll the _Advanced fine tuning parameters_ widget down to show more parameters.
+:::
 
-3. Set the "batch size" to $3$
+5. Set the "batch size" to $3$
 
-4. Change the "learning rate" to $0.0001$
+6. Change the "learning rate" to $0.0001$
 
 ::: {.callout-note}
 You can modify other parameters for the training process here, such as the number of training epochs.
@@ -1019,63 +902,24 @@ acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.learning_
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 
-image = Image.fromarray(screenshot)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-org_height, org_width = image.height, image.width
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 14, item_number=4, item_number_position="W", item_number_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
-roi = (org_width * 0.7, 0, org_width, org_height)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 15, item_number=5, item_number_position="W", item_number_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
-# Crop the image
-cropped_image = image.crop(roi)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 16, item_number=6, item_number_position="W", item_number_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([535, 525, 565, 845], outline="white", width=5)
-draw.rectangle([535, 525, 565, 845], outline="green", width=2)
-
-position = (515, 480)
-font = ImageFont.truetype("arialbd.ttf", size=36)
-draw.text(position, "1", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=36)
-draw.text(position, "1", fill="white", font=font)
-
-draw.rectangle([50, 725, 540, 755], outline="white", width=5)
-draw.rectangle([50, 725, 540, 755], outline="green", width=2)
-
-position = (20, 720)
-font = ImageFont.truetype("arialbd.ttf", size=34)
-draw.text(position, "2", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=34)
-draw.text(position, "2", fill="white", font=font)
-
-draw.rectangle([50, 755, 540, 780], outline="white", width=5)
-draw.rectangle([50, 755, 540, 780], outline="green", width=2)
-
-position = (20, 750)
-font = ImageFont.truetype("arialbd.ttf", size=34)
-draw.text(position, "3", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=34)
-draw.text(position, "3", fill="white", font=font)
-
-draw.rectangle([50, 780, 540, 810], outline="white", width=5)
-draw.rectangle([50, 780, 540, 810], outline="green", width=2)
-
-position = (20, 780)
-font = ImageFont.truetype("arialbd.ttf", size=34)
-draw.text(position, "4", fill="green", font=font)
-font = ImageFont.truetype("arial.ttf", size=34)
-draw.text(position, "4", fill="white", font=font)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 :::
 
 ::::
 
-## 4.5. Execute the fine tuning process
+## 4.7. Execute the fine tuning process
 
 :::: {.columns}
 
@@ -1093,23 +937,13 @@ Depending on your computer resources (RAM, CPU), this process might take some mi
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 
-image = Image.fromarray(screenshot)
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-org_height, org_width = image.height, image.width
+highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_number=None, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-roi = (org_width * 0.7, 0, org_width, org_height)
-
-# Crop the image
-cropped_image = image.crop(roi)
-
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-draw.rectangle([245, 880, 405, 920], outline="white", width=5)
-draw.rectangle([245, 880, 405, 920], outline="green", width=2)
-
-cropped_image.resize((int(0.7 * 0.3 * org_width), int(org_height * 0.7)), Image.Resampling.LANCZOS)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 ``` {python}
 #| echo: false
@@ -1120,11 +954,193 @@ acquisition_fun_cfg.fine_tune()
 
 ::::
 
-## 4.6. Review the fine tuned segmentation
+## 4.8. Review the fine tuned segmentation
+
+::: {.callout-tip}
+Use the *opacity* slider to compare how the fine tuned model segments the same objects that were labeled for training.
+:::
 
 ``` {python}
 #| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
-image
+
+draw = ImageDraw.Draw(image)
+
+# Draw a red rectangle
+draw.rectangle([10, 90, 280, 120], outline="white", width=5)
+draw.rectangle([10, 90, 280, 120], outline="green", width=2)
+
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+# 5. Use the fine tuned model for inference
+
+## 5.1. Create a mask to apply the fine tuned model for inference
+
+:::: {.columns}
+
+::: {.column width=0.6}
+1. Switch to the "Image groups manager" tab
+
+2. Click the "Edit mask properties" checkbox
+
+3. Set the mask scale to $256$ for the "X" and "Y" axes, and a scale of $1$ for the "Z" axis
+
+4. Click the "Create mask" button
+
+:::
+
+::: {.column width=0.4}
+
+``` {python}
+#| echo: false
+image_groups_mgr_dw.raise_()
+
+focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
+focus_widget.setChecked(True)
+
+image_groups_mgr.mask_generator.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
+image_groups_mgr.mask_generator.generate_mask_layer()
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
+
+highlight_widget(draw, image_groups_mgr.mask_generator.layout, 0, item_number=2, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, image_groups_mgr.mask_generator.edit_mask_widget.layout, 0, item_number=3, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, image_groups_mgr.mask_generator.edit_mask_widget.layout, 1, item_number=4, item_number_position="W", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+:::
+
+::::
+
+## 5.2. Specify the samplable regions for inference
+
+- Draw a mask that covers slices $31$ to $34$ in the "Z" axis.
+
+``` {python}
+#| echo: false
+viewer.camera.center = (31, 128, 128)
+viewer.dims.current_step = (31, 128, 128)
+
+viewer.layers["images mask (1)"].data[0, 0, 31:35, 0, 0] = 1
+viewer.layers["images mask (1)"].refresh()
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+image = Image.fromarray(screenshot)
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+## 5.3. Select the new mask layer to be used for sampling positions
+
+:::: {.columns}
+
+::: {.column width=0.6}
+1. Scroll down the _Image groups manager_ tree to show the newest mask layer grup ("mask (1)")
+
+2. Select the "mask (1)" layer group
+
+::: {.callout-note}
+The "Group name" column in the groups tree can be resized to show the complete names.
+:::
+
+3. Make sure that the "Use as sampling mask" checkbox is checked
+
+:::
+
+::: {.column width=0.4}
+``` {python}
+#| echo: false
+image_groups_mgr.image_groups_tw.clearSelection()
+
+vertical_scroll_bar = image_groups_mgr.image_groups_tw.verticalScrollBar()
+vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
+
+image_groups_mgr.groups_root.child(0).child(image_groups_mgr.groups_root.child(0).childCount() - 1).setSelected(True)
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
+
+highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, (2, 3), item_number=2, item_number_position="N", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, 15, item_number=3, item_number_position="E", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+:::
+
+::::
+
+
+## 5.4. Use the fine tuned model for inference in the masked region
+
+:::: {.columns}
+
+::: {.column width=0.6}
+
+1. Go back to the "Acquisition function configuration" widget
+2. Click the "Run on all image groups" button again
+
+:::
+
+::: {.column width=0.4}
+``` {python}
+#| echo: false
+acquisition_fun_cfg_dw.raise_()
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
+
+highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_number=2, item_number_position="E", item_number_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+``` {python}
+#| echo: false
+_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+```
+:::
+
+::::
+
+## 5.5. Inspect the performance of the fine tuned model
+
+- Now you have a fine tuned model for nuclei segmentation that has been adapted to this image!
+
+::: {.callout-note}
+The fine tuned model can be used in *Cellpose*'s GUI software, their python API package, or any other package that supports pretrained `cellpose` models.
+:::
+
+``` {python}
+#| echo: false
+viewer.camera.center = (33, 128, 128)
+viewer.dims.current_step = (33, 128, 128)
+```
+``` {python}
+#| echo: false
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+image = Image.fromarray(screenshot)
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
