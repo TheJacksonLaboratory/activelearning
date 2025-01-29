@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from pathlib import Path, PureWindowsPath
 import numpy as np
 import zarr
@@ -7,24 +7,12 @@ import zarrdataset as zds
 
 from napari.layers import Image
 from napari.layers._source import Source
-from napari.layers._multiscale_data import MultiScaleData
 
 from napari_activelearning._layers import (LayerChannel,
                                            LayersGroup,
                                            ImageGroup,
                                            ImageGroupsManager)
 from napari_activelearning._labels import LabelsManager, LabelGroup, LabelItem
-from napari_activelearning._acquisition import AcquisitionFunction
-from napari_activelearning._models import SimpleTunable
-
-
-@pytest.fixture(scope="package")
-def tunable_segmentation_method():
-    method = SimpleTunable()
-    method._run_pred = MagicMock(return_value=np.random.random((10, 10)))
-    method._run_eval = MagicMock(return_value=np.random.randint(0, 2, (10, 10)))
-    method._fine_tune = MagicMock(return_value=None)
-    return method
 
 
 @pytest.fixture(scope="package")
@@ -253,12 +241,11 @@ def multiscale_layer_channel(multiscale_layer):
 
 @pytest.fixture(scope="function")
 def multiscale_layers_group(multiscale_layer_channel):
-    layers_group_mock = LayersGroup("segmentation",
-                                    source_axes="TZYX",
-                                    use_as_input_image=False,
-                                    use_as_input_labels=True,
-                                    use_as_sampling_mask=False)
+    layers_group_mock = LayersGroup()
+    layers_group_mock.layers_group_name = "segmentation"
+    layers_group_mock.source_axes = "TZYX"
     layers_group_mock.addChild(multiscale_layer_channel)
+    layers_group_mock.use_as_input_labels = True
     layers_group_mock.source_axes = "TZYX"
 
     return layers_group_mock
@@ -278,8 +265,10 @@ def simple_image_group(single_scale_array):
 
     image_group = ImageGroup("simple_group")
 
-    layers_group = LayersGroup("simple_layers_group")
+    layers_group = LayersGroup()
     image_group.addChild(layers_group)
+
+    layers_group.layers_group_name = "simple_layers_group"
 
     layer_channel = layers_group.add_layer(layer, 0, "TCZYX")
     image_group.input_layers_group = 0

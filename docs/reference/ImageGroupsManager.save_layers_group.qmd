@@ -1,6 +1,0 @@
-# ImageGroupsManager.save_layers_group { #napari_activelearning.ImageGroupsManager.save_layers_group }
-
-```python
-ImageGroupsManager.save_layers_group()
-```
-

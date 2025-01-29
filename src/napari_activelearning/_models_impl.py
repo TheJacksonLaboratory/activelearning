@@ -1,11 +1,10 @@
-import os
 import numpy as np
+import random
 import skimage
 
 import zarrdataset as zds
 
-from ._acquisition import SegmentationMethod, FineTuningMethod, add_dropout
-
+from ._acquisition import TunableMethod, add_dropout, USING_PYTORCH
 
 try:
     import cellpose
@@ -33,7 +32,7 @@ try:
                                              axis=self._channel_axis)
             return img_t
 
-    class CellposeSegmentation(SegmentationMethod):
+    class CellposeTunable(TunableMethod):
         def __init__(self):
             super().__init__()
 
@@ -41,7 +40,6 @@ try:
             self._model_dropout = None
 
             self.refresh_model = True
-
             self._transform = None
 
             self._pretrained_model = None
@@ -49,6 +47,25 @@ try:
             self._gpu = True
             self._channel_axis = 2
             self._channels = [0, 0]
+
+            self._batch_size = 8
+            self._learning_rate = 0.005
+            self._n_epochs = 20
+            self._weight_decay = 1e-5
+            self._momentum = 0.9
+            self._SGD = False
+            self._rgb = False
+            self._normalize = True
+            self._compute_flows = False
+            self._save_path = None
+            self._save_every = 100
+            self._nimg_per_epoch = None
+            self._nimg_test_per_epoch = None
+            self._rescale = True
+            self._scale_range = None
+            self._bsize = 224
+            self._min_train_masks = 5
+            self._model_name = None
 
         def _model_init(self):
             gpu = torch.cuda.is_available() and self._gpu
@@ -70,7 +87,9 @@ try:
             self._model_dropout = models.CellposeModel(
                 gpu=gpu,
                 model_type=model_type,
-                pretrained_model=str(self._pretrained_model)
+                pretrained_model=(str(self._pretrained_model)
+                                  if self._pretrained_model is not None
+                                  else None)
             )
             self._model_dropout.mkldnn = False
             self._model_dropout.net.mkldnn = False
@@ -112,37 +131,34 @@ try:
                                          channels=self._channels)
             return seg
 
-    class CellposeTunable(CellposeSegmentation, FineTuningMethod):
-        def __init__(self):
-            super().__init__()
-
-            self._batch_size = 8
-            self._learning_rate = 0.005
-            self._n_epochs = 20
-            self._weight_decay = 1e-5
-            self._momentum = 0.9
-            self._SGD = False
-            self._rgb = False
-            self._normalize = True
-            self._compute_flows = False
-            self._save_path = None
-            self._save_every = 100
-            self._nimg_per_epoch = None
-            self._nimg_test_per_epoch = None
-            self._rescale = True
-            self._scale_range = None
-            self._bsize = 224
-            self._min_train_masks = 5
-            self._model_name = None
-
         def _get_transform(self):
-            if self._transform is None:
-                self._transform = CellposeTransform(self._channels,
-                                                    self._channel_axis)
-            return self._transform
+            return lambda x: x, None
 
-        def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+        def _preload_data(self, dataloader):
+            raw_data = []
+            label_data = []
+            for img, lab in dataloader:
+                if USING_PYTORCH:
+                    img = img[0].numpy().squeeze()
+                    lab = lab[0].numpy().squeeze()
+
+                    raw_data.append(img)
+                    label_data.append(lab)
+
+            return raw_data, label_data
+
+        def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
             self._model_init()
+
+            (train_data,
+             train_labels) = self._preload_data(
+                 train_dataloader
+             )
+
+            (test_data,
+             test_labels) = self._preload_data(
+                 val_dataloader
+             )
 
             self._pretrained_model = train.train_seg(
                 self._model.net,
@@ -180,6 +196,8 @@ try:
 
             self.refresh_model = True
 
+            return True
+
     USING_CELLPOSE = True
 
 except ModuleNotFoundError:
@@ -208,7 +226,7 @@ class BaseTransform(zds.MaskGenerator):
         return image_t
 
 
-class SimpleSegmentation(SegmentationMethod):
+class SimpleTunable(TunableMethod):
     def __init__(self):
         super().__init__()
         self._channel_axis = 2
@@ -236,17 +254,16 @@ class SimpleSegmentation(SegmentationMethod):
         labels = skimage.measure.label(img_g > self._threshold)
         return labels
 
-
-class SimpleTunable(SimpleSegmentation, FineTuningMethod):
-    def __init__(self):
-        super().__init__()
-
     def _get_transform(self):
         if self._transform is None:
             self._model_init()
 
-        return self._transform
+        return self._transform, None
 
-    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+    # def _fine_tune(self, data_loader,
+    #                train_data_proportion: float = 0.8) -> bool:
+    def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         if self._transform is None:
             self._model_init()
+
+        return True

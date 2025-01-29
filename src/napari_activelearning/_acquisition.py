@@ -1,16 +1,16 @@
 from typing import Optional, Iterable, Tuple, Callable, Union
-from functools import partial
-import random
+
 from pathlib import Path
 import numpy as np
+import random
 import math
+import dask.array as da
 
 import zarrdataset as zds
-import dask.array as da
 
 try:
     import torch
-    from torch.utils.data import DataLoader
+    from torch.utils.data import DataLoader, ChainDataset, random_split
     USING_PYTORCH = True
 except ModuleNotFoundError:
     USING_PYTORCH = False
@@ -20,8 +20,7 @@ from napari.layers._multiscale_data import MultiScaleData
 
 from ._layers import ImageGroupsManager, ImageGroup, LayersGroup
 from ._labels import LabelsManager, LabelItem
-from ._utils import (get_dataloader, save_zarr, downsample_image,
-                     StaticPatchSampler)
+from ._utils import get_dataloader, save_zarr, downsample_image
 
 
 def compute_BALD(probs):
@@ -48,6 +47,9 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
     for sp_l in super_pixel_indices:
         mask = super_pixel_labels == sp_l
         u_val = np.sum(mutual_info[mask]) / np.sum(mask)
+        if np.isnan(u_val):
+            u_val = 0.0
+
         u_sp_lab = np.where(mask, u_val, u_sp_lab)
 
     return u_sp_lab
@@ -87,6 +89,7 @@ def add_multiscale_output_layer(
         contrast_limits: Optional[Iterable[float]] = None,
         colormap: Optional[str] = None,
         use_as_input_labels: bool = False,
+        use_as_sampling_mask: bool = False,
         add_func: Optional[Callable] = napari.Viewer.add_image
 ):
     if output_filename:
@@ -116,7 +119,7 @@ def add_multiscale_output_layer(
         opacity=0.8,
         scale=list(scale.values()),
         translate=tuple(
-            reference_scale.get(ax, 1) / 2.0
+            (reference_scale.get(ax, 1) - 1) / 2.0
             if reference_scale.get(ax, 1) > 1 else 0
             for ax in reference_source_axes
             ),
@@ -134,18 +137,13 @@ def add_multiscale_output_layer(
     if isinstance(new_output_layer, list):
         new_output_layer = new_output_layer[0]
 
-    output_layers_group = image_group.getLayersGroup(
-        layers_group_name
+    output_layers_group = image_group.add_layers_group(
+        layers_group_name,
+        source_axes=axes,
+        use_as_input_image=False,
+        use_as_input_labels=use_as_input_labels,
+        use_as_sampling_mask=use_as_sampling_mask
     )
-
-    if output_layers_group is None:
-        output_layers_group = image_group.add_layers_group(
-            layers_group_name,
-            source_axes=axes,
-            use_as_input_image=False,
-            use_as_input_labels=use_as_input_labels,
-            use_as_sampling_mask=False
-        )
 
     output_channel = output_layers_group.add_layer(
         new_output_layer
@@ -199,13 +197,42 @@ if USING_PYTORCH:
         for module in net.modules():
             if isinstance(module, torch.nn.Sequential):
                 for l_idx, layer in enumerate(module):
-                    if isinstance(layer, torch.nn.ReLU):
+                    if isinstance(layer, (torch.nn.Threshold,
+                                          torch.nn.ReLU,
+                                          torch.nn.RReLU,
+                                          torch.nn.Hardtanh,
+                                          torch.nn.ReLU6,
+                                          torch.nn.Sigmoid,
+                                          torch.nn.Hardsigmoid,
+                                          torch.nn.Tanh,
+                                          torch.nn.SiLU,
+                                          torch.nn.Mish,
+                                          torch.nn.Hardswish,
+                                          torch.nn.ELU,
+                                          torch.nn.CELU,
+                                          torch.nn.SELU,
+                                          torch.nn.GLU,
+                                          torch.nn.GELU,
+                                          torch.nn.Hardshrink,
+                                          torch.nn.LeakyReLU,
+                                          torch.nn.LogSigmoid,
+                                          torch.nn.Softplus,
+                                          torch.nn.Softshrink,
+                                          torch.nn.MultiheadAttention,
+                                          torch.nn.PReLU,
+                                          torch.nn.Softsign,
+                                          torch.nn.Tanhshrink,
+                                          torch.nn.Softmin,
+                                          torch.nn.Softmax,
+                                          torch.nn.Softmax2d,
+                                          torch.nn.LogSoftmax)):
                         break
                 else:
                     continue
 
                 dropout_layer = torch.nn.Dropout(p=p, inplace=True)
                 module.insert(l_idx + 1, DropoutEvalOverrider(dropout_layer))
+
 else:
     def add_dropout(net, p=0.05):
         pass
@@ -232,7 +259,15 @@ class SegmentationMethod:
         return out
 
 
-class FineTuningMethod:
+class MyZarrDataset(zds.ZarrDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __len__(self):
+        return len(self._toplefts)
+
+
+class TunableMethod(SegmentationMethod):
     def __init__(self):
         self._num_workers = 0
         super().__init__()
@@ -241,102 +276,145 @@ class FineTuningMethod:
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
 
-    def _fine_tune(self, train_data, train_labels, test_data, test_labels):
+    def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
         raise NotImplementedError("This method requies to be overriden by a "
                                   "derived class.")
 
     def fine_tune(self, dataset_metadata_list: Iterable[dict],
                   train_data_proportion: float = 0.8,
-                  patch_sizes: Union[dict, int] = 256,
-                  model_axes="YXC"):
-        train_data = []
-        test_data = []
-        train_labels = []
-        test_labels = []
+                  patch_sizes: Union[dict, int] = 256):
 
-        transform = self._get_transform()
+        transform, labels_transform = self._get_transform()
 
-        for dataset_metadata in dataset_metadata_list:
+        worker_init_fn = None
+
+        if len(dataset_metadata_list) == 1:
+            sampling_mask = np.copy(
+                dataset_metadata_list[0]["masks"]["filenames"]
+            )
+
+            sampling_locations = np.nonzero(sampling_mask)
+            sampling_locations = np.ravel_multi_index(sampling_locations,
+                                                      sampling_mask.shape)
+            sampling_locations = np.random.choice(
+                sampling_locations,
+                size=int(train_data_proportion * len(sampling_locations)),
+                replace=False
+            )
+            sampling_locations = np.unravel_index(sampling_locations,
+                                                  sampling_mask.shape)
+
+            train_mask = np.zeros_like(sampling_mask)
+            train_mask[sampling_locations] = True
+            val_mask = np.bitwise_xor(train_mask, sampling_mask)
+
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
-                spatial_axes=dataset_metadata["labels"]["axes"],
+                spatial_axes=dataset_metadata_list[0]["labels"]["axes"],
                 min_area=0.01
             )
 
-            dataset = zds.ZarrDataset(
-                list(dataset_metadata.values()),
+            dataset_metadata_list[0]["masks"]["filenames"] = train_mask
+
+            train_datasets = MyZarrDataset(
+                list(dataset_metadata_list[0].values()),
                 return_positions=False,
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
                 shuffle=True,
             )
 
-            dataset.add_transform("images", zds.ToDtype(np.float32))
-            dataset.add_transform("labels", zds.ToDtype(np.int32))
+            dataset_metadata_list[0]["masks"]["filenames"] = val_mask
 
-            if USING_PYTORCH:
-                dataloader = DataLoader(
-                    dataset,
-                    num_workers=self._num_workers,
-                    worker_init_fn=zds.zarrdataset_worker_init_fn
+            val_datasets = MyZarrDataset(
+                list(dataset_metadata_list[0].values()),
+                return_positions=False,
+                draw_same_chunk=False,
+                patch_sampler=patch_sampler,
+                shuffle=True,
+            )
+
+            train_datasets.add_transform("images", zds.ToDtype(np.float32))
+            if transform:
+                train_datasets.add_transform("images", transform)
+
+            train_datasets.add_transform("labels", zds.ToDtype(np.int32))
+            if labels_transform:
+                train_datasets.add_transform("labels", labels_transform)
+
+            val_datasets.add_transform("images", zds.ToDtype(np.float32))
+            if transform:
+                val_datasets.add_transform("images", transform)
+
+            val_datasets.add_transform("labels", zds.ToDtype(np.int32))
+            if labels_transform:
+                val_datasets.add_transform("labels", labels_transform)
+
+            worker_init_fn = zds.zarrdataset_worker_init_fn
+
+        else:
+            train_datasets = []
+            val_datasets = []
+
+            training_indices = np.random.choice(
+                len(dataset_metadata_list),
+                int(train_data_proportion * len(dataset_metadata_list))
+            ).tolist()
+
+            for idx, dataset_metadata in enumerate(dataset_metadata_list):
+                patch_sampler = MyZarrDataset(
+                    patch_size=patch_sizes,
+                    spatial_axes=dataset_metadata["labels"]["axes"],
+                    min_area=0.01
                 )
-            else:
-                dataloader = dataset
 
-            drop_axis = tuple(
-                ax_idx
-                for ax_idx, ax in enumerate(
-                    dataset_metadata["images"]["axes"])
-                if ax != "C" and ax not in model_axes
-            )
+                dataset = MyZarrDataset(
+                    list(dataset_metadata.values()),
+                    return_positions=False,
+                    draw_same_chunk=False,
+                    patch_sampler=patch_sampler,
+                    shuffle=True,
+                )
 
-            drop_label_axis = tuple(
-                ax_idx
-                for ax_idx, ax in enumerate(
-                    dataset_metadata["labels"]["axes"])
-                if ax != "C" and ax not in model_axes
-            )
+                dataset.add_transform("images", zds.ToDtype(np.float32))
+                if transform:
+                    dataset.add_transform("images", transform)
 
-            for img, lab in dataloader:
-                if USING_PYTORCH:
-                    img = img[0].numpy()
-                    lab = lab[0].numpy()
+                dataset.add_transform("labels", zds.ToDtype(np.int32))
+                if labels_transform:
+                    dataset.add_transform("labels", labels_transform)
 
-                if len(drop_axis):
-                    img = img.squeeze(drop_axis)
-
-                if len(drop_label_axis):
-                    lab = lab.squeeze(drop_label_axis)
-
-                img = transform(img)
-
-                if random.random() <= train_data_proportion:
-                    train_data.append(img)
-                    train_labels.append(lab)
+                if idx in training_indices:
+                    train_datasets.append(dataset)
                 else:
-                    test_data.append(img)
-                    test_labels.append(lab)
+                    val_datasets.append(dataset)
 
-        if not test_data:
-            # Take at least one sample at random from the train dataset
-            test_data_idx = random.randrange(0, len(train_data))
-            test_data = [train_data.pop(test_data_idx)]
-            test_labels = [train_labels.pop(test_data_idx)]
+            train_datasets = ChainDataset(train_datasets)
+            val_datasets = ChainDataset(val_datasets)
+            worker_init_fn = zds.chained_zarrdataset_worker_init_fn
 
-        self._fine_tune(train_data, train_labels, test_data, test_labels)
+        if USING_PYTORCH:
+            train_dataloader = DataLoader(
+                train_datasets,
+                num_workers=self._num_workers,
+                worker_init_fn=worker_init_fn
+            )
+            val_dataloader = DataLoader(
+                val_datasets,
+                num_workers=self._num_workers,
+                worker_init_fn=worker_init_fn
+            )
+        else:
+            train_dataloader = train_datasets
+            val_dataloader = val_datasets
 
-        return train_data, train_labels, test_data, test_labels
-
-
-class TunableMethod(SegmentationMethod, FineTuningMethod):
-    def __init__(self):
-        super().__init__()
+        return self._fine_tune(train_dataloader, val_dataloader)
 
 
 class AcquisitionFunction:
     def __init__(self, image_groups_manager: ImageGroupsManager,
                  labels_manager: LabelsManager,
-                 tunable_segmentation_method: TunableMethod):
+                 tunable_segmentation_methods: dict):
         self._patch_sizes = {}
         self._max_samples = 1
         self._MC_repetitions = 3
@@ -347,7 +425,8 @@ class AcquisitionFunction:
 
         self.image_groups_manager = image_groups_manager
         self.labels_manager = labels_manager
-        self.tunable_segmentation_method = tunable_segmentation_method
+        self.tunable_segmentation_method = None
+        self._tunable_segmentation_methods = tunable_segmentation_methods
 
         super().__init__()
 
@@ -441,10 +520,23 @@ class AcquisitionFunction:
 
         return dataset_metadata
 
+    def set_model(self, selected_model):
+        tunable_segmentation_method_cls =\
+            self._tunable_segmentation_methods.get(selected_model, None)
+
+        if tunable_segmentation_method_cls is not None:
+            self.tunable_segmentation_method =\
+                tunable_segmentation_method_cls()
+        else:
+            self.tunable_segmentation_method = None
+
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
                             segmentation_only=False):
+        if self.tunable_segmentation_method is None:
+            return
+
         model_spatial_axes = [
             ax
             for ax in self.model_axes
@@ -563,6 +655,9 @@ class AcquisitionFunction:
             segmentation_group_name: Optional[str] = "segmentation",
             segmentation_only: bool = False,
             ):
+        if self.tunable_segmentation_method is None:
+            return
+
         if run_all:
             for idx in range(self.image_groups_manager.groups_root.childCount()
                              ):
@@ -632,8 +727,7 @@ class AcquisitionFunction:
                     is_multiscale=True
                 )
 
-                acquisition_fun_grp = acquisition_root[""
-                                                       "acquisition_fun/0"]
+                acquisition_fun_grp = acquisition_root["acquisition_fun/0"]
             else:
                 acquisition_fun_grp = None
 
@@ -731,6 +825,7 @@ class AcquisitionFunction:
                     reference_source_axes=output_axes,
                     reference_scale=sampling_output_scale,
                     output_filename=output_filename,
+                    use_as_sampling_mask=True,
                     add_func=viewer.add_labels
                 )
 
@@ -750,8 +845,8 @@ class AcquisitionFunction:
             )
 
             if (not segmentation_only
-               and image_group is not None
-               and image_group.labels_group is None):
+               and image_group is not None):
+               # and image_group.labels_group is None):
                 new_label_group = self.labels_manager.add_labels(
                     segmentation_channel,
                     img_sampling_positions
@@ -769,6 +864,8 @@ class AcquisitionFunction:
                 self.image_groups_manager.groups_root.child(idx),
                 range(self.image_groups_manager.groups_root.childCount()))
         ))
+        if self.tunable_segmentation_method is None:
+            return
 
         if not image_groups:
             return False
@@ -799,10 +896,6 @@ class AcquisitionFunction:
                 (label_layers_group, "labels")
             ]
 
-            if (sampling_mask_layers_group is not None
-               and image_group.labels_group is None):
-                layer_types.append((sampling_mask_layers_group, "masks"))
-
             displayed_source_axes = input_layers_group.source_axes
             displayed_shape = {
                 ax: ax_s
@@ -816,6 +909,25 @@ class AcquisitionFunction:
                 output_axes.remove("C")
                 output_axes = "".join(output_axes)
 
+            if sampling_mask_layers_group is not None:
+                layer_types.append((sampling_mask_layers_group, "masks"))
+            else:
+                self.image_groups_manager.mask_generator.active_image_group =\
+                    image_group
+                self.image_groups_manager.mask_generator.set_patch_size(
+                    [self._patch_sizes.get(ax, 1)
+                     for ax in output_axes]
+                )
+
+                self.image_groups_manager.mask_generator.generate_mask_layer()
+
+                sampling_mask_layers_group = image_group.child(
+                    image_group.sampling_mask_layers_group
+                )
+                sampling_mask_layers_group.child(0).layer.data[:] = 1
+
+                layer_types.append((sampling_mask_layers_group, "masks"))
+
             dataset_metadata = self._prepare_datasets_metadata(
                  displayed_shape,
                  layer_types,
@@ -823,10 +935,9 @@ class AcquisitionFunction:
 
             dataset_metadata_list.append(dataset_metadata)
 
-        self.tunable_segmentation_method.fine_tune(
+        success = self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
-            patch_sizes=self._patch_sizes,
-            model_axes=self.model_axes
+            patch_sizes=self._patch_sizes
         )
 
         self.compute_acquisition_layers(
@@ -835,4 +946,4 @@ class AcquisitionFunction:
             segmentation_only=True
         )
 
-        return True
+        return success

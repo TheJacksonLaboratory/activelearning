@@ -1,22 +1,41 @@
+from ._acquisition import TunableMethod
 from ._interface import (ImageGroupsManagerWidget,
                          LabelsManagerWidget,
                          AcquisitionFunctionWidget)
 
-from ._models import USING_CELLPOSE
-from ._models_interface import SimpleTunableWidget
+from ._models_impl import USING_CELLPOSE
+from ._models_impl_interface import SimpleTunableWidget
 
-if USING_CELLPOSE:
-    from ._models_interface import CellposeTunableWidget
-
-    SEGMENTATION_METHOD_CLASS = CellposeTunableWidget
-
-else:
-    SEGMENTATION_METHOD_CLASS = SimpleTunableWidget
 
 CURRENT_IMAGE_GROUPS_MANAGER = None
 CURRENT_LABEL_GROUPS_MANAGER = None
 CURRENT_SEGMENTATION_METHOD = None
 CURRENT_ACQUISITION_FUNCTION = None
+
+models_registry: dict[str] = {
+    "None selected": None
+}
+
+
+def register_model(model_name: str, model: TunableMethod):
+    global CURRENT_ACQUISITION_FUNCTION
+    if model_name in models_registry:
+        return
+
+    models_registry[model_name] = model
+
+    if CURRENT_ACQUISITION_FUNCTION is not None:
+        CURRENT_ACQUISITION_FUNCTION = AcquisitionFunctionWidget(
+            image_groups_manager=get_image_groups_manager_widget(),
+            labels_manager=get_label_groups_manager_widget(),
+            tunable_segmentation_methods=models_registry,
+        )
+
+
+register_model("simple", SimpleTunableWidget)
+if USING_CELLPOSE:
+    from ._models_impl_interface import CellposeTunableWidget
+    register_model("cellpose", CellposeTunableWidget)
 
 
 def get_image_groups_manager_widget():
@@ -43,12 +62,10 @@ def get_acquisition_function_widget():
     global CURRENT_ACQUISITION_FUNCTION
 
     if CURRENT_ACQUISITION_FUNCTION is None:
-        segmentation_method = SEGMENTATION_METHOD_CLASS()
-
         CURRENT_ACQUISITION_FUNCTION = AcquisitionFunctionWidget(
             image_groups_manager=get_image_groups_manager_widget(),
             labels_manager=get_label_groups_manager_widget(),
-            tunable_segmentation_method=segmentation_method,
+            tunable_segmentation_methods=models_registry,
         )
 
     return CURRENT_ACQUISITION_FUNCTION

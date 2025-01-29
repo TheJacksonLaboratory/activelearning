@@ -384,7 +384,7 @@ class LabelsManager:
                                                                      []):
             for label in map(lambda idx: label_group.child(idx),
                              range(label_group.childCount())):
-                if all(ax_pos.start <= ax_coord <= ax_pos.stop
+                if all(ax_pos.start <= ax_coord < ax_pos.stop
                        for ax_pos, ax_coord in zip(label.position, curr_pos)):
                     clicked_label = label
                     break
