@@ -32,7 +32,7 @@ dependencies = [
     "scikit-image",
     "tensorstore==0.1.59",
     "ome-zarr==0.9.0",
-    "zarr",
+    "zarr>=2.12.0,<3.0.0",
     "zarrdataset>=0.2.0",
 ]
 
