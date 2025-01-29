@@ -14,7 +14,8 @@ import napari
 from napari.layers import Image, Labels, Layer
 from napari.layers._multiscale_data import MultiScaleData
 
-from ._utils import get_source_data, validate_name, get_basename, save_zarr
+from ._utils import (get_source_data, validate_name, get_basename, save_zarr,
+                     get_next_name)
 
 
 class LayerChannel(QTreeWidgetItem):
@@ -183,9 +184,6 @@ class LayersGroup(QTreeWidgetItem):
             )
         else:
             self._source_axes_no_channels = self._source_axes
-
-        # if "C" in self._source_axes and not self.childCount():
-        #     self._source_axes = self._source_axes_no_channels
 
         if "C" not in self._source_axes and self.childCount() > 1:
             self._source_axes = "C" + self._source_axes
@@ -1229,7 +1227,10 @@ class MaskGenerator(PropertiesEditor):
         )
 
         self._active_layer_channel = self._active_layers_group.child(0)
-        masks_group_name = "mask"
+        masks_group_name = get_next_name(
+            "mask",
+            self._active_image_group.layers_groups_names
+        )
 
         reference_shape = {
             ax: ax_s
