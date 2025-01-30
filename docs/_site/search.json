@@ -1,0 +1,1051 @@
+[
+  {
+    "objectID": "tutorials.html",
+    "href": "tutorials.html",
+    "title": "Tutorials",
+    "section": "",
+    "text": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari\n\n\n\n\n\n\nCellpose\n\n\nTransfer learning\n\n\n\nTutorial for fine-tuning the “nuclei” model from cellpose to new data.\n\n\n\n\n\nFernando Cervantes\n\n\n\n\n\n\nNo matching items"
+  },
+  {
+    "objectID": "reference/TunableMethod._get_transform.html",
+    "href": "reference/TunableMethod._get_transform.html",
+    "title": "TunableMethod._get_transform",
+    "section": "",
+    "text": "TunableMethod._get_transform\nTunableMethod._get_transform()",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "TunableMethod._get_transform"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod.html",
+    "href": "reference/TunableMethod.html",
+    "title": "TunableMethod",
+    "section": "",
+    "text": "TunableMethod\nTunableMethod(self)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "TunableMethod"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod._run_pred.html",
+    "href": "reference/SegmentationMethod._run_pred.html",
+    "title": "SegmentationMethod._run_pred",
+    "section": "",
+    "text": "SegmentationMethod._run_pred\nSegmentationMethod._run_pred(img, *args, **kwargs)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "SegmentationMethod._run_pred"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.segment.html",
+    "href": "reference/SegmentationMethod.segment.html",
+    "title": "SegmentationMethod.segment",
+    "section": "",
+    "text": "SegmentationMethod.segment\nSegmentationMethod.segment(img, *args, **kwargs)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "SegmentationMethod.segment"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.probs.html",
+    "href": "reference/SegmentationMethod.probs.html",
+    "title": "SegmentationMethod.probs",
+    "section": "",
+    "text": "SegmentationMethod.probs\nSegmentationMethod.probs(img, *args, **kwargs)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "SegmentationMethod.probs"
+    ]
+  },
+  {
+    "objectID": "reference/LayersGroup.html",
+    "href": "reference/LayersGroup.html",
+    "title": "LayersGroup",
+    "section": "",
+    "text": "LayersGroup\nLayersGroup(self)",
+    "crumbs": [
+      "Image Groups Manger",
+      "LayersGroup"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.remove_labels_group.html",
+    "href": "reference/LabelsManager.remove_labels_group.html",
+    "title": "LabelsManager.remove_labels_group",
+    "section": "",
+    "text": "LabelsManager.remove_labels_group\nLabelsManager.remove_labels_group()",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.remove_labels_group"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.html",
+    "href": "reference/LabelsManager.html",
+    "title": "LabelsManager",
+    "section": "",
+    "text": "LabelsManager\nLabelsManager(self)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.focus_region.html",
+    "href": "reference/LabelsManager.focus_region.html",
+    "title": "LabelsManager.focus_region",
+    "section": "",
+    "text": "LabelsManager.focus_region\nLabelsManager.focus_region(label=None, edit_focused_label=False)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.focus_region"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.edit_labels.html",
+    "href": "reference/LabelsManager.edit_labels.html",
+    "title": "LabelsManager.edit_labels",
+    "section": "",
+    "text": "LabelsManager.edit_labels\nLabelsManager.edit_labels()",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.edit_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.add_labels.html",
+    "href": "reference/LabelsManager.add_labels.html",
+    "title": "LabelsManager.add_labels",
+    "section": "",
+    "text": "LabelsManager.add_labels\nLabelsManager.add_labels(layer_channel, labels)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.add_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LabelGroupRoot.html",
+    "href": "reference/LabelGroupRoot.html",
+    "title": "LabelGroupRoot",
+    "section": "",
+    "text": "LabelGroupRoot\nLabelGroupRoot(self)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelGroupRoot"
+    ]
+  },
+  {
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage image groups used for segmentation and fine tune models.\n\n\n\nLayerChannel\n\n\n\nLayersGroup\n\n\n\nImageGroup\n\n\n\nImageGroupRoot\n\n\n\nImageGroupEditor\n\n\n\nMaskGenerator\n\n\n\nImageGroupsManager\n\n\n\nImageGroupsManager.set_active_item\n\n\n\nImageGroupsManager.get_active_item\n\n\n\nImageGroupsManager.focus_active_item\n\n\n\nImageGroupsManager.update_group\n\n\n\nImageGroupsManager.create_group\n\n\n\nImageGroupsManager.create_layers_group\n\n\n\nImageGroupsManager.add_layers_to_group\n\n\n\nImageGroupsManager.remove_layer\n\n\n\nImageGroupsManager.remove_layers_group\n\n\n\nImageGroupsManager.remove_group\n\n\n\nImageGroupsManager.save_layers_group\n\n\n\nImageGroupsManager.dump_dataset_specs\n\n\n\n\n\n\n\nClass to handle model inference on image managed by the Image Groups Manager widget.\n\n\n\nAcquisitionFunction\n\n\n\ncompute_BALD\n\n\n\ncompute_acquisition_superpixel\n\n\n\ncompute_acquisition_fun\n\n\n\ncompute_segmentation\n\n\n\nadd_multiscale_output_layer\n\n\n\nDropoutEvalOverrider\n\n\n\nadd_dropout\n\n\n\nSegmentationMethod\n\n\n\nSegmentationMethod._run_pred\n\n\n\nSegmentationMethod._run_eval\n\n\n\nSegmentationMethod.probs\n\n\n\nSegmentationMethod.segment\n\n\n\nTunableMethod\n\n\n\nTunableMethod._get_transform\n\n\n\nTunableMethod._fine_tune\n\n\n\nTunableMethod.fine_tune\n\n\n\nAcquisitionFunction\n\n\n\nAcquisitionFunction.compute_acquisition\n\n\n\nAcquisitionFunction.compute_acquisition_layers\n\n\n\nAcquisitionFunction.fine_tune\n\n\n\n\n\n\n\nClass to manage segmentation label groups resulted from executing segmentation with the Acquisition Function Configuration widget.\n\n\n\nLabelItem\n\n\n\nLabelGroup\n\n\n\nLabelGroupRoot\n\n\n\nLabelsManager\n\n\n\nLabelsManager.add_labels\n\n\n\nLabelsManager.remove_labels\n\n\n\nLabelsManager.remove_labels_group\n\n\n\nLabelsManager.navigate\n\n\n\nLabelsManager.focus_region\n\n\n\nLabelsManager.focus_and_edit_region\n\n\n\nLabelsManager.edit_labels\n\n\n\nLabelsManager.commit",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#image-groups-manger",
+    "href": "reference/index.html#image-groups-manger",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage image groups used for segmentation and fine tune models.\n\n\n\nLayerChannel\n\n\n\nLayersGroup\n\n\n\nImageGroup\n\n\n\nImageGroupRoot\n\n\n\nImageGroupEditor\n\n\n\nMaskGenerator\n\n\n\nImageGroupsManager\n\n\n\nImageGroupsManager.set_active_item\n\n\n\nImageGroupsManager.get_active_item\n\n\n\nImageGroupsManager.focus_active_item\n\n\n\nImageGroupsManager.update_group\n\n\n\nImageGroupsManager.create_group\n\n\n\nImageGroupsManager.create_layers_group\n\n\n\nImageGroupsManager.add_layers_to_group\n\n\n\nImageGroupsManager.remove_layer\n\n\n\nImageGroupsManager.remove_layers_group\n\n\n\nImageGroupsManager.remove_group\n\n\n\nImageGroupsManager.save_layers_group\n\n\n\nImageGroupsManager.dump_dataset_specs",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#acquisition-function-configuration",
+    "href": "reference/index.html#acquisition-function-configuration",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to handle model inference on image managed by the Image Groups Manager widget.\n\n\n\nAcquisitionFunction\n\n\n\ncompute_BALD\n\n\n\ncompute_acquisition_superpixel\n\n\n\ncompute_acquisition_fun\n\n\n\ncompute_segmentation\n\n\n\nadd_multiscale_output_layer\n\n\n\nDropoutEvalOverrider\n\n\n\nadd_dropout\n\n\n\nSegmentationMethod\n\n\n\nSegmentationMethod._run_pred\n\n\n\nSegmentationMethod._run_eval\n\n\n\nSegmentationMethod.probs\n\n\n\nSegmentationMethod.segment\n\n\n\nTunableMethod\n\n\n\nTunableMethod._get_transform\n\n\n\nTunableMethod._fine_tune\n\n\n\nTunableMethod.fine_tune\n\n\n\nAcquisitionFunction\n\n\n\nAcquisitionFunction.compute_acquisition\n\n\n\nAcquisitionFunction.compute_acquisition_layers\n\n\n\nAcquisitionFunction.fine_tune",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#label-groups-manger",
+    "href": "reference/index.html#label-groups-manger",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage segmentation label groups resulted from executing segmentation with the Acquisition Function Configuration widget.\n\n\n\nLabelItem\n\n\n\nLabelGroup\n\n\n\nLabelGroupRoot\n\n\n\nLabelsManager\n\n\n\nLabelsManager.add_labels\n\n\n\nLabelsManager.remove_labels\n\n\n\nLabelsManager.remove_labels_group\n\n\n\nLabelsManager.navigate\n\n\n\nLabelsManager.focus_region\n\n\n\nLabelsManager.focus_and_edit_region\n\n\n\nLabelsManager.edit_labels\n\n\n\nLabelsManager.commit",
+    "crumbs": [
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.set_active_item.html",
+    "href": "reference/ImageGroupsManager.set_active_item.html",
+    "title": "ImageGroupsManager.set_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.set_active_item\nImageGroupsManager.set_active_item(item=None)",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.set_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_layers_group.html",
+    "href": "reference/ImageGroupsManager.remove_layers_group.html",
+    "title": "ImageGroupsManager.remove_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.remove_layers_group\nImageGroupsManager.remove_layers_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_group.html",
+    "href": "reference/ImageGroupsManager.remove_group.html",
+    "title": "ImageGroupsManager.remove_group",
+    "section": "",
+    "text": "ImageGroupsManager.remove_group\nImageGroupsManager.remove_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.get_active_item.html",
+    "href": "reference/ImageGroupsManager.get_active_item.html",
+    "title": "ImageGroupsManager.get_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.get_active_item\nImageGroupsManager.get_active_item()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.get_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.dump_dataset_specs.html",
+    "href": "reference/ImageGroupsManager.dump_dataset_specs.html",
+    "title": "ImageGroupsManager.dump_dataset_specs",
+    "section": "",
+    "text": "ImageGroupsManager.dump_dataset_specs\nImageGroupsManager.dump_dataset_specs()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.dump_dataset_specs"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.create_group.html",
+    "href": "reference/ImageGroupsManager.create_group.html",
+    "title": "ImageGroupsManager.create_group",
+    "section": "",
+    "text": "ImageGroupsManager.create_group\nImageGroupsManager.create_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.create_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupRoot.html",
+    "href": "reference/ImageGroupRoot.html",
+    "title": "ImageGroupRoot",
+    "section": "",
+    "text": "ImageGroupRoot\nImageGroupRoot(self)",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupRoot"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroup.html",
+    "href": "reference/ImageGroup.html",
+    "title": "ImageGroup",
+    "section": "",
+    "text": "ImageGroup\nImageGroup(self, group_name=None, group_dir=None)",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroup"
+    ]
+  },
+  {
+    "objectID": "reference/compute_segmentation.html",
+    "href": "reference/compute_segmentation.html",
+    "title": "compute_segmentation",
+    "section": "",
+    "text": "compute_segmentation\ncompute_segmentation(tunable_segmentation_method, img, labels_offset=0)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "compute_segmentation"
+    ]
+  },
+  {
+    "objectID": "reference/compute_acquisition_superpixel.html",
+    "href": "reference/compute_acquisition_superpixel.html",
+    "title": "compute_acquisition_superpixel",
+    "section": "",
+    "text": "compute_acquisition_superpixel\ncompute_acquisition_superpixel(probs, super_pixel_labels)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "compute_acquisition_superpixel"
+    ]
+  },
+  {
+    "objectID": "reference/add_multiscale_output_layer.html",
+    "href": "reference/add_multiscale_output_layer.html",
+    "title": "add_multiscale_output_layer",
+    "section": "",
+    "text": "add_multiscale_output_layer\nadd_multiscale_output_layer(\n    root,\n    axes,\n    scale,\n    data_group,\n    group_name,\n    layers_group_name,\n    image_group,\n    reference_source_axes,\n    reference_scale,\n    output_filename=None,\n    contrast_limits=None,\n    colormap=None,\n    use_as_input_labels=False,\n    use_as_sampling_mask=False,\n    add_func=napari.Viewer.add_image,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "add_multiscale_output_layer"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.html",
+    "href": "reference/AcquisitionFunction.html",
+    "title": "AcquisitionFunction",
+    "section": "",
+    "text": "AcquisitionFunction\nAcquisitionFunction(\n    self,\n    image_groups_manager,\n    labels_manager,\n    tunable_segmentation_methods,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "AcquisitionFunction"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.compute_acquisition_layers.html",
+    "href": "reference/AcquisitionFunction.compute_acquisition_layers.html",
+    "title": "AcquisitionFunction.compute_acquisition_layers",
+    "section": "",
+    "text": "AcquisitionFunction.compute_acquisition_layers\nAcquisitionFunction.compute_acquisition_layers(\n    run_all=False,\n    segmentation_group_name='segmentation',\n    segmentation_only=False,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.compute_acquisition_layers"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.compute_acquisition.html",
+    "href": "reference/AcquisitionFunction.compute_acquisition.html",
+    "title": "AcquisitionFunction.compute_acquisition",
+    "section": "",
+    "text": "AcquisitionFunction.compute_acquisition\nAcquisitionFunction.compute_acquisition(\n    dataset_metadata,\n    acquisition_fun,\n    segmentation_out,\n    sampled_mask=None,\n    segmentation_only=False,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.compute_acquisition"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.fine_tune.html",
+    "href": "reference/AcquisitionFunction.fine_tune.html",
+    "title": "AcquisitionFunction.fine_tune",
+    "section": "",
+    "text": "AcquisitionFunction.fine_tune\nAcquisitionFunction.fine_tune()",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.fine_tune"
+    ]
+  },
+  {
+    "objectID": "reference/add_dropout.html",
+    "href": "reference/add_dropout.html",
+    "title": "add_dropout",
+    "section": "",
+    "text": "add_dropout\nadd_dropout(net, p=0.05)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "add_dropout"
+    ]
+  },
+  {
+    "objectID": "reference/compute_acquisition_fun.html",
+    "href": "reference/compute_acquisition_fun.html",
+    "title": "compute_acquisition_fun",
+    "section": "",
+    "text": "compute_acquisition_fun\ncompute_acquisition_fun(\n    tunable_segmentation_method,\n    img,\n    img_sp,\n    MC_repetitions,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "compute_acquisition_fun"
+    ]
+  },
+  {
+    "objectID": "reference/compute_BALD.html",
+    "href": "reference/compute_BALD.html",
+    "title": "compute_BALD",
+    "section": "",
+    "text": "compute_BALD\ncompute_BALD(probs)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "compute_BALD"
+    ]
+  },
+  {
+    "objectID": "reference/DropoutEvalOverrider.html",
+    "href": "reference/DropoutEvalOverrider.html",
+    "title": "DropoutEvalOverrider",
+    "section": "",
+    "text": "DropoutEvalOverrider\nDropoutEvalOverrider(self, dropout_module)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "DropoutEvalOverrider"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupEditor.html",
+    "href": "reference/ImageGroupEditor.html",
+    "title": "ImageGroupEditor",
+    "section": "",
+    "text": "ImageGroupEditor\nImageGroupEditor(self)",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupEditor"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.add_layers_to_group.html",
+    "href": "reference/ImageGroupsManager.add_layers_to_group.html",
+    "title": "ImageGroupsManager.add_layers_to_group",
+    "section": "",
+    "text": "ImageGroupsManager.add_layers_to_group\nImageGroupsManager.add_layers_to_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.add_layers_to_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.create_layers_group.html",
+    "href": "reference/ImageGroupsManager.create_layers_group.html",
+    "title": "ImageGroupsManager.create_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.create_layers_group\nImageGroupsManager.create_layers_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.create_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.focus_active_item.html",
+    "href": "reference/ImageGroupsManager.focus_active_item.html",
+    "title": "ImageGroupsManager.focus_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.focus_active_item\nImageGroupsManager.focus_active_item(item)",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.focus_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.html",
+    "href": "reference/ImageGroupsManager.html",
+    "title": "ImageGroupsManager",
+    "section": "",
+    "text": "ImageGroupsManager\nImageGroupsManager(self, default_axis_labels='TZYX')",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_layer.html",
+    "href": "reference/ImageGroupsManager.remove_layer.html",
+    "title": "ImageGroupsManager.remove_layer",
+    "section": "",
+    "text": "ImageGroupsManager.remove_layer\nImageGroupsManager.remove_layer()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_layer"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.save_layers_group.html",
+    "href": "reference/ImageGroupsManager.save_layers_group.html",
+    "title": "ImageGroupsManager.save_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.save_layers_group\nImageGroupsManager.save_layers_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.save_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.update_group.html",
+    "href": "reference/ImageGroupsManager.update_group.html",
+    "title": "ImageGroupsManager.update_group",
+    "section": "",
+    "text": "ImageGroupsManager.update_group\nImageGroupsManager.update_group()",
+    "crumbs": [
+      "Image Groups Manger",
+      "ImageGroupsManager.update_group"
+    ]
+  },
+  {
+    "objectID": "reference/LabelGroup.html",
+    "href": "reference/LabelGroup.html",
+    "title": "LabelGroup",
+    "section": "",
+    "text": "LabelGroup\nLabelGroup(self, layer_channel=None)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelGroup"
+    ]
+  },
+  {
+    "objectID": "reference/LabelItem.html",
+    "href": "reference/LabelItem.html",
+    "title": "LabelItem",
+    "section": "",
+    "text": "LabelItem\nLabelItem(self, acquisition_val, position)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelItem"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.commit.html",
+    "href": "reference/LabelsManager.commit.html",
+    "title": "LabelsManager.commit",
+    "section": "",
+    "text": "LabelsManager.commit\nLabelsManager.commit()",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.commit"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.focus_and_edit_region.html",
+    "href": "reference/LabelsManager.focus_and_edit_region.html",
+    "title": "LabelsManager.focus_and_edit_region",
+    "section": "",
+    "text": "LabelsManager.focus_and_edit_region\nLabelsManager.focus_and_edit_region(layer, event)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.focus_and_edit_region"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.navigate.html",
+    "href": "reference/LabelsManager.navigate.html",
+    "title": "LabelsManager.navigate",
+    "section": "",
+    "text": "LabelsManager.navigate\nLabelsManager.navigate(delta_patch_index=0, delta_image_index=0)",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.navigate"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.remove_labels.html",
+    "href": "reference/LabelsManager.remove_labels.html",
+    "title": "LabelsManager.remove_labels",
+    "section": "",
+    "text": "LabelsManager.remove_labels\nLabelsManager.remove_labels()",
+    "crumbs": [
+      "Label Groups Manger",
+      "LabelsManager.remove_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LayerChannel.html",
+    "href": "reference/LayerChannel.html",
+    "title": "LayerChannel",
+    "section": "",
+    "text": "LayerChannel\nLayerChannel(self, layer, channel=0, source_axes='TZYX')",
+    "crumbs": [
+      "Image Groups Manger",
+      "LayerChannel"
+    ]
+  },
+  {
+    "objectID": "reference/MaskGenerator.html",
+    "href": "reference/MaskGenerator.html",
+    "title": "MaskGenerator",
+    "section": "",
+    "text": "MaskGenerator\nMaskGenerator(self)",
+    "crumbs": [
+      "Image Groups Manger",
+      "MaskGenerator"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.html",
+    "href": "reference/SegmentationMethod.html",
+    "title": "SegmentationMethod",
+    "section": "",
+    "text": "SegmentationMethod\nSegmentationMethod(self)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "SegmentationMethod"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod._run_eval.html",
+    "href": "reference/SegmentationMethod._run_eval.html",
+    "title": "SegmentationMethod._run_eval",
+    "section": "",
+    "text": "SegmentationMethod._run_eval\nSegmentationMethod._run_eval(img, *args, **kwargs)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "SegmentationMethod._run_eval"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod.fine_tune.html",
+    "href": "reference/TunableMethod.fine_tune.html",
+    "title": "TunableMethod.fine_tune",
+    "section": "",
+    "text": "TunableMethod.fine_tune\nTunableMethod.fine_tune(\n    dataset_metadata_list,\n    train_data_proportion=0.8,\n    patch_sizes=256,\n)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "TunableMethod.fine_tune"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod._fine_tune.html",
+    "href": "reference/TunableMethod._fine_tune.html",
+    "title": "TunableMethod._fine_tune",
+    "section": "",
+    "text": "TunableMethod._fine_tune\nTunableMethod._fine_tune(train_dataloader, val_dataloader)",
+    "crumbs": [
+      "Acquisition Function Configuration",
+      "TunableMethod._fine_tune"
+    ]
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "",
+    "text": "Follow the instructions to install napari from its official website.\n\n\n\n\n\n\n\n\n\nImportant\n\n\n\nIf you installed napari using conda, activate that same environment before installing the Active Learning plugin.\n\n\nInstall the plugin adding [cellpose] to the command so all dependencies required for this tutorial are available.\npython -m pip install \"napari-activelearning[cellpose]\""
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#load-a-sample-image",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#load-a-sample-image",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.1. Load a sample image",
+    "text": "1.1. Load a sample image\nYou can use the cells 3D image sample from napari’s built-in samples.\nFile &gt; Open Sample &gt; napari builtins &gt; Cells (3D+2Ch)"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-image-groups-manager-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-image-groups-manager-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.2. Add the Image Groups Manager widget to napari’s window",
+    "text": "1.2. Add the Image Groups Manager widget to napari’s window\nThe Image groups manager can be found under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Image groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-an-image-group-containing-nuclei-and-membrane-layers",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-an-image-group-containing-nuclei-and-membrane-layers",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.3. Create an Image Group containing nuclei and membrane layers",
+    "text": "1.3. Create an Image Group containing nuclei and membrane layers\n\nSelect the nuclei and membrane layer\nClick the New Image Group button on the Image Groups Manager widget"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#edit-the-image-group-properties",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#edit-the-image-group-properties",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.4. Edit the image group properties",
+    "text": "1.4. Edit the image group properties\n\n\n\nSelect the newly created image group, it will appear as “images” in the Image groups manager widget.\nClick the Edit group properties checkbox.\nMake sure that Axes order is “CZYX”, otherwise, you can edit it and press Enter to update the axes names."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.1. Add the Acquisition function configuration widget to napari’s window",
+    "text": "2.1. Add the Acquisition function configuration widget to napari’s window\nThe Acquisition function configuration is under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Acquisition function configuration\n\n\n\n\n\n\nTip\n\n\n\nAll Active Learning widgets can be un-docked from their current place and re-docked into other more convenient location within napari’s window, or even as tabs, as illustrated in this tutorial."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#define-sampling-configuration",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#define-sampling-configuration",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.2. Define sampling configuration",
+    "text": "2.2. Define sampling configuration\n\n\n\nMake sure “Input axes” are set to “ZYX”\n\n\n\n\n\n\n\nNote\n\n\n\nThis specifies that the samples will be taken from those axes.\n\n\n\nChange the “Model axes” to “CYX”\n\n\n\n\n\n\n\nNote\n\n\n\nAnd this specifies that sample’s axes will be permuted to match the “Model axes” order."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#set-the-size-of-the-sampling-patch",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#set-the-size-of-the-sampling-patch",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.3. Set the size of the sampling patch",
+    "text": "2.3. Set the size of the sampling patch\n\n\n\n\n\n\n\n\n\n\n\n\n\nClick the “Edit patch size” checkbox\nChange the patch size of “X” and “Y” to 256, and the “Z” axis to 1.\n\n\n\n\n\n\n\nNote\n\n\n\nThis directs the Active Learning plugin to sample at random patches of size \\(256\\times256\\) pixels, and \\(1\\) slice of depth."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#define-the-maximum-number-of-samples-to-extract",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#define-the-maximum-number-of-samples-to-extract",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.4. Define the maximum number of samples to extract",
+    "text": "2.4. Define the maximum number of samples to extract\n\n\n\n\n\n\n\n\n\n\n\n\n\nSet the “Maximum samples” to \\(4\\) and press Enter\n\n\n\n\n\n\n\nNote\n\n\n\nThis tells the Active Learning plugin to process at most four samples at random from the whole image."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#configure-the-segmentation-method",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#configure-the-segmentation-method",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.5. Configure the segmentation method",
+    "text": "2.5. Configure the segmentation method\n\n\n\nUse the “Model” dropdown list to select the cellpose method\nClick the “Advanced segmentation parameters” checkbox\nChange the “Channel axis” to \\(0\\)\n\n\n\n\n\n\n\nNote\n\n\n\nThis makes cellpose to use the first axis as “Color” channel.\n\n\n\nChange the second channel to \\(1\\) (the right spin box in the “channels” row)\n\n\n\n\n\n\n\nNote\n\n\n\nThis tells cellpose to segment the first channel (\\(0\\)) and use the second channel (\\(1\\)) as help channel.\n\n\n\nChoose the “nuclei” model from the dropdown list"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-segmentation-method-on-all-image-groups",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-segmentation-method-on-all-image-groups",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.6. Execute the segmentation method on all image groups",
+    "text": "2.6. Execute the segmentation method on all image groups\n\n\n\nClick the “Run on all image groups” button\n\n\n\n\n\n\n\nNote\n\n\n\nTo execute the segmentation only on specific image groups, select the desired image groups in the Image groups manager widget and use the “Run on selected image groups” button instead."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-segmentation-layer",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-segmentation-layer",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.7. Inspect the segmentation layer",
+    "text": "2.7. Inspect the segmentation layer\n\n\n\n\n\n\nNote\n\n\n\nBecause the input image is 3D, you might have to slide the Z index at the bottom of napari’s window to look at the samples that have been segmented."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-a-mask-to-restrict-the-sampling-space",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-a-mask-to-restrict-the-sampling-space",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.1. Create a mask to restrict the sampling space",
+    "text": "3.1. Create a mask to restrict the sampling space\n\n\n\nSwitch to the Image groups manager tab\nClick the “Edit mask properties” checkbox\nSet the mask scale to \\(256\\) for the “X” and “Y” axes, and a scale of \\(1\\) for the “Z” axis\nClick the “Create mask” button\n\n\n\n\n\n\n\nNote\n\n\n\nThis creates a low-resolution mask where each of its pixels corresponds to a \\(256\\times256\\) pixels region in the input image. Because the mask is low-resolution, it uses less space in memory and disk."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#specify-the-samplable-regions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#specify-the-samplable-regions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.2. Specify the samplable regions",
+    "text": "3.2. Specify the samplable regions\n\nDraw a mask that covers slices \\(27\\) to \\(30\\) in the “Z” axis.\n\n\n\n\n\n\n\nNote\n\n\n\nMove the slider at the bottom of napari’s window to navigate between slices in the “Z” axis."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-segmentation-process-on-the-masked-regions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-segmentation-process-on-the-masked-regions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.3. Execute the segmentation process on the masked regions",
+    "text": "3.3. Execute the segmentation process on the masked regions\n\n\n\nGo back to the Acquisition function configuration widget\nClick the “Run on all image groups” button again\n\n\n\n\n\n\n\nNote\n\n\n\nBecause the image group has a defined mask, samples will be extracted at random inside those defined regions only."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-masked-segmentation-output",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-masked-segmentation-output",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.4. Inspect the masked segmentation output",
+    "text": "3.4. Inspect the masked segmentation output"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.1. Add the Label groups manager widget to napari’s window",
+    "text": "4.1. Add the Label groups manager widget to napari’s window\nYou can find the Label groups manager under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Label groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-a-segmented-patch-to-edit",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-a-segmented-patch-to-edit",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.2. Select a segmented patch to edit",
+    "text": "4.2. Select a segmented patch to edit\n\nDouble click on any segmented patch in the viewer (e.g. on slice \\(27\\))\n\n\n\n\n\n\n\nNote\n\n\n\nThis creates a new editable “Labels edit” layer with a copy of the selected patch."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.3. Use napari’s layer controls to make changes on the objects of the current patch",
+    "text": "4.3. Use napari’s layer controls to make changes on the objects of the current patch"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#commit-changes-to-the-labels-layer",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#commit-changes-to-the-labels-layer",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.4. Commit changes to the labels layer",
+    "text": "4.4. Commit changes to the labels layer\n\nOnce you have finished editing the labels, click the “Commit changes” button on the Label groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#navigate-between-segmented-patches",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#navigate-between-segmented-patches",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.5. Navigate between segmented patches",
+    "text": "4.5. Navigate between segmented patches\n\n\n\nExpand the second group of labels\nDouble-click on any of the nested items to open it for editing\nUse the navigation buttons to move between segmented patches\nContinue editing the segmentation in the current patch and commit the changes when finished"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#setup-fine-tuning-configuration",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#setup-fine-tuning-configuration",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.6. Setup fine tuning configuration",
+    "text": "4.6. Setup fine tuning configuration\n\n\n\nGo to the Acquisition function configuration widget\nClick the “Advanced fine tuning parameters” checkbox\nChange the “save path” to a location where you want to store the fine tuned model"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#setup-fine-tuning-configuration-1",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#setup-fine-tuning-configuration-1",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.6. Setup fine tuning configuration",
+    "text": "4.6. Setup fine tuning configuration\n\n\n\nChange the “model name” to “nuclei_ft”\n\n\n\n\n\n\n\nNote\n\n\n\nScroll the Advanced fine tuning parameters widget down to show more parameters.\n\n\n\nSet the “batch size” to \\(3\\)\nChange the “learning rate” to \\(0.0001\\)\n\n\n\n\n\n\n\nNote\n\n\n\nYou can modify other parameters for the training process here, such as the number of training epochs."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-fine-tuning-process",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#execute-the-fine-tuning-process",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.7. Execute the fine tuning process",
+    "text": "4.7. Execute the fine tuning process\n\n\n\nClick the “Fine tune model” button to run the training process.\n\n\n\n\n\n\n\nNote\n\n\n\nDepending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#review-the-fine-tuned-segmentation",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#review-the-fine-tuned-segmentation",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.8. Review the fine tuned segmentation",
+    "text": "4.8. Review the fine tuned segmentation\n\n\n\n\n\n\nTip\n\n\n\nUse the opacity slider to compare how the fine tuned model segments the same objects that were labeled for training."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-a-mask-to-apply-the-fine-tuned-model-for-inference",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#create-a-mask-to-apply-the-fine-tuned-model-for-inference",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.1. Create a mask to apply the fine tuned model for inference",
+    "text": "5.1. Create a mask to apply the fine tuned model for inference\n\n\n\nSwitch to the Image groups manager tab\nClick the “Edit mask properties” checkbox\nSet the mask scale to \\(256\\) for the “X” and “Y” axes, and a scale of \\(1\\) for the “Z” axis\nClick the “Create mask” button"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#specify-the-samplable-regions-for-inference",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#specify-the-samplable-regions-for-inference",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.2. Specify the samplable regions for inference",
+    "text": "5.2. Specify the samplable regions for inference\n\nDraw a mask that covers slices \\(31\\) to \\(34\\) in the “Z” axis."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-new-mask-layer-to-be-used-for-sampling-positions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-new-mask-layer-to-be-used-for-sampling-positions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.3. Select the new mask layer to be used for sampling positions",
+    "text": "5.3. Select the new mask layer to be used for sampling positions\n\n\n\nScroll down the Image groups manager tree to show the newest mask layer grup (“mask (1)”)\nSelect the “mask (1)” layer group\n\n\n\n\n\n\n\nNote\n\n\n\nThe “Group name” column in the groups tree can be resized to show the complete names.\n\n\n\nMake sure that “Use as sampling mask” checkbox is checked"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#use-the-fine-tuned-model-for-inference-in-the-masked-region",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#use-the-fine-tuned-model-for-inference-in-the-masked-region",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.4. Use the fine tuned model for inference in the masked region",
+    "text": "5.4. Use the fine tuned model for inference in the masked region\n\n\n\nGo back to the Acquisition function configuration widget\nClick “Run on all image groups” button again"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-output-of-the-fine-tuned-model",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#inspect-the-output-of-the-fine-tuned-model",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.5. Inspect the output of the fine tuned model",
+    "text": "5.5. Inspect the output of the fine tuned model\n\nNow you have a fine tuned model for nuclei segmentation that has been adapted to this image!\n\n\n\n\n\n\n\nNote\n\n\n\nThe fine tuned model can be used in Cellpose’s GUI software, their python API package, or any other package that supports pretrained cellpose models."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#segment-the-newly-masked-region-with-the-base-model",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#segment-the-newly-masked-region-with-the-base-model",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.6. Segment the newly masked region with the base model",
+    "text": "5.6. Segment the newly masked region with the base model\n\n\n\nChoose the “nuclei” model again from the dropdown list in the Advanced segmentation parameters section\nClick the “Run on all image groups” button again\n\n\n\n\n\n\n\nNote\n\n\n\nThis will execute the segmentation process with the non-fine-tuned “nuclei” model on the same sampling positions from the last run."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#compare-the-results-of-both-models",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#compare-the-results-of-both-models",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.7. Compare the results of both models",
+    "text": "5.7. Compare the results of both models\n\n\n\n\n\n\nTip\n\n\n\nHide all the layers and show only the “nuclei” and “membrane” layers, as well as the “images segmentation [2]” and “images segmentation [3]” layers that correspond to the output of the fine tuned model and base model, respectively."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#load-a-sample-image",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#load-a-sample-image",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.1. Load a sample image",
+    "text": "1.1. Load a sample image\nYou can use the cells 3D image sample from napari’s built-in samples.\nFile &gt; Open Sample &gt; napari builtins &gt; Cells (3D+2Ch)"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-image-groups-manager-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-image-groups-manager-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.2. Add the Image Groups Manager widget to napari’s window",
+    "text": "1.2. Add the Image Groups Manager widget to napari’s window\nThe Image groups manager can be found under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Image groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-an-image-group-containing-nuclei-and-membrane-layers",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-an-image-group-containing-nuclei-and-membrane-layers",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.3. Create an Image Group containing nuclei and membrane layers",
+    "text": "1.3. Create an Image Group containing nuclei and membrane layers\n\nSelect the nuclei and membrane layer\nClick the New Image Group button on the Image Groups Manager widget"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#edit-the-image-group-properties",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#edit-the-image-group-properties",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "1.4. Edit the image group properties",
+    "text": "1.4. Edit the image group properties\n\n\n\nSelect the newly created image group, it will appear as “images” in the Image groups manager widget.\nClick the Edit group properties checkbox.\nMake sure that Axes order is “CZYX”, otherwise, you can edit it and press Enter to update the axes names."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.1. Add the Acquisition function configuration widget to napari’s window",
+    "text": "2.1. Add the Acquisition function configuration widget to napari’s window\nThe Acquisition function configuration is under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Acquisition function configuration\n\n\n\n\n\n\nTip\n\n\nAll Active Learning widgets can be un-docked from their current place and re-docked into other more convenient location within napari’s window, or even as tabs, as illustrated in this tutorial."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#define-sampling-configuration",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#define-sampling-configuration",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.2. Define sampling configuration",
+    "text": "2.2. Define sampling configuration\n\n\n\nMake sure “Input axes” are set to “ZYX”\n\n\n\n\n\n\n\nNote\n\n\nThis specifies that the samples will be taken from those axes.\n\n\n\n\nChange the “Model axes” to “CYX”\n\n\n\n\n\n\n\nNote\n\n\nAnd this specifies that sample’s axes will be permuted to match the “Model axes” order."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#set-the-size-of-the-sampling-patch",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#set-the-size-of-the-sampling-patch",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.3. Set the size of the sampling patch",
+    "text": "2.3. Set the size of the sampling patch\n\n\n\n\n\n\n\n\n\n\n\n\n\nClick the “Edit patch size” checkbox\nChange the patch size of “X” and “Y” to 256, and the “Z” axis to 1.\n\n\n\n\n\n\n\nNote\n\n\nThis directs the Active Learning plugin to sample at random patches of size \\(256\\times256\\) pixels, and \\(1\\) slice of depth."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#define-the-maximum-number-of-samples-to-extract",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#define-the-maximum-number-of-samples-to-extract",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.4. Define the maximum number of samples to extract",
+    "text": "2.4. Define the maximum number of samples to extract\n\n\n\n\n\n\n\n\n\n\n\n\n\nSet the “Maximum samples” to \\(4\\) and press Enter\n\n\n\n\n\n\n\nNote\n\n\nThis tells the Active Learning plugin to process at most four samples at random from the whole image."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#configure-the-segmentation-method",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#configure-the-segmentation-method",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.5. Configure the segmentation method",
+    "text": "2.5. Configure the segmentation method\n\n\n\nUse the “Model” dropdown list to select the cellpose method\nClick the “Advanced segmentation parameters” checkbox\nChange the “Channel axis” to \\(0\\)\n\n\n\n\n\n\n\nNote\n\n\nThis makes cellpose to use the first axis as “Color” channel.\n\n\n\n\nChange the second channel to \\(1\\) (the right spin box in the “channels” row)\n\n\n\n\n\n\n\nNote\n\n\nThis tells cellpose to segment the first channel (\\(0\\)) and use the second channel (\\(1\\)) as help channel.\n\n\n\n\nChoose the “nuclei” model from the dropdown list"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-segmentation-method-on-all-image-groups",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-segmentation-method-on-all-image-groups",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.6. Execute the segmentation method on all image groups",
+    "text": "2.6. Execute the segmentation method on all image groups\n\n\n\nClick the “Run on all image groups” button\n\n\n\n\n\n\n\nNote\n\n\nTo execute the segmentation only on specific image groups, select the desired image groups in the Image groups manager widget and use the “Run on selected image groups” button instead."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-segmentation-layer",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-segmentation-layer",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "2.7. Inspect the segmentation layer",
+    "text": "2.7. Inspect the segmentation layer\n\n\n\n\n\n\nNote\n\n\nBecause the input image is 3D, you might have to slide the Z index at the bottom of napari’s window to look at the samples that have been segmented."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-a-mask-to-restrict-the-sampling-space",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-a-mask-to-restrict-the-sampling-space",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.1. Create a mask to restrict the sampling space",
+    "text": "3.1. Create a mask to restrict the sampling space\n\n\n\nSwitch to the Image groups manager tab\nClick the “Edit mask properties” checkbox\nSet the mask scale to \\(256\\) for the “X” and “Y” axes, and a scale of \\(1\\) for the “Z” axis\nClick the “Create mask” button\n\n\n\n\n\n\n\nNote\n\n\nThis creates a low-resolution mask where each of its pixels corresponds to a \\(256\\times256\\) pixels region in the input image. Because the mask is low-resolution, it uses less space in memory and disk."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#specify-the-samplable-regions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#specify-the-samplable-regions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.2. Specify the samplable regions",
+    "text": "3.2. Specify the samplable regions\n\nDraw a mask that covers slices \\(27\\) to \\(30\\) in the “Z” axis.\n\n\n\n\n\n\n\nNote\n\n\nMove the slider at the bottom of napari’s window to navigate between slices in the “Z” axis."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-segmentation-process-on-the-masked-regions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-segmentation-process-on-the-masked-regions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.3. Execute the segmentation process on the masked regions",
+    "text": "3.3. Execute the segmentation process on the masked regions\n\n\n\nGo back to the Acquisition function configuration widget\nClick the “Run on all image groups” button again\n\n\n\n\n\n\n\nNote\n\n\nBecause the image group has a defined mask, samples will be extracted at random inside those defined regions only."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-masked-segmentation-output",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-masked-segmentation-output",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "3.4. Inspect the masked segmentation output",
+    "text": "3.4. Inspect the masked segmentation output"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.1. Add the Label groups manager widget to napari’s window",
+    "text": "4.1. Add the Label groups manager widget to napari’s window\nYou can find the Label groups manager under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Label groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-a-segmented-patch-to-edit",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-a-segmented-patch-to-edit",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.2. Select a segmented patch to edit",
+    "text": "4.2. Select a segmented patch to edit\n\nDouble click on any segmented patch in the viewer (e.g. on slice \\(27\\))\n\n\n\n\n\n\n\nNote\n\n\nThis creates a new editable “Labels edit” layer with a copy of the selected patch."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.3. Use napari’s layer controls to make changes on the objects of the current patch",
+    "text": "4.3. Use napari’s layer controls to make changes on the objects of the current patch"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#commit-changes-to-the-labels-layer",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#commit-changes-to-the-labels-layer",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.4. Commit changes to the labels layer",
+    "text": "4.4. Commit changes to the labels layer\n\nOnce you have finished editing the labels, click the “Commit changes” button on the Label groups manager"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#navigate-between-segmented-patches",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#navigate-between-segmented-patches",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.5. Navigate between segmented patches",
+    "text": "4.5. Navigate between segmented patches\n\n\n\nExpand the second group of labels\nDouble-click on any of the nested items to open it for editing\nUse the navigation buttons to move between segmented patches\nContinue editing the segmentation in the current patch and commit the changes when finished"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#setup-fine-tuning-configuration",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#setup-fine-tuning-configuration",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.6. Setup fine tuning configuration",
+    "text": "4.6. Setup fine tuning configuration\n\n\n\nGo to the Acquisition function configuration widget\nClick the “Advanced fine tuning parameters” checkbox\nChange the “save path” to a location where you want to store the fine tuned model"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#setup-fine-tuning-configuration-1",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#setup-fine-tuning-configuration-1",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.6. Setup fine tuning configuration",
+    "text": "4.6. Setup fine tuning configuration\n\n\n\nChange the “model name” to “nuclei_ft”\n\n\n\n\n\n\n\nNote\n\n\nScroll the Advanced fine tuning parameters widget down to show more parameters.\n\n\n\n\nSet the “batch size” to \\(3\\)\nChange the “learning rate” to \\(0.0001\\)\n\n\n\n\n\n\n\nNote\n\n\nYou can modify other parameters for the training process here, such as the number of training epochs."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-fine-tuning-process",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#execute-the-fine-tuning-process",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.7. Execute the fine tuning process",
+    "text": "4.7. Execute the fine tuning process\n\n\n\nClick the “Fine tune model” button to run the training process.\n\n\n\n\n\n\n\nNote\n\n\nDepending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#review-the-fine-tuned-segmentation",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#review-the-fine-tuned-segmentation",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "4.8. Review the fine tuned segmentation",
+    "text": "4.8. Review the fine tuned segmentation\n\n\n\n\n\n\nTip\n\n\nUse the opacity slider to compare how the fine tuned model segments the same objects that were labeled for training."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-a-mask-to-apply-the-fine-tuned-model-for-inference",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#create-a-mask-to-apply-the-fine-tuned-model-for-inference",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.1. Create a mask to apply the fine tuned model for inference",
+    "text": "5.1. Create a mask to apply the fine tuned model for inference\n\n\n\nSwitch to the Image groups manager tab\nClick the “Edit mask properties” checkbox\nSet the mask scale to \\(256\\) for the “X” and “Y” axes, and a scale of \\(1\\) for the “Z” axis\nClick the “Create mask” button"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#specify-the-samplable-regions-for-inference",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#specify-the-samplable-regions-for-inference",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.2. Specify the samplable regions for inference",
+    "text": "5.2. Specify the samplable regions for inference\n\nDraw a mask that covers slices \\(31\\) to \\(34\\) in the “Z” axis."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-new-mask-layer-to-be-used-for-sampling-positions",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-new-mask-layer-to-be-used-for-sampling-positions",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.3. Select the new mask layer to be used for sampling positions",
+    "text": "5.3. Select the new mask layer to be used for sampling positions\n\n\n\nScroll down the Image groups manager tree to show the newest mask layer grup (“mask (1)”)\nSelect the “mask (1)” layer group\n\n\n\n\n\n\n\nNote\n\n\nThe “Group name” column in the groups tree can be resized to show the complete names.\n\n\n\n\nMake sure that “Use as sampling mask” checkbox is checked"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#use-the-fine-tuned-model-for-inference-in-the-masked-region",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#use-the-fine-tuned-model-for-inference-in-the-masked-region",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.4. Use the fine tuned model for inference in the masked region",
+    "text": "5.4. Use the fine tuned model for inference in the masked region\n\n\n\nGo back to the Acquisition function configuration widget\nClick “Run on all image groups” button again"
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-output-of-the-fine-tuned-model",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#inspect-the-output-of-the-fine-tuned-model",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.5. Inspect the output of the fine tuned model",
+    "text": "5.5. Inspect the output of the fine tuned model\n\nNow you have a fine tuned model for nuclei segmentation that has been adapted to this image!\n\n\n\n\n\n\n\nNote\n\n\nThe fine tuned model can be used in Cellpose’s GUI software, their python API package, or any other package that supports pretrained cellpose models."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#segment-the-newly-masked-region-with-the-base-model",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#segment-the-newly-masked-region-with-the-base-model",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.6. Segment the newly masked region with the base model",
+    "text": "5.6. Segment the newly masked region with the base model\n\n\n\nChoose the “nuclei” model again from the dropdown list in the Advanced segmentation parameters section\nClick the “Run on all image groups” button again\n\n\n\n\n\n\n\nNote\n\n\nThis will execute the segmentation process with the non-fine-tuned “nuclei” model on the same sampling positions from the last run."
+  },
+  {
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#compare-the-results-of-both-models",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#compare-the-results-of-both-models",
+    "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
+    "section": "5.7. Compare the results of both models",
+    "text": "5.7. Compare the results of both models\n\n\n\n\n\n\nTip\n\n\nHide all the layers and show only the “nuclei” and “membrane” layers, as well as the “images segmentation [2]” and “images segmentation [3]” layers that correspond to the output of the fine tuned model and base model, respectively."
+  }
+]

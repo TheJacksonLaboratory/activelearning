@@ -10,17 +10,13 @@ website:
   page-navigation: true
   navbar:
     left:
-      - file: tutorials/
-        text: Tutorials
+      - tutorials.qmd
       - href: reference/
         text: API Reference
 
 format:
   html:
     theme: cosmo
-    css:
-      - api/_styles-quartodoc.css
-      - styles.css
     toc: true
 
 quartodoc:

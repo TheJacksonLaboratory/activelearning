@@ -1,0 +1,7 @@
+---
+title: "Tutorials"
+listing: 
+  contents: tutorials
+  type: default
+  categories: true # allows you to sort posts by assigned categories 
+---
