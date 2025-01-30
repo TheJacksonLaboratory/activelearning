@@ -1,0 +1,6 @@
+# LabelGroup { #napari_activelearning.LabelGroup }
+
+```python
+LabelGroup(self, layer_channel=None)
+```
+

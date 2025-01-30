@@ -180,11 +180,5 @@ venv/
 
 .quarto
 models
-/docs/_sidebar.yml
-/docs/about.qmd
-/docs/index.qmd
-/docs/objects.json
-/docs/reference
-/docs/styles.css
-/docs/tutorials/cellpose_tutorial_notebook.qmd
-/docs/tutorials/cellpose_tutorial/.jupyter_cache
+/docs_src/tutorials/cellpose_tutorial_notebook.qmd
+/docs_src/tutorials/cellpose_tutorial/.jupyter_cache

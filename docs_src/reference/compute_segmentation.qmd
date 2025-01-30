@@ -1,0 +1,6 @@
+# compute_segmentation { #napari_activelearning.compute_segmentation }
+
+```python
+compute_segmentation(tunable_segmentation_method, img, labels_offset=0)
+```
+

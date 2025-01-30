@@ -1,0 +1,12 @@
+# AcquisitionFunction.compute_acquisition { #napari_activelearning.AcquisitionFunction.compute_acquisition }
+
+```python
+AcquisitionFunction.compute_acquisition(
+    dataset_metadata,
+    acquisition_fun,
+    segmentation_out,
+    sampled_mask=None,
+    segmentation_only=False,
+)
+```
+

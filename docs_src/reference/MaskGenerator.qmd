@@ -1,0 +1,6 @@
+# MaskGenerator { #napari_activelearning.MaskGenerator }
+
+```python
+MaskGenerator(self)
+```
+

@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.6.40">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Fernando Cervantes">
+<meta name="description" content="Tutorial for fine-tuning the “nuclei” model from cellpose to new data.">
+
+<title>Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<script src="../../site_libs/quarto-html/quarto.js"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-549806ee2085284f45b00abea8c6df48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap-e212f1f3c46809d555a1335ea96b499f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top quarto-banner">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../tutorials.html"> 
+<span class="menu-text">Tutorials</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../reference/"> 
+<span class="menu-text">API Reference</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari</h1>
+                  <div>
+        <div class="description">
+          Tutorial for fine-tuning the “nuclei” model from <code>cellpose</code> to new data.
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">Cellpose</div>
+                <div class="quarto-category">Transfer learning</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      <div>
+      <div class="quarto-title-meta-heading">Author</div>
+      <div class="quarto-title-meta-contents">
+               <p>Fernando Cervantes </p>
+            </div>
+    </div>
+      
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#install-napari-and-the-active-learning-plugin" id="toc-install-napari-and-the-active-learning-plugin" class="nav-link active" data-scroll-target="#install-napari-and-the-active-learning-plugin">0. Install <code>napari</code> and the Active Learning plugin</a>
+  <ul class="collapse">
+  <li><a href="#install-napari" id="toc-install-napari" class="nav-link" data-scroll-target="#install-napari">0.1. Install <code>napari</code></a></li>
+  <li><a href="#install-the-napari-activelearning-plugin-using-pip" id="toc-install-the-napari-activelearning-plugin-using-pip" class="nav-link" data-scroll-target="#install-the-napari-activelearning-plugin-using-pip">0.2. Install the <code>napari-activelearning</code> plugin using <code>pip</code></a></li>
+  </ul></li>
+  <li><a href="#image-groups-management" id="toc-image-groups-management" class="nav-link" data-scroll-target="#image-groups-management">1. Image groups management</a>
+  <ul class="collapse">
+  <li><a href="#load-a-sample-image" id="toc-load-a-sample-image" class="nav-link" data-scroll-target="#load-a-sample-image">1.1. Load a sample image</a></li>
+  <li><a href="#add-the-image-groups-manager-widget-to-naparis-window" id="toc-add-the-image-groups-manager-widget-to-naparis-window" class="nav-link" data-scroll-target="#add-the-image-groups-manager-widget-to-naparis-window">1.2. Add the <em>Image Groups Manager</em> widget to napari’s window</a></li>
+  <li><a href="#create-an-image-group-containing-nuclei-and-membrane-layers" id="toc-create-an-image-group-containing-nuclei-and-membrane-layers" class="nav-link" data-scroll-target="#create-an-image-group-containing-nuclei-and-membrane-layers">1.3. Create an <em>Image Group</em> containing <em>nuclei</em> and <em>membrane</em> layers</a></li>
+  <li><a href="#edit-the-image-group-properties" id="toc-edit-the-image-group-properties" class="nav-link" data-scroll-target="#edit-the-image-group-properties">1.4. Edit the image group properties</a></li>
+  </ul></li>
+  <li><a href="#segmentation-on-image-groups" id="toc-segmentation-on-image-groups" class="nav-link" data-scroll-target="#segmentation-on-image-groups">2. Segmentation on image groups</a>
+  <ul class="collapse">
+  <li><a href="#add-the-acquisition-function-configuration-widget-to-naparis-window" id="toc-add-the-acquisition-function-configuration-widget-to-naparis-window" class="nav-link" data-scroll-target="#add-the-acquisition-function-configuration-widget-to-naparis-window">2.1. Add the <em>Acquisition function configuration</em> widget to napari’s window</a></li>
+  <li><a href="#define-sampling-configuration" id="toc-define-sampling-configuration" class="nav-link" data-scroll-target="#define-sampling-configuration">2.2. Define sampling configuration</a></li>
+  <li><a href="#set-the-size-of-the-sampling-patch" id="toc-set-the-size-of-the-sampling-patch" class="nav-link" data-scroll-target="#set-the-size-of-the-sampling-patch">2.3. Set the size of the sampling patch</a></li>
+  <li><a href="#define-the-maximum-number-of-samples-to-extract" id="toc-define-the-maximum-number-of-samples-to-extract" class="nav-link" data-scroll-target="#define-the-maximum-number-of-samples-to-extract">2.4. Define the maximum number of samples to extract</a></li>
+  <li><a href="#configure-the-segmentation-method" id="toc-configure-the-segmentation-method" class="nav-link" data-scroll-target="#configure-the-segmentation-method">2.5. Configure the segmentation method</a></li>
+  <li><a href="#execute-the-segmentation-method-on-all-image-groups" id="toc-execute-the-segmentation-method-on-all-image-groups" class="nav-link" data-scroll-target="#execute-the-segmentation-method-on-all-image-groups">2.6. Execute the segmentation method on all image groups</a></li>
+  <li><a href="#inspect-the-segmentation-layer" id="toc-inspect-the-segmentation-layer" class="nav-link" data-scroll-target="#inspect-the-segmentation-layer">2.7. Inspect the segmentation layer</a></li>
+  </ul></li>
+  <li><a href="#segment-masked-regions-only" id="toc-segment-masked-regions-only" class="nav-link" data-scroll-target="#segment-masked-regions-only">3. Segment masked regions only</a>
+  <ul class="collapse">
+  <li><a href="#create-a-mask-to-restrict-the-sampling-space" id="toc-create-a-mask-to-restrict-the-sampling-space" class="nav-link" data-scroll-target="#create-a-mask-to-restrict-the-sampling-space">3.1. Create a mask to restrict the sampling space</a></li>
+  <li><a href="#specify-the-samplable-regions" id="toc-specify-the-samplable-regions" class="nav-link" data-scroll-target="#specify-the-samplable-regions">3.2. Specify the samplable regions</a></li>
+  <li><a href="#execute-the-segmentation-process-on-the-masked-regions" id="toc-execute-the-segmentation-process-on-the-masked-regions" class="nav-link" data-scroll-target="#execute-the-segmentation-process-on-the-masked-regions">3.3. Execute the segmentation process on the masked regions</a></li>
+  <li><a href="#inspect-the-masked-segmentation-output" id="toc-inspect-the-masked-segmentation-output" class="nav-link" data-scroll-target="#inspect-the-masked-segmentation-output">3.4. Inspect the masked segmentation output</a></li>
+  </ul></li>
+  <li><a href="#fine-tune-the-segmentation-model" id="toc-fine-tune-the-segmentation-model" class="nav-link" data-scroll-target="#fine-tune-the-segmentation-model">4. Fine tune the segmentation model</a>
+  <ul class="collapse">
+  <li><a href="#add-the-label-groups-manager-widget-to-naparis-window" id="toc-add-the-label-groups-manager-widget-to-naparis-window" class="nav-link" data-scroll-target="#add-the-label-groups-manager-widget-to-naparis-window">4.1. Add the <em>Label groups manager</em> widget to napari’s window</a></li>
+  <li><a href="#select-a-segmented-patch-to-edit" id="toc-select-a-segmented-patch-to-edit" class="nav-link" data-scroll-target="#select-a-segmented-patch-to-edit">4.2. Select a segmented patch to edit</a></li>
+  <li><a href="#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch" id="toc-use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch" class="nav-link" data-scroll-target="#use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch">4.3. Use napari’s layer controls to make changes on the objects of the current patch</a></li>
+  <li><a href="#commit-changes-to-the-labels-layer" id="toc-commit-changes-to-the-labels-layer" class="nav-link" data-scroll-target="#commit-changes-to-the-labels-layer">4.4. Commit changes to the labels layer</a></li>
+  <li><a href="#navigate-between-segmented-patches" id="toc-navigate-between-segmented-patches" class="nav-link" data-scroll-target="#navigate-between-segmented-patches">4.5. Navigate between segmented patches</a></li>
+  <li><a href="#setup-fine-tuning-configuration" id="toc-setup-fine-tuning-configuration" class="nav-link" data-scroll-target="#setup-fine-tuning-configuration">4.6. Setup fine tuning configuration</a></li>
+  <li><a href="#setup-fine-tuning-configuration-1" id="toc-setup-fine-tuning-configuration-1" class="nav-link" data-scroll-target="#setup-fine-tuning-configuration-1">4.6. Setup fine tuning configuration</a></li>
+  <li><a href="#execute-the-fine-tuning-process" id="toc-execute-the-fine-tuning-process" class="nav-link" data-scroll-target="#execute-the-fine-tuning-process">4.7. Execute the fine tuning process</a></li>
+  <li><a href="#review-the-fine-tuned-segmentation" id="toc-review-the-fine-tuned-segmentation" class="nav-link" data-scroll-target="#review-the-fine-tuned-segmentation">4.8. Review the fine tuned segmentation</a></li>
+  </ul></li>
+  <li><a href="#use-the-fine-tuned-model-for-inference" id="toc-use-the-fine-tuned-model-for-inference" class="nav-link" data-scroll-target="#use-the-fine-tuned-model-for-inference">5. Use the fine tuned model for inference</a>
+  <ul class="collapse">
+  <li><a href="#create-a-mask-to-apply-the-fine-tuned-model-for-inference" id="toc-create-a-mask-to-apply-the-fine-tuned-model-for-inference" class="nav-link" data-scroll-target="#create-a-mask-to-apply-the-fine-tuned-model-for-inference">5.1. Create a mask to apply the fine tuned model for inference</a></li>
+  <li><a href="#specify-the-samplable-regions-for-inference" id="toc-specify-the-samplable-regions-for-inference" class="nav-link" data-scroll-target="#specify-the-samplable-regions-for-inference">5.2. Specify the samplable regions for inference</a></li>
+  <li><a href="#select-the-new-mask-layer-to-be-used-for-sampling-positions" id="toc-select-the-new-mask-layer-to-be-used-for-sampling-positions" class="nav-link" data-scroll-target="#select-the-new-mask-layer-to-be-used-for-sampling-positions">5.3. Select the new mask layer to be used for sampling positions</a></li>
+  <li><a href="#use-the-fine-tuned-model-for-inference-in-the-masked-region" id="toc-use-the-fine-tuned-model-for-inference-in-the-masked-region" class="nav-link" data-scroll-target="#use-the-fine-tuned-model-for-inference-in-the-masked-region">5.4. Use the fine tuned model for inference in the masked region</a></li>
+  <li><a href="#inspect-the-output-of-the-fine-tuned-model" id="toc-inspect-the-output-of-the-fine-tuned-model" class="nav-link" data-scroll-target="#inspect-the-output-of-the-fine-tuned-model">5.5. Inspect the output of the fine tuned model</a></li>
+  <li><a href="#segment-the-newly-masked-region-with-the-base-model" id="toc-segment-the-newly-masked-region-with-the-base-model" class="nav-link" data-scroll-target="#segment-the-newly-masked-region-with-the-base-model">5.6. Segment the newly masked region with the base model</a></li>
+  <li><a href="#compare-the-results-of-both-models" id="toc-compare-the-results-of-both-models" class="nav-link" data-scroll-target="#compare-the-results-of-both-models">5.7. Compare the results of both models</a></li>
+  </ul></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="cellpose_tutorial_presentation.html"><i class="bi bi-file-slides"></i>RevealJS</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block" id="quarto-document-content">
+
+
+
+
+
+<section id="install-napari-and-the-active-learning-plugin" class="level1">
+<h1>0. Install <code>napari</code> and the Active Learning plugin</h1>
+<hr>
+<section id="install-napari" class="level3">
+<h3 class="anchored" data-anchor-id="install-napari">0.1. Install <code>napari</code></h3>
+<p>Follow the instructions to install <code>napari</code> from its <a href="https://napari.org/stable/tutorials/fundamentals/installation.html#napari-installation">official website</a>.</p>
+</section>
+<section id="install-the-napari-activelearning-plugin-using-pip" class="level3">
+<h3 class="anchored" data-anchor-id="install-the-napari-activelearning-plugin-using-pip">0.2. Install the <code>napari-activelearning</code> plugin using <code>pip</code></h3>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>If you installed <code>napari</code> using conda, activate that same environment before installing the <em>Active Learning</em> plugin.</p>
+</div>
+</div>
+<p>Install the plugin adding <code>[cellpose]</code> to the command so all dependencies required for this tutorial are available.</p>
+<pre><code>python -m pip install "napari-activelearning[cellpose]"</code></pre>
+</section>
+</section>
+<section id="image-groups-management" class="level1">
+<h1>1. Image groups management</h1>
+<section id="load-a-sample-image" class="level2">
+<h2 class="anchored" data-anchor-id="load-a-sample-image">1.1. Load a sample image</h2>
+<p>You can use the cells 3D image sample from napari’s built-in samples.</p>
+<pre><code>File &gt; Open Sample &gt; napari builtins &gt; Cells (3D+2Ch)</code></pre>
+<div id="bb3d8018" class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display" data-execution_count="4">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-5-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="add-the-image-groups-manager-widget-to-naparis-window" class="level2">
+<h2 class="anchored" data-anchor-id="add-the-image-groups-manager-widget-to-naparis-window">1.2. Add the <em>Image Groups Manager</em> widget to napari’s window</h2>
+<p>The <em>Image groups manager</em> can be found under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
+<pre><code>Plugins &gt; Active Learning &gt; Image groups manager</code></pre>
+<div id="af4cf95c" class="cell" data-execution_count="8">
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-8-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="create-an-image-group-containing-nuclei-and-membrane-layers" class="level2">
+<h2 class="anchored" data-anchor-id="create-an-image-group-containing-nuclei-and-membrane-layers">1.3. Create an <em>Image Group</em> containing <em>nuclei</em> and <em>membrane</em> layers</h2>
+<ol type="1">
+<li><p>Select the <em>nuclei</em> and <em>membrane</em> layer</p></li>
+<li><p>Click the <em>New Image Group</em> button on the <em>Image Groups Manager</em> widget</p></li>
+</ol>
+<div id="c2099abf" class="cell" data-execution_count="10">
+<div class="cell-output cell-output-display" data-execution_count="9">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-10-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="edit-the-image-group-properties" class="level2">
+<h2 class="anchored" data-anchor-id="edit-the-image-group-properties">1.4. Edit the image group properties</h2>
+<div class="columns">
+<div class="column" style="width:0.3;">
+<ol type="1">
+<li><p>Select the newly created image group, it will appear as “images” in the <em>Image groups manager</em> widget.</p></li>
+<li><p>Click the <em>Edit group properties</em> checkbox.</p></li>
+<li><p>Make sure that <em>Axes order</em> is “CZYX”, otherwise, you can edit it and press <em>Enter</em> to update the axes names.</p></li>
+</ol>
+</div><div class="column" style="width:0.7;">
+<div id="4ebd8025" class="cell" data-execution_count="13">
+<div class="cell-output cell-output-display" data-execution_count="12">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-13-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="segmentation-on-image-groups" class="level1">
+<h1>2. Segmentation on image groups</h1>
+<section id="add-the-acquisition-function-configuration-widget-to-naparis-window" class="level2">
+<h2 class="anchored" data-anchor-id="add-the-acquisition-function-configuration-widget-to-naparis-window">2.1. Add the <em>Acquisition function configuration</em> widget to napari’s window</h2>
+<p>The <em>Acquisition function configuration</em> is under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
+<pre><code>Plugins &gt; Active Learning &gt; Acquisition function configuration</code></pre>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>All <em>Active Learning</em> widgets can be <em>un-docked</em> from their current place and <em>re-docked</em> into other more convenient location within napari’s window, or even as tabs, as illustrated in this tutorial.</p>
+</div>
+</div>
+<div id="447d175a" class="cell" data-execution_count="16">
+<div class="cell-output cell-output-display" data-execution_count="15">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-16-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="define-sampling-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="define-sampling-configuration">2.2. Define sampling configuration</h2>
+<div class="columns">
+<div class="column" style="width:0.3;">
+<ol type="1">
+<li>Make sure “Input axes” are set to “ZYX”</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This specifies that the samples will be taken from those axes.</p>
+</div>
+</div>
+<ol start="2" type="1">
+<li>Change the “Model axes” to “CYX”</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>And this specifies that sample’s axes will be permuted to match the “Model axes” order.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.3;">
+<div id="38304518" class="cell" data-execution_count="18">
+<div class="cell-output cell-output-display" data-execution_count="17">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-18-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="set-the-size-of-the-sampling-patch" class="level2">
+<h2 class="anchored" data-anchor-id="set-the-size-of-the-sampling-patch">2.3. Set the size of the sampling patch</h2>
+<div class="columns">
+<div class="column" style="width:0.70;">
+<div id="78543a82" class="cell" data-execution_count="20">
+<div class="cell-output cell-output-display" data-execution_count="19">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-20-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:0.30;">
+<ol type="1">
+<li>Click the “Edit patch size” checkbox</li>
+<li>Change the patch size of “X” and “Y” to 256, and the “Z” axis to 1.</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This directs the Active Learning plugin to sample at random patches of size <span class="math inline">\(256\times256\)</span> pixels, and <span class="math inline">\(1\)</span> slice of depth.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="define-the-maximum-number-of-samples-to-extract" class="level2">
+<h2 class="anchored" data-anchor-id="define-the-maximum-number-of-samples-to-extract">2.4. Define the maximum number of samples to extract</h2>
+<div class="columns">
+<div class="column" style="width:0.4;">
+<div id="01f1bc6c" class="cell" data-execution_count="22">
+<div class="cell-output cell-output-display" data-execution_count="21">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-22-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:0.6;">
+<ul>
+<li>Set the “Maximum samples” to <span class="math inline">\(4\)</span> and press <em>Enter</em></li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This tells the Active Learning plugin to process at most <em>four</em> samples at random from the whole image.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="configure-the-segmentation-method" class="level2">
+<h2 class="anchored" data-anchor-id="configure-the-segmentation-method">2.5. Configure the segmentation method</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Use the “Model” dropdown list to select the <code>cellpose</code> method</p></li>
+<li><p>Click the “Advanced segmentation parameters” checkbox</p></li>
+<li><p>Change the “Channel axis” to <span class="math inline">\(0\)</span></p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This makes <code>cellpose</code> to use the first axis as “Color” channel.</p>
+</div>
+</div>
+<ol start="4" type="1">
+<li>Change the second channel to <span class="math inline">\(1\)</span> (the right spin box in the “channels” row)</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This tells <code>cellpose</code> to segment the first channel (<span class="math inline">\(0\)</span>) and use the second channel (<span class="math inline">\(1\)</span>) as help channel.</p>
+</div>
+</div>
+<ol start="5" type="1">
+<li>Choose the “nuclei” model from the dropdown list</li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="593dbc2c" class="cell" data-execution_count="24">
+<div class="cell-output cell-output-display" data-execution_count="23">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-24-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="execute-the-segmentation-method-on-all-image-groups" class="level2">
+<h2 class="anchored" data-anchor-id="execute-the-segmentation-method-on-all-image-groups">2.6. Execute the segmentation method on all image groups</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ul>
+<li>Click the “Run on all image groups” button</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>To execute the segmentation only on specific image groups, select the desired image groups in the <em>Image groups manager</em> widget and use the “Run on selected image groups” button instead.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="30fa1e37" class="cell" data-execution_count="25">
+<div class="cell-output cell-output-display" data-execution_count="24">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-25-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="inspect-the-segmentation-layer" class="level2">
+<h2 class="anchored" data-anchor-id="inspect-the-segmentation-layer">2.7. Inspect the segmentation layer</h2>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Because the input image is 3D, you might have to slide the Z index at the bottom of napari’s window to look at the samples that have been segmented.</p>
+</div>
+</div>
+<div id="4c1f606d" class="cell" data-execution_count="28">
+<div class="cell-output cell-output-display" data-execution_count="27">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-28-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="segment-masked-regions-only" class="level1">
+<h1>3. Segment masked regions only</h1>
+<section id="create-a-mask-to-restrict-the-sampling-space" class="level2">
+<h2 class="anchored" data-anchor-id="create-a-mask-to-restrict-the-sampling-space">3.1. Create a mask to restrict the sampling space</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Switch to the <em>Image groups manager</em> tab</p></li>
+<li><p>Click the “Edit mask properties” checkbox</p></li>
+<li><p>Set the mask scale to <span class="math inline">\(256\)</span> for the “X” and “Y” axes, and a scale of <span class="math inline">\(1\)</span> for the “Z” axis</p></li>
+<li><p>Click the “Create mask” button</p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This creates a low-resolution mask where each of its pixels corresponds to a <span class="math inline">\(256\times256\)</span> pixels region in the input image. Because the mask is low-resolution, it uses less space in memory and disk.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="50690a16" class="cell" data-execution_count="30">
+<div class="cell-output cell-output-display" data-execution_count="29">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-30-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="specify-the-samplable-regions" class="level2">
+<h2 class="anchored" data-anchor-id="specify-the-samplable-regions">3.2. Specify the samplable regions</h2>
+<ul>
+<li>Draw a mask that covers slices <span class="math inline">\(27\)</span> to <span class="math inline">\(30\)</span> in the “Z” axis.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Move the slider at the bottom of napari’s window to navigate between slices in the “Z” axis.</p>
+</div>
+</div>
+<div id="a2c341d2" class="cell" data-execution_count="32">
+<div class="cell-output cell-output-display" data-execution_count="31">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-32-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="execute-the-segmentation-process-on-the-masked-regions" class="level2">
+<h2 class="anchored" data-anchor-id="execute-the-segmentation-process-on-the-masked-regions">3.3. Execute the segmentation process on the masked regions</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Go back to the <em>Acquisition function configuration</em> widget</p></li>
+<li><p>Click the “Run on all image groups” button again</p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Because the image group has a defined mask, samples will be extracted at random inside those defined regions only.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="9cc1de0b" class="cell" data-execution_count="34">
+<div class="cell-output cell-output-display" data-execution_count="33">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-34-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="inspect-the-masked-segmentation-output" class="level2">
+<h2 class="anchored" data-anchor-id="inspect-the-masked-segmentation-output">3.4. Inspect the masked segmentation output</h2>
+<div id="aa33ba52" class="cell" data-execution_count="36">
+<div class="cell-output cell-output-display" data-execution_count="35">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-36-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="fine-tune-the-segmentation-model" class="level1">
+<h1>4. Fine tune the segmentation model</h1>
+<section id="add-the-label-groups-manager-widget-to-naparis-window" class="level2">
+<h2 class="anchored" data-anchor-id="add-the-label-groups-manager-widget-to-naparis-window">4.1. Add the <em>Label groups manager</em> widget to napari’s window</h2>
+<p>You can find the <em>Label groups manager</em> under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
+<pre><code>Plugins &gt; Active Learning &gt; Label groups manager</code></pre>
+<div id="15b6ac97" class="cell" data-execution_count="39">
+<div class="cell-output cell-output-display" data-execution_count="38">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-39-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="select-a-segmented-patch-to-edit" class="level2">
+<h2 class="anchored" data-anchor-id="select-a-segmented-patch-to-edit">4.2. Select a segmented patch to edit</h2>
+<ul>
+<li>Double click on any segmented patch in the viewer (e.g.&nbsp;on slice <span class="math inline">\(27\)</span>)</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This creates a new editable “Labels edit” layer with a copy of the selected patch.</p>
+</div>
+</div>
+<div id="b91ea41c" class="cell" data-execution_count="41">
+<div class="cell-output cell-output-display" data-execution_count="40">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-41-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch" class="level2">
+<h2 class="anchored" data-anchor-id="use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch">4.3. Use napari’s layer controls to make changes on the objects of the current patch</h2>
+<div id="1558ecb3" class="cell" data-execution_count="42">
+<div class="cell-output cell-output-display" data-execution_count="41">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-42-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="commit-changes-to-the-labels-layer" class="level2">
+<h2 class="anchored" data-anchor-id="commit-changes-to-the-labels-layer">4.4. Commit changes to the labels layer</h2>
+<ul>
+<li>Once you have finished editing the labels, click the “Commit changes” button on the <em>Label groups manager</em></li>
+</ul>
+<div id="5146dce6" class="cell" data-execution_count="44">
+<div class="cell-output cell-output-display" data-execution_count="43">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-44-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="navigate-between-segmented-patches" class="level2">
+<h2 class="anchored" data-anchor-id="navigate-between-segmented-patches">4.5. Navigate between segmented patches</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Expand the second group of labels</p></li>
+<li><p>Double-click on any of the nested items to open it for editing</p></li>
+<li><p>Use the navigation buttons to move between segmented patches</p></li>
+<li><p>Continue editing the segmentation in the current patch and commit the changes when finished</p></li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="0e165b0b" class="cell" data-execution_count="47">
+<div class="cell-output cell-output-display" data-execution_count="46">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-47-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="setup-fine-tuning-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="setup-fine-tuning-configuration">4.6. Setup fine tuning configuration</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Go to the <em>Acquisition function configuration</em> widget</p></li>
+<li><p>Click the “Advanced fine tuning parameters” checkbox</p></li>
+<li><p>Change the “save path” to a location where you want to store the fine tuned model</p></li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="00e5b116" class="cell" data-execution_count="51">
+<div class="cell-output cell-output-display" data-execution_count="50">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-51-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="setup-fine-tuning-configuration-1" class="level2">
+<h2 class="anchored" data-anchor-id="setup-fine-tuning-configuration-1">4.6. Setup fine tuning configuration</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol start="4" type="1">
+<li>Change the “model name” to “nuclei_ft”</li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Scroll the <em>Advanced fine tuning parameters</em> widget down to show more parameters.</p>
+</div>
+</div>
+<ol start="5" type="1">
+<li><p>Set the “batch size” to <span class="math inline">\(3\)</span></p></li>
+<li><p>Change the “learning rate” to <span class="math inline">\(0.0001\)</span></p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>You can modify other parameters for the training process here, such as the number of training epochs.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="a148e59e" class="cell" data-execution_count="53">
+<div class="cell-output cell-output-display" data-execution_count="52">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-53-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="execute-the-fine-tuning-process" class="level2">
+<h2 class="anchored" data-anchor-id="execute-the-fine-tuning-process">4.7. Execute the fine tuning process</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ul>
+<li>Click the “Fine tune model” button to run the training process.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Depending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="78ddafb5" class="cell" data-execution_count="54">
+<div class="cell-output cell-output-display" data-execution_count="53">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-54-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="review-the-fine-tuned-segmentation" class="level2">
+<h2 class="anchored" data-anchor-id="review-the-fine-tuned-segmentation">4.8. Review the fine tuned segmentation</h2>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Use the <em>opacity</em> slider to compare how the fine tuned model segments the same objects that were labeled for training.</p>
+</div>
+</div>
+<div id="915e5f19" class="cell" data-execution_count="56">
+<div class="cell-output cell-output-display" data-execution_count="55">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-56-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="use-the-fine-tuned-model-for-inference" class="level1">
+<h1>5. Use the fine tuned model for inference</h1>
+<section id="create-a-mask-to-apply-the-fine-tuned-model-for-inference" class="level2">
+<h2 class="anchored" data-anchor-id="create-a-mask-to-apply-the-fine-tuned-model-for-inference">5.1. Create a mask to apply the fine tuned model for inference</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Switch to the <em>Image groups manager</em> tab</p></li>
+<li><p>Click the “Edit mask properties” checkbox</p></li>
+<li><p>Set the mask scale to <span class="math inline">\(256\)</span> for the “X” and “Y” axes, and a scale of <span class="math inline">\(1\)</span> for the “Z” axis</p></li>
+<li><p>Click the “Create mask” button</p></li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="a11ac633" class="cell" data-execution_count="58">
+<div class="cell-output cell-output-display" data-execution_count="57">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-58-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="specify-the-samplable-regions-for-inference" class="level2">
+<h2 class="anchored" data-anchor-id="specify-the-samplable-regions-for-inference">5.2. Specify the samplable regions for inference</h2>
+<ul>
+<li>Draw a mask that covers slices <span class="math inline">\(31\)</span> to <span class="math inline">\(34\)</span> in the “Z” axis.</li>
+</ul>
+<div id="8d88e5d9" class="cell" data-execution_count="60">
+<div class="cell-output cell-output-display" data-execution_count="59">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-60-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="select-the-new-mask-layer-to-be-used-for-sampling-positions" class="level2">
+<h2 class="anchored" data-anchor-id="select-the-new-mask-layer-to-be-used-for-sampling-positions">5.3. Select the new mask layer to be used for sampling positions</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Scroll down the <em>Image groups manager</em> tree to show the newest mask layer grup (“mask (1)”)</p></li>
+<li><p>Select the “mask (1)” layer group</p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The “Group name” column in the groups tree can be resized to show the complete names.</p>
+</div>
+</div>
+<ol start="3" type="1">
+<li>Make sure that “Use as sampling mask” checkbox is checked</li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="8e7088a1" class="cell" data-execution_count="62">
+<div class="cell-output cell-output-display" data-execution_count="61">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-62-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="use-the-fine-tuned-model-for-inference-in-the-masked-region" class="level2">
+<h2 class="anchored" data-anchor-id="use-the-fine-tuned-model-for-inference-in-the-masked-region">5.4. Use the fine tuned model for inference in the masked region</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Go back to the <em>Acquisition function configuration</em> widget</p></li>
+<li><p>Click “Run on all image groups” button again</p></li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="bb92bac8" class="cell" data-execution_count="64">
+<div class="cell-output cell-output-display" data-execution_count="63">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-64-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="inspect-the-output-of-the-fine-tuned-model" class="level2">
+<h2 class="anchored" data-anchor-id="inspect-the-output-of-the-fine-tuned-model">5.5. Inspect the output of the fine tuned model</h2>
+<ul>
+<li>Now you have a fine tuned model for nuclei segmentation that has been adapted to this image!</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The fine tuned model can be used in <em>Cellpose</em>’s GUI software, their python API package, or any other package that supports pretrained <code>cellpose</code> models.</p>
+</div>
+</div>
+<div id="0b42491a" class="cell" data-execution_count="67">
+<div class="cell-output cell-output-display" data-execution_count="66">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-67-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="segment-the-newly-masked-region-with-the-base-model" class="level2">
+<h2 class="anchored" data-anchor-id="segment-the-newly-masked-region-with-the-base-model">5.6. Segment the newly masked region with the base model</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Choose the “nuclei” model again from the dropdown list in the <em>Advanced segmentation parameters</em> section</p></li>
+<li><p>Click the “Run on all image groups” button again</p></li>
+</ol>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This will execute the segmentation process with the non-fine-tuned “nuclei” model on the same sampling positions from the last run.</p>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="16dfc359" class="cell" data-execution_count="69">
+<div class="cell-output cell-output-display" data-execution_count="68">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-69-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="compare-the-results-of-both-models" class="level2">
+<h2 class="anchored" data-anchor-id="compare-the-results-of-both-models">5.7. Compare the results of both models</h2>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Hide all the layers and show only the “nuclei” and “membrane” layers, as well as the “images segmentation [2]” and “images segmentation [3]” layers that correspond to the output of the fine tuned model and base model, respectively.</p>
+</div>
+</div>
+<div id="50c69a62" class="cell" data-execution_count="72">
+<div class="cell-output cell-output-display" data-execution_count="71">
+<div>
+<figure class="figure">
+<p><img src="cellpose_tutorial_files/figure-revealjs/cell-72-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

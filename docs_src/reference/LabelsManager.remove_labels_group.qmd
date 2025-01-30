@@ -1,0 +1,6 @@
+# LabelsManager.remove_labels_group { #napari_activelearning.LabelsManager.remove_labels_group }
+
+```python
+LabelsManager.remove_labels_group()
+```
+

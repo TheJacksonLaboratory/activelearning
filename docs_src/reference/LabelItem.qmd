@@ -1,0 +1,6 @@
+# LabelItem { #napari_activelearning.LabelItem }
+
+```python
+LabelItem(self, acquisition_val, position)
+```
+

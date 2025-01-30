@@ -1,0 +1,6 @@
+# LabelsManager.focus_and_edit_region { #napari_activelearning.LabelsManager.focus_and_edit_region }
+
+```python
+LabelsManager.focus_and_edit_region(layer, event)
+```
+

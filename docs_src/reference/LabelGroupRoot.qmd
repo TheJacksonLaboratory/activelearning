@@ -1,0 +1,6 @@
+# LabelGroupRoot { #napari_activelearning.LabelGroupRoot }
+
+```python
+LabelGroupRoot(self)
+```
+

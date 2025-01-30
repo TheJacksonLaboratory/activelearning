@@ -1,0 +1,6 @@
+# LabelsManager.navigate { #napari_activelearning.LabelsManager.navigate }
+
+```python
+LabelsManager.navigate(delta_patch_index=0, delta_image_index=0)
+```
+

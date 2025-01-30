@@ -1,0 +1,6 @@
+# ImageGroupsManager.focus_active_item { #napari_activelearning.ImageGroupsManager.focus_active_item }
+
+```python
+ImageGroupsManager.focus_active_item(item)
+```
+
