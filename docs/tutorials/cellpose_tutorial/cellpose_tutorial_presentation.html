@@ -140,14 +140,14 @@ Fernando Cervantes
 </section>
 <section>
 <section id="install-napari-and-the-active-learning-plugin" class="title-slide slide level1 center">
-<h1>0. Install <code>napari</code> and the Active Learning plugin</h1>
+<h1>1. Install <code>napari</code> and the Active Learning plugin</h1>
 
 </section>
 <section class="slide level2">
 
-<h3 id="install-napari">0.1. Install <code>napari</code></h3>
+<h3 id="install-napari">1.1. Install <code>napari</code></h3>
 <p>Follow the instructions to install <code>napari</code> from its <a href="https://napari.org/stable/tutorials/fundamentals/installation.html#napari-installation">official website</a>.</p>
-<h3 id="install-the-napari-activelearning-plugin-using-pip">0.2. Install the <code>napari-activelearning</code> plugin using <code>pip</code></h3>
+<h3 id="install-the-napari-activelearning-plugin-using-pip">1.2. Install the <code>napari-activelearning</code> plugin using <code>pip</code></h3>
 <div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -166,40 +166,66 @@ Fernando Cervantes
 </section></section>
 <section>
 <section id="image-groups-management" class="title-slide slide level1 center">
-<h1>1. Image groups management</h1>
+<h1>2. Image groups management</h1>
 
 </section>
 <section id="load-a-sample-image" class="slide level2">
-<h2>1.1. Load a sample image</h2>
+<h2>2.1. Load a sample image</h2>
 <p>You can use the cells 3D image sample from napari’s built-in samples.</p>
 <pre><code>File &gt; Open Sample &gt; napari builtins &gt; Cells (3D+2Ch)</code></pre>
 
 <img data-src="cellpose_tutorial_files/figure-revealjs/cell-5-output-1.png" class="r-stretch"></section>
 <section id="add-the-image-groups-manager-widget-to-naparis-window" class="slide level2">
-<h2>1.2. Add the <em>Image Groups Manager</em> widget to napari’s window</h2>
+<h2>2.2. Add the <em>Image Groups Manager</em> widget to napari’s window</h2>
 <p>The <em>Image groups manager</em> can be found under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
 <pre><code>Plugins &gt; Active Learning &gt; Image groups manager</code></pre>
 
 <img data-src="cellpose_tutorial_files/figure-revealjs/cell-8-output-1.png" class="r-stretch"></section>
 <section id="create-an-image-group-containing-nuclei-and-membrane-layers" class="slide level2">
-<h2>1.3. Create an <em>Image Group</em> containing <em>nuclei</em> and <em>membrane</em> layers</h2>
+<h2>2.3. Create an <em>Image Group</em> containing <em>nuclei</em> and <em>membrane</em> layers</h2>
 <ol type="1">
-<li><p>Select the <em>nuclei</em> and <em>membrane</em> layer</p></li>
-<li><p>Click the <em>New Image Group</em> button on the <em>Image Groups Manager</em> widget</p></li>
+<li><p>Select the <em>nuclei</em> and <em>membrane</em> layer.</p></li>
+<li><p>Click the <em>New Image Group</em> button on the <em>Image Groups Manager</em> widget.</p></li>
 </ol>
 
 <img data-src="cellpose_tutorial_files/figure-revealjs/cell-10-output-1.png" class="r-stretch"></section>
 <section id="edit-the-image-group-properties" class="slide level2">
-<h2>1.4. Edit the image group properties</h2>
+<h2>2.4. Edit the image group properties</h2>
 <div class="columns">
 <div class="column" style="width:0.3;">
 <ol type="1">
-<li><p>Select the newly created image group, it will appear as “images” in the <em>Image groups manager</em> widget.</p></li>
+<li>Select the “images” <em>channel group</em> that has been created under the new image group.</li>
+</ol>
+<div title="Note on image groups hierarchy">
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note on image groups hierarchy</strong></p>
+</div>
+<div class="callout-content">
+<p>The hierarchical structure of groups within this plugin is the following:</p>
+<ul>
+<li><p><em>Image groups</em>. Used to contain different modes of data, such as images, labels, masks, segmentation labels, etc.</p>
+<ul>
+<li><p><em>Layers groups</em>. These group multiple layers together, and are intended to contain data from the same mode such different channel layers of the same image.</p>
+<ul>
+<li><em>Layer channels</em>. This is directly related to a napari layer from the <em>layer list</em> widget, but allows to store additional information that is useful for the inference or fine-tuning process, such as the name and order of the axes.</li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<ol start="2" type="1">
 <li><p>Click the <em>Edit group properties</em> checkbox.</p></li>
 <li><p>Make sure that <em>Axes order</em> is “CZYX”, otherwise, you can edit it and press <em>Enter</em> to update the axes names.</p></li>
 </ol>
 </div><div class="column" style="width:0.7;">
-<div id="4ebd8025" class="cell" data-execution_count="13">
+<div id="8b17ad32" class="cell" data-execution_count="13">
 <div class="cell-output cell-output-display" data-execution_count="12">
 <div>
 <figure>
@@ -212,11 +238,11 @@ Fernando Cervantes
 </section></section>
 <section>
 <section id="segmentation-on-image-groups" class="title-slide slide level1 center">
-<h1>2. Segmentation on image groups</h1>
+<h1>3. Segmentation on image groups</h1>
 
 </section>
 <section id="add-the-acquisition-function-configuration-widget-to-naparis-window" class="slide level2">
-<h2>2.1. Add the <em>Acquisition function configuration</em> widget to napari’s window</h2>
+<h2>3.1. Add the <em>Acquisition function configuration</em> widget to napari’s window</h2>
 <p>The <em>Acquisition function configuration</em> is under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
 <pre><code>Plugins &gt; Active Learning &gt; Acquisition function configuration</code></pre>
 <div class="callout callout-tip callout-titled callout-style-default">
@@ -235,43 +261,51 @@ Fernando Cervantes
 
 <img data-src="cellpose_tutorial_files/figure-revealjs/cell-16-output-1.png" class="r-stretch"></section>
 <section id="define-sampling-configuration" class="slide level2">
-<h2>2.2. Define sampling configuration</h2>
+<h2>3.2. Define sampling configuration</h2>
 <div class="columns">
-<div class="column" style="width:0.3;">
+<div class="column" style="width:0.7;">
 <ol type="1">
-<li>Make sure “Input axes” are set to “ZYX”</li>
+<li>Make sure “Input axes” are set to “ZYX”.</li>
 </ol>
+<div title="Note on Input axes">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Note on Input axes</strong></p>
 </div>
 <div class="callout-content">
-<p>This specifies that the samples will be taken from those axes.</p>
+<p>This enables edition of the patch size at those selected <strong>spatial</strong> axes.</p>
+<p>For example, the “Cells (3D+2Ch)” sample image is three-dimensional, with “ZYX” spatial axes, and has two color channels. For that image we will extract two-dimensional patches of size <span class="math inline">\(256\times256\)</span> pixels, in the “X” and “Y” spatial axes.</p>
+<p>Therefore, “Input axes”=“ZYX” allows to set the patch size at spatial axes “Y” and “X” to <span class="math inline">\(256\)</span> pixels, and “Z” to <span class="math inline">\(1\)</span> in order to extract one-slice-deep patches.</p>
+</div>
 </div>
 </div>
 </div>
 <ol start="2" type="1">
-<li>Change the “Model axes” to “CYX”</li>
+<li>Change the “Model axes” to “CYX”.</li>
 </ol>
+<div title="Note on Model axes">
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Note on Model axes</strong></p>
 </div>
 <div class="callout-content">
-<p>And this specifies that sample’s axes will be permuted to match the “Model axes” order.</p>
+<p>This, on the other hand, specifies the order our model expects to receive its inputs.</p>
+<p>In his case, the nuclei model from <code>cellpose</code> will be applied to two-dimensional images. Because the “Z” axis is not used, we drop it from the “Model axes” string. This is only possible because the “Z” axis is already set to <span class="math inline">\(1\)</span> slice deep and can be <em>squeezed</em> from the patch.</p>
+<p>Additionally, we append the “C” (color channel) axis to the beginning of the string. That means that the order of the patch axes will be permuted to have the color channel as leading axis.</p>
+</div>
 </div>
 </div>
 </div>
 </div><div class="column" style="width:0.3;">
-<div id="38304518" class="cell" data-execution_count="18">
+<div id="f7d87e7c" class="cell" data-execution_count="18">
 <div class="cell-output cell-output-display" data-execution_count="17">
 <div>
 <figure>
@@ -283,10 +317,10 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="set-the-size-of-the-sampling-patch" class="slide level2">
-<h2>2.3. Set the size of the sampling patch</h2>
+<h2>3.3. Set the size of the sampling patch</h2>
 <div class="columns">
-<div class="column" style="width:0.70;">
-<div id="78543a82" class="cell" data-execution_count="20">
+<div class="column" style="width:0.3;">
+<div id="8b9ce702" class="cell" data-execution_count="20">
 <div class="cell-output cell-output-display" data-execution_count="19">
 <div>
 <figure>
@@ -295,7 +329,7 @@ Fernando Cervantes
 </div>
 </div>
 </div>
-</div><div class="column" style="width:0.30;">
+</div><div class="column" style="width:0.7;">
 <ol type="1">
 <li>Click the “Edit patch size” checkbox</li>
 <li>Change the patch size of “X” and “Y” to 256, and the “Z” axis to 1.</li>
@@ -309,17 +343,17 @@ Fernando Cervantes
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p>This directs the Active Learning plugin to sample at random patches of size <span class="math inline">\(256\times256\)</span> pixels, and <span class="math inline">\(1\)</span> slice of depth.</p>
+<p>This directs the Active Learning plugin to sample at random patches of size <span class="math inline">\(256\times256\)</span> pixels and <span class="math inline">\(1\)</span> slice deep.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="define-the-maximum-number-of-samples-to-extract" class="slide level2">
-<h2>2.4. Define the maximum number of samples to extract</h2>
+<section id="sec-max-samples" class="slide level2">
+<h2>3.4. Define the maximum number of samples to extract</h2>
 <div class="columns">
-<div class="column" style="width:0.4;">
-<div id="01f1bc6c" class="cell" data-execution_count="22">
+<div class="column" style="width:0.3;">
+<div id="28a91143" class="cell" data-execution_count="22">
 <div class="cell-output cell-output-display" data-execution_count="21">
 <div>
 <figure>
@@ -328,7 +362,7 @@ Fernando Cervantes
 </div>
 </div>
 </div>
-</div><div class="column" style="width:0.6;">
+</div><div class="column" style="width:0.7;">
 <ul>
 <li>Set the “Maximum samples” to <span class="math inline">\(4\)</span> and press <em>Enter</em></li>
 </ul>
@@ -342,15 +376,16 @@ Fernando Cervantes
 </div>
 <div class="callout-content">
 <p>This tells the Active Learning plugin to process at most <em>four</em> samples at random from the whole image.</p>
+<p>Because the image is of size <span class="math inline">\(256\times256\)</span> pixels, four whole slices will be sampled at random for segmentation.</p>
 </div>
 </div>
 </div>
 </div></div>
 </section>
 <section id="configure-the-segmentation-method" class="slide level2">
-<h2>2.5. Configure the segmentation method</h2>
+<h2>3.5. Configure the segmentation method</h2>
 <div class="columns">
-<div class="column" style="width:0.6;">
+<div class="column" style="width:0.7;">
 <ol type="1">
 <li><p>Use the “Model” dropdown list to select the <code>cellpose</code> method</p></li>
 <li><p>Click the “Advanced segmentation parameters” checkbox</p></li>
@@ -365,7 +400,7 @@ Fernando Cervantes
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p>This makes <code>cellpose</code> to use the first axis as “Color” channel.</p>
+<p>This makes <code>cellpose</code> to use the first axis as “Color” channel, as we already set in “Model axes”=“CYX”.</p>
 </div>
 </div>
 </div>
@@ -388,8 +423,8 @@ Fernando Cervantes
 <ol start="5" type="1">
 <li>Choose the “nuclei” model from the dropdown list</li>
 </ol>
-</div><div class="column" style="width:0.4;">
-<div id="593dbc2c" class="cell" data-execution_count="24">
+</div><div class="column" style="width:0.3;">
+<div id="4caeaa04" class="cell" data-execution_count="24">
 <div class="cell-output cell-output-display" data-execution_count="23">
 <div>
 <figure>
@@ -401,7 +436,7 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="execute-the-segmentation-method-on-all-image-groups" class="slide level2">
-<h2>2.6. Execute the segmentation method on all image groups</h2>
+<h2>3.6. Execute the segmentation method on all image groups</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ul>
@@ -421,7 +456,7 @@ Fernando Cervantes
 </div>
 </div>
 </div><div class="column" style="width:0.4;">
-<div id="30fa1e37" class="cell" data-execution_count="25">
+<div id="c52b2fa6" class="cell" data-execution_count="25">
 <div class="cell-output cell-output-display" data-execution_count="24">
 <div>
 <figure>
@@ -433,7 +468,10 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="inspect-the-segmentation-layer" class="slide level2">
-<h2>2.7. Inspect the segmentation layer</h2>
+<h2>3.7. Inspect the segmentation layer</h2>
+<ul>
+<li>We will only see four segmented slices from the whole image. This is because we set the “Maximum samples” parameter to <span class="math inline">\(4\)</span> in <a href="#/sec-max-samples" class="quarto-xref">Section&nbsp;3.4</a>.</li>
+</ul>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -443,19 +481,19 @@ Fernando Cervantes
 <p><strong>Note</strong></p>
 </div>
 <div class="callout-content">
-<p>Because the input image is 3D, you might have to slide the Z index at the bottom of napari’s window to look at the samples that have been segmented.</p>
+<p>Because the input image is 3D, you may have to slide the “Z” index at the bottom of napari’s window to look at the samples that were segmented.</p>
 </div>
 </div>
 </div>
 
 <img data-src="cellpose_tutorial_files/figure-revealjs/cell-28-output-1.png" class="r-stretch"></section></section>
 <section>
-<section id="segment-masked-regions-only" class="title-slide slide level1 center">
-<h1>3. Segment masked regions only</h1>
+<section id="sec-mask" class="title-slide slide level1 center">
+<h1>4. Segment masked regions only</h1>
 
 </section>
 <section id="create-a-mask-to-restrict-the-sampling-space" class="slide level2">
-<h2>3.1. Create a mask to restrict the sampling space</h2>
+<h2>4.1. Create a mask to restrict the sampling space</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ol type="1">
@@ -478,7 +516,7 @@ Fernando Cervantes
 </div>
 </div>
 </div><div class="column" style="width:0.4;">
-<div id="50690a16" class="cell" data-execution_count="30">
+<div id="0d541409" class="cell" data-execution_count="30">
 <div class="cell-output cell-output-display" data-execution_count="29">
 <div>
 <figure>
@@ -490,77 +528,63 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="specify-the-samplable-regions" class="slide level2">
-<h2>3.2. Specify the samplable regions</h2>
-<ul>
-<li>Draw a mask that covers slices <span class="math inline">\(27\)</span> to <span class="math inline">\(30\)</span> in the “Z” axis.</li>
-</ul>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p>Move the slider at the bottom of napari’s window to navigate between slices in the “Z” axis.</p>
-</div>
-</div>
-</div>
-
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-32-output-1.png" class="r-stretch"></section>
-<section id="execute-the-segmentation-process-on-the-masked-regions" class="slide level2">
-<h2>3.3. Execute the segmentation process on the masked regions</h2>
+<h2>4.2. Specify the samplable regions</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ol type="1">
-<li><p>Go back to the <em>Acquisition function configuration</em> widget</p></li>
-<li><p>Click the “Run on all image groups” button again</p></li>
+<li><p>Make sure the newly created layer “images mask” is selected.</p></li>
+<li><p>Activate the paint brush tool (or press 2 or P keys in the keyboard as shortcuts).</p></li>
+<li><p>Move the “brush size” slider to set a size of <span class="math inline">\(1\)</span> pixel in the mask scale. Because we set a scale of <span class="math inline">\(256\)</span> on “X” and “Y” axis, this translates to a region of <span class="math inline">\(256\times256\)</span> pixels on the original image.</p></li>
+<li><p>Click and drag on the image to draw the mask on the current slice.</p></li>
+<li><p>Move the slider at the bottom of napari’s window to navigate between slices in the “Z” axis. Select slide <span class="math inline">\(28\)</span> and draw on it as in step <span class="math inline">\(4\)</span>. Repeat with slices <span class="math inline">\(29\)</span> and <span class="math inline">\(30\)</span>.</p></li>
 </ol>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p>Because the image group has a defined mask, samples will be extracted at random inside those defined regions only.</p>
-</div>
-</div>
-</div>
 </div><div class="column" style="width:0.4;">
-<div id="9cc1de0b" class="cell" data-execution_count="34">
-<div class="cell-output cell-output-display" data-execution_count="33">
+<div id="da3348f1" class="cell" data-execution_count="32">
+<div class="cell-output cell-output-display" data-execution_count="31">
 <div>
 <figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-34-output-1.png"></p>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-32-output-1.png"></p>
 </figure>
 </div>
 </div>
 </div>
 </div></div>
 </section>
-<section id="inspect-the-masked-segmentation-output" class="slide level2">
-<h2>3.4. Inspect the masked segmentation output</h2>
+<section id="execute-the-segmentation-process-on-the-masked-regions-and-inspect-the-results" class="slide level2">
+<h2>4.3. Execute the segmentation process on the masked regions and inspect the results</h2>
+<ul>
+<li>Run again the segmentation process (clicking “Run on all image groups” button).</li>
+</ul>
+<div class="callout callout-important callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Important</strong></p>
+</div>
+<div class="callout-content">
+<p>All slices between <span class="math inline">\(27\)</span> and <span class="math inline">\(30\)</span> were picked and segmented thanks to the sampling mask!</p>
+</div>
+</div>
+</div>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-36-output-1.png" class="r-stretch"></section></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-35-output-1.png" class="r-stretch"></section></section>
 <section>
 <section id="fine-tune-the-segmentation-model" class="title-slide slide level1 center">
-<h1>4. Fine tune the segmentation model</h1>
+<h1>5. Fine tune the segmentation model</h1>
 
 </section>
 <section id="add-the-label-groups-manager-widget-to-naparis-window" class="slide level2">
-<h2>4.1. Add the <em>Label groups manager</em> widget to napari’s window</h2>
+<h2>5.1. Add the <em>Label groups manager</em> widget to napari’s window</h2>
 <p>You can find the <em>Label groups manager</em> under the <em>Active Learning</em> plugin in napari’s plugins menu.</p>
 <pre><code>Plugins &gt; Active Learning &gt; Label groups manager</code></pre>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-39-output-1.png" class="r-stretch"></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-38-output-1.png" class="r-stretch"></section>
 <section id="select-a-segmented-patch-to-edit" class="slide level2">
-<h2>4.2. Select a segmented patch to edit</h2>
+<h2>5.2. Select a segmented patch to edit</h2>
 <ul>
-<li>Double click on any segmented patch in the viewer (e.g.&nbsp;on slice <span class="math inline">\(27\)</span>)</li>
+<li>Double click on any of the segmented patches in the viewer (e.g.&nbsp;any slice between <span class="math inline">\(27\)</span> and <span class="math inline">\(30\)</span>)</li>
 </ul>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
@@ -576,20 +600,33 @@ Fernando Cervantes
 </div>
 </div>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-41-output-1.png" class="r-stretch"></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-40-output-1.png" class="r-stretch"></section>
 <section id="use-naparis-layer-controls-to-make-changes-on-the-objects-of-the-current-patch" class="slide level2">
-<h2>4.3. Use napari’s layer controls to make changes on the objects of the current patch</h2>
+<h2>5.3. Use napari’s layer controls to make changes on the objects of the current patch</h2>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
+</div>
+<div class="callout-content">
+<p>You can follow <a href="https://napari.org/dev/howtos/layers/labels.html#creating-deleting-merging-and-splitting-connected-components">this tutorial</a> to learn how to use the annotation tools in napari.</p>
+</div>
+</div>
+</div>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-42-output-1.png" class="r-stretch"></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-41-output-1.png" class="r-stretch"></section>
 <section id="commit-changes-to-the-labels-layer" class="slide level2">
-<h2>4.4. Commit changes to the labels layer</h2>
+<h2>5.4. Commit changes to the labels layer</h2>
 <ul>
 <li>Once you have finished editing the labels, click the “Commit changes” button on the <em>Label groups manager</em></li>
 </ul>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-44-output-1.png" class="r-stretch"></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-43-output-1.png" class="r-stretch"></section>
 <section id="navigate-between-segmented-patches" class="slide level2">
-<h2>4.5. Navigate between segmented patches</h2>
+<h2>5.5. Navigate between segmented patches</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ol type="1">
@@ -597,46 +634,7 @@ Fernando Cervantes
 <li><p>Double-click on any of the nested items to open it for editing</p></li>
 <li><p>Use the navigation buttons to move between segmented patches</p></li>
 <li><p>Continue editing the segmentation in the current patch and commit the changes when finished</p></li>
-</ol>
-</div><div class="column" style="width:0.4;">
-<div id="0e165b0b" class="cell" data-execution_count="47">
-<div class="cell-output cell-output-display" data-execution_count="46">
-<div>
-<figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-47-output-1.png"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="setup-fine-tuning-configuration" class="slide level2">
-<h2>4.6. Setup fine tuning configuration</h2>
-<div class="columns">
-<div class="column" style="width:0.6;">
-<ol type="1">
-<li><p>Go to the <em>Acquisition function configuration</em> widget</p></li>
-<li><p>Click the “Advanced fine tuning parameters” checkbox</p></li>
-<li><p>Change the “save path” to a location where you want to store the fine tuned model</p></li>
-</ol>
-</div><div class="column" style="width:0.4;">
-<div id="00e5b116" class="cell" data-execution_count="51">
-<div class="cell-output cell-output-display" data-execution_count="50">
-<div>
-<figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-51-output-1.png"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="setup-fine-tuning-configuration-1" class="slide level2">
-<h2>4.6. Setup fine tuning configuration</h2>
-<div class="columns">
-<div class="column" style="width:0.6;">
-<ol start="4" type="1">
-<li>Change the “model name” to “nuclei_ft”</li>
+<li><p>Repeat this with each of the segmented patches.</p></li>
 </ol>
 <div class="callout callout-note callout-titled callout-style-default">
 <div class="callout-body">
@@ -645,6 +643,59 @@ Fernando Cervantes
 <i class="callout-icon"></i>
 </div>
 <p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>Every time we run the segmentation process, a new <em>group</em> of labels is added to the <em>Label groups manager</em>.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="7b8b6064" class="cell" data-execution_count="46">
+<div class="cell-output cell-output-display" data-execution_count="45">
+<div>
+<figure>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-46-output-1.png"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="setup-fine-tuning-configuration" class="slide level2">
+<h2>5.6. Setup fine tuning configuration</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol type="1">
+<li><p>Go to the <em>Acquisition function configuration</em> widget</p></li>
+<li><p>Click the “Advanced fine tuning parameters” checkbox</p></li>
+<li><p>Change the “save path” to a location where you want to store the fine tuned model</p></li>
+</ol>
+</div><div class="column" style="width:0.4;">
+<div id="a1f48dbb" class="cell" data-execution_count="50">
+<div class="cell-output cell-output-display" data-execution_count="49">
+<div>
+<figure>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-50-output-1.png"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="setup-fine-tuning-configuration-1" class="slide level2">
+<h2>5.6. Setup fine tuning configuration</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ol start="4" type="1">
+<li>Change the “model name” to “nuclei_ft”</li>
+</ol>
+<div class="callout callout-tip callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
 <p>Scroll the <em>Advanced fine tuning parameters</em> widget down to show more parameters.</p>
@@ -655,13 +706,13 @@ Fernando Cervantes
 <li><p>Set the “batch size” to <span class="math inline">\(3\)</span></p></li>
 <li><p>Change the “learning rate” to <span class="math inline">\(0.0001\)</span></p></li>
 </ol>
-<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
 <p>You can modify other parameters for the training process here, such as the number of training epochs.</p>
@@ -669,7 +720,39 @@ Fernando Cervantes
 </div>
 </div>
 </div><div class="column" style="width:0.4;">
-<div id="a148e59e" class="cell" data-execution_count="53">
+<div id="39a52da7" class="cell" data-execution_count="52">
+<div class="cell-output cell-output-display" data-execution_count="51">
+<div>
+<figure>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-52-output-1.png"></p>
+</figure>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+<section id="execute-the-fine-tuning-process" class="slide level2">
+<h2>5.7. Execute the fine tuning process</h2>
+<div class="columns">
+<div class="column" style="width:0.6;">
+<ul>
+<li>Click the “Fine tune model” button to run the training process.</li>
+</ul>
+<div class="callout callout-caution callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Caution</strong></p>
+</div>
+<div class="callout-content">
+<p>Depending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead.</p>
+</div>
+</div>
+</div>
+</div><div class="column" style="width:0.4;">
+<div id="8d7036be" class="cell" data-execution_count="53">
 <div class="cell-output cell-output-display" data-execution_count="52">
 <div>
 <figure>
@@ -680,40 +763,8 @@ Fernando Cervantes
 </div>
 </div></div>
 </section>
-<section id="execute-the-fine-tuning-process" class="slide level2">
-<h2>4.7. Execute the fine tuning process</h2>
-<div class="columns">
-<div class="column" style="width:0.6;">
-<ul>
-<li>Click the “Fine tune model” button to run the training process.</li>
-</ul>
-<div class="callout callout-note callout-titled callout-style-default">
-<div class="callout-body">
-<div class="callout-title">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<p><strong>Note</strong></p>
-</div>
-<div class="callout-content">
-<p>Depending on your computer resources (RAM, CPU), this process might take some minutes to complete. If you have a dedicated GPU device, this can take a couple of seconds instead.</p>
-</div>
-</div>
-</div>
-</div><div class="column" style="width:0.4;">
-<div id="78ddafb5" class="cell" data-execution_count="54">
-<div class="cell-output cell-output-display" data-execution_count="53">
-<div>
-<figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-54-output-1.png"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
 <section id="review-the-fine-tuned-segmentation" class="slide level2">
-<h2>4.8. Review the fine tuned segmentation</h2>
+<h2>5.8. Review the fine tuned segmentation</h2>
 <div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -728,91 +779,44 @@ Fernando Cervantes
 </div>
 </div>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-56-output-1.png" class="r-stretch"></section></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-55-output-1.png" class="r-stretch"></section></section>
 <section>
 <section id="use-the-fine-tuned-model-for-inference" class="title-slide slide level1 center">
-<h1>5. Use the fine tuned model for inference</h1>
+<h1>6. Use the fine tuned model for inference</h1>
 
 </section>
 <section id="create-a-mask-to-apply-the-fine-tuned-model-for-inference" class="slide level2">
-<h2>5.1. Create a mask to apply the fine tuned model for inference</h2>
+<h2>6.1. Create a mask to apply the fine tuned model for inference</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ol type="1">
-<li><p>Switch to the <em>Image groups manager</em> tab</p></li>
-<li><p>Click the “Edit mask properties” checkbox</p></li>
-<li><p>Set the mask scale to <span class="math inline">\(256\)</span> for the “X” and “Y” axes, and a scale of <span class="math inline">\(1\)</span> for the “Z” axis</p></li>
-<li><p>Click the “Create mask” button</p></li>
-</ol>
-</div><div class="column" style="width:0.4;">
-<div id="a11ac633" class="cell" data-execution_count="58">
-<div class="cell-output cell-output-display" data-execution_count="57">
-<div>
-<figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-58-output-1.png"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="specify-the-samplable-regions-for-inference" class="slide level2">
-<h2>5.2. Specify the samplable regions for inference</h2>
-<ul>
-<li>Draw a mask that covers slices <span class="math inline">\(31\)</span> to <span class="math inline">\(34\)</span> in the “Z” axis.</li>
-</ul>
-
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-60-output-1.png" class="r-stretch"></section>
-<section id="select-the-new-mask-layer-to-be-used-for-sampling-positions" class="slide level2">
-<h2>5.3. Select the new mask layer to be used for sampling positions</h2>
-<div class="columns">
-<div class="column" style="width:0.6;">
-<ol type="1">
-<li><p>Scroll down the <em>Image groups manager</em> tree to show the newest mask layer grup (“mask (1)”)</p></li>
+<li><p>Follow the steps from <a href="#/sec-mask" class="quarto-xref">Section&nbsp;4</a> to create a mask, now covering slices <span class="math inline">\(31\)</span> to <span class="math inline">\(34\)</span>.</p></li>
+<li><p>Scroll down the <em>Image groups manager</em> tree to show the newest mask layer grup (“mask (1)”).</p></li>
 <li><p>Select the “mask (1)” layer group</p></li>
 </ol>
-<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
 <p>The “Group name” column in the groups tree can be resized to show the complete names.</p>
 </div>
 </div>
 </div>
-<ol start="3" type="1">
-<li>Make sure that “Use as sampling mask” checkbox is checked</li>
+<ol start="4" type="1">
+<li><p>Make sure that “Use as sampling mask” checkbox is checked.</p></li>
+<li><p>Click “Run on all image groups” button in the <em>Acquisition function configuration</em> widget again.</p></li>
 </ol>
 </div><div class="column" style="width:0.4;">
-<div id="8e7088a1" class="cell" data-execution_count="62">
-<div class="cell-output cell-output-display" data-execution_count="61">
+<div id="0e2f20ee" class="cell" data-execution_count="57">
+<div class="cell-output cell-output-display" data-execution_count="56">
 <div>
 <figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-62-output-1.png"></p>
-</figure>
-</div>
-</div>
-</div>
-</div></div>
-</section>
-<section id="use-the-fine-tuned-model-for-inference-in-the-masked-region" class="slide level2">
-<h2>5.4. Use the fine tuned model for inference in the masked region</h2>
-<div class="columns">
-<div class="column" style="width:0.6;">
-<ol type="1">
-<li><p>Go back to the <em>Acquisition function configuration</em> widget</p></li>
-<li><p>Click “Run on all image groups” button again</p></li>
-</ol>
-</div><div class="column" style="width:0.4;">
-<div id="bb92bac8" class="cell" data-execution_count="64">
-<div class="cell-output cell-output-display" data-execution_count="63">
-<div>
-<figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-64-output-1.png"></p>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-57-output-1.png"></p>
 </figure>
 </div>
 </div>
@@ -820,17 +824,17 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="inspect-the-output-of-the-fine-tuned-model" class="slide level2">
-<h2>5.5. Inspect the output of the fine tuned model</h2>
+<h2>6.2. Inspect the output of the fine tuned model</h2>
 <ul>
 <li>Now you have a fine tuned model for nuclei segmentation that has been adapted to this image!</li>
 </ul>
-<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout callout-important callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>Note</strong></p>
+<p><strong>Important</strong></p>
 </div>
 <div class="callout-content">
 <p>The fine tuned model can be used in <em>Cellpose</em>’s GUI software, their python API package, or any other package that supports pretrained <code>cellpose</code> models.</p>
@@ -838,9 +842,9 @@ Fernando Cervantes
 </div>
 </div>
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-67-output-1.png" class="r-stretch"></section>
-<section id="segment-the-newly-masked-region-with-the-base-model" class="slide level2">
-<h2>5.6. Segment the newly masked region with the base model</h2>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-59-output-1.png" class="r-stretch"></section>
+<section id="segment-the-newly-masked-region-with-the-base-model-for-comaprison" class="slide level2">
+<h2>6.3. Segment the newly masked region with the base model for comaprison</h2>
 <div class="columns">
 <div class="column" style="width:0.6;">
 <ol type="1">
@@ -861,11 +865,11 @@ Fernando Cervantes
 </div>
 </div>
 </div><div class="column" style="width:0.4;">
-<div id="16dfc359" class="cell" data-execution_count="69">
-<div class="cell-output cell-output-display" data-execution_count="68">
+<div id="54c1c842" class="cell" data-execution_count="61">
+<div class="cell-output cell-output-display" data-execution_count="60">
 <div>
 <figure>
-<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-69-output-1.png"></p>
+<p><img data-src="cellpose_tutorial_files/figure-revealjs/cell-61-output-1.png"></p>
 </figure>
 </div>
 </div>
@@ -873,7 +877,10 @@ Fernando Cervantes
 </div></div>
 </section>
 <section id="compare-the-results-of-both-models" class="slide level2">
-<h2>5.7. Compare the results of both models</h2>
+<h2>6.4. Compare the results of both models</h2>
+<ul>
+<li>Hide all the layers except the “nuclei” and “membrane” layers, and the “images segmentation [2]” and “images segmentation [3]” layers, that are the segmentation outputs from the fine-tuned model and base model, respectively.</li>
+</ul>
 <div class="callout callout-tip callout-titled callout-style-default">
 <div class="callout-body">
 <div class="callout-title">
@@ -883,14 +890,14 @@ Fernando Cervantes
 <p><strong>Tip</strong></p>
 </div>
 <div class="callout-content">
-<p>Hide all the layers and show only the “nuclei” and “membrane” layers, as well as the “images segmentation [2]” and “images segmentation [3]” layers that correspond to the output of the fine tuned model and base model, respectively.</p>
+<p>Click the <strong>eye</strong> icon in the “layer list” to hide/show layers.</p>
 </div>
 </div>
 </div>
 
 
 
-<img data-src="cellpose_tutorial_files/figure-revealjs/cell-72-output-1.png" class="r-stretch"></section></section>
+<img data-src="cellpose_tutorial_files/figure-revealjs/cell-64-output-1.png" class="r-stretch"></section></section>
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <div class="footer footer-default">
