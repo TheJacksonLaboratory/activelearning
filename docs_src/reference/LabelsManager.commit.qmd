@@ -1,6 +1,0 @@
-# LabelsManager.commit { #napari_activelearning.LabelsManager.commit }
-
-```python
-LabelsManager.commit()
-```
-

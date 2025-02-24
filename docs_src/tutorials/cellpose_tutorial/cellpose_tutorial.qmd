@@ -1,11 +1,14 @@
 ---
-title: "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari"
+title: 'Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari'
 author: Fernando Cervantes
-categories: [Cellpose, Transfer learning] # self-defined categories
-
+categories:
+  - Cellpose
+  - Transfer learning
 description: Tutorial for fine-tuning the "nuclei" model from `cellpose` to new data.
-
 format:
+  html:
+    toc: true
+
   revealjs:
     output-file: cellpose_tutorial_presentation
     code-fold: false
@@ -13,15 +16,26 @@ format:
     controls: true
     fontsize: 18pt
 
-  html:
-    toc: true
-
-execute: 
+execute:
   cache: true
+  warning: false
+  error: false
+  echo: false
 
 jupyter: python3
 ---
 
+```{python}
+
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+import napari
+from PIL import Image, ImageDraw, ImageFont
+import napari_activelearning as al
+import zarr
+import numpy as np
+```
 # 1. Install `napari` and the Active Learning plugin
 
 ---
@@ -38,10 +52,21 @@ If you installed `napari` using conda, activate that same environment before ins
 
 Install the plugin adding `[cellpose]` to the command so all dependencies required for this tutorial are available.
 
-```
+``` {.bash}
 python -m pip install "napari-activelearning[cellpose]"
 ```
 
+### 1.3. Launch `napari`
+
+From a console, open `napari` with the following command:
+
+``` {.bash}
+napari
+```
+
+::: {.callout-caution}
+The first time `napari` is launched it can take more than $30$ seconds to open, so please be patient!
+:::
 
 # 2. Image groups management
 
@@ -53,36 +78,17 @@ You can use the cells 3D image sample from napari's built-in samples.
 File > Open Sample > napari builtins > Cells (3D+2Ch)
 ```
 
-``` {python}
-#| echo: false
-import napari
-from PIL import Image, ImageDraw, ImageFont
-import napari_activelearning as al
-import zarr
-from scipy.interpolate import splprep, splev
-import numpy as np
-```
-
-``` {python}
-#| echo: false
-
-# Function to generate Bezier curve points
-def bezier_curve(points, num_points=100):
-    points = np.array(points)
-    tck, u = splprep(points.T, s=0)
-    u_new = np.linspace(u.min(), u.max(), num_points)
-    x_new, y_new = splev(u_new, tck, der=0)
-    return list(zip(x_new, y_new))
+```{python}
 
 
 def draw_text(draw, text, text_pos, text_size=36):
     pos_x, pos_y = text_pos
 
-    font = ImageFont.truetype("arialbd.ttf", size=text_size + 1)
-    draw.text((pos_x-1, pos_y-1), "1", fill="black", font=font)
-    draw.text((pos_x-1, pos_y+1), "1", fill="black", font=font)
-    draw.text((pos_x+1, pos_y+1), "1", fill="black", font=font)
-    draw.text((pos_x+1, pos_y-1), "1", fill="black", font=font)
+    font = ImageFont.truetype("arialbd.ttf", size=text_size)
+    draw.text((pos_x-1, pos_y-1), text, fill="black", font=font)
+    draw.text((pos_x-1, pos_y+1), text, fill="black", font=font)
+    draw.text((pos_x+1, pos_y+1), text, fill="black", font=font)
+    draw.text((pos_x+1, pos_y-1), text, fill="black", font=font)
     font = ImageFont.truetype("arial.ttf", size=text_size)
     draw.text((pos_x, pos_y), text, fill="white", font=font)
 
@@ -200,16 +206,17 @@ def crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0):
 screenshot_scale = 0.5
 ```
 
-``` {python}
-#| echo: false
+```{python}
+
 viewer = napari.Viewer()
 viewer.window._qt_window.showMaximized()
 _ = viewer.open_sample(plugin="napari", sample="cells3d")
 
 layer_list = viewer.window.qt_viewer.dockLayerList.widget().layout().itemAt(1).widget()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -224,16 +231,32 @@ The _Image groups manager_ can be found under the _Active Learning_ plugin in na
 Plugins > Active Learning > Image groups manager
 ```
 
-``` {python}
-#| echo: false
+::: {.callout-note title="About the _Image groups manager_" collapse="true"}
+The _Image groups manager_ widget is used to create _groups_ of layers and their specific use within the `active-learning` plugin.
+It allows to specify properties and metadata of such layers (e.g. inputs paths, output directory, axes order, etc.) that are used by the _Acquisition Function Configuration_ widget.
+
+This widget allows to relate different layers using a single hierarchical structure (_image group_).
+Such hierarchical structure is implemented as follows:
+
+* *Image groups*. Used to contain different modes of data from a single object, such as image pixels, labels, masks, etc.
+
+    + *Layers groups*. These group multiple layers of the same mode together, e.g. different channel layers of the same image.
+
+        - *Layer channels*. This is directly related to elements in `napari`'s _layer list_. Moreover, _layer channels_ allow to store additional information or _metadata_ useful for the inference and fine-tuning processes.
+:::
+
+```{python}
+
 image_groups_mgr, acquisition_fun_cfg, label_groups_mgr = al.get_active_learning_widget()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 image_groups_mgr_dw = viewer.window.add_dock_widget(image_groups_mgr)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -252,14 +275,15 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 2. Click the _New Image Group_ button on the _Image Groups Manager_ widget.
 
-``` {python}
-#| echo: false
+```{python}
+
 viewer.layers.selection.clear()
 viewer.layers.selection.add(viewer.layers["nuclei"])
 viewer.layers.selection.add(viewer.layers["membrane"])
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -274,8 +298,9 @@ highlight_widget(draw, image_groups_mgr.layout, 0, item_annotation=2, item_annot
 
 cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 image_groups_mgr.create_group()
 ```
 
@@ -284,17 +309,7 @@ image_groups_mgr.create_group()
 :::: {.columns}
 
 ::: {.column width=0.3}
-1. Select the "images" _channel group_ that has been created under the new image group.
-
-::: {.callout-note title="Note on image groups hierarchy" collapse="true"}
-The hierarchical structure of groups within this plugin is the following:
-
-* *Image groups*. Used to contain different modes of data, such as images, labels, masks, segmentation labels, etc.
-
-    + *Layers groups*. These group multiple layers together, and are intended to contain data from the same mode such different channel layers of the same image.
-
-        - *Layer channels*. This is directly related to a napari layer from the _layer list_ widget, but allows to store additional information that is useful for the inference or fine-tuning process, such as the name and order of the axes.
-:::
+1. Select the "images" layers group_ that has been created under the new image group.
 
 2. Click the _Edit group properties_ checkbox.
 
@@ -302,8 +317,9 @@ The hierarchical structure of groups within this plugin is the following:
 :::
 
 ::: {.column width=0.7}
-``` {python}
-#| echo: false
+
+```{python}
+
 focus_widget = image_groups_mgr.image_groups_editor.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
 
@@ -311,8 +327,9 @@ image_groups_mgr._active_image_group.child(0).setSelected(True)
 image_groups_mgr.image_groups_editor.edit_axes_le.setText("CZYX")
 image_groups_mgr.image_groups_editor.update_source_axes()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -326,6 +343,7 @@ highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
+
 :::
 
 ::::
@@ -341,23 +359,36 @@ Plugins > Active Learning > Acquisition function configuration
 ```
 
 ::: {.callout-tip}
-All _Active Learning_ widgets can be _un-docked_ from their current place and _re-docked_ into other more convenient location within napari's window, or even as tabs, as illustrated in this tutorial.
+All _Active Learning_ widgets can be _un-docked_ from their current place and _re-docked_ into other more convenient location within `napari`'s window, or even as tabs, as illustrated in this tutorial.
 :::
 
-``` {python}
-#| echo: false
+::: {.callout-note title="About the _Acquisition function configuration_" collapse="true"}
+The _Acquisition function configuration_ widget comprises the processes of _inference_ and _fine tunning_ of deep learning models.
+
+This tool allows to define the sampling configuration used to retrieve patches from the _input_ image at random.
+Such configuration involves the size on each dimension of the patches, the maximum number of patches that can be sampled from each image, and the order of the axes that are passed to the model's inference function.
+Parameters for such model can also be configured within this widget.
+
+The fine-tuning process can also be configured and launched from within this widget.
+Finally, this widget executes the inference process on the same sampled patches to compare the _base_ and _fine-tuned_ model performance visually.
+:::
+
+```{python}
+
 acquisition_fun_cfg_dw = viewer.window.add_dock_widget(acquisition_fun_cfg)
 viewer.window._qt_window.tabifyDockWidget(image_groups_mgr_dw, acquisition_fun_cfg_dw)
 
 image_groups_mgr_dw.setWindowTitle("Image groups manager")
 acquisition_fun_cfg_dw.setWindowTitle("Acquisition function configuration")
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 acquisition_fun_cfg_dw.raise_()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -372,7 +403,7 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 1. Make sure "Input axes" are set to "ZYX".
 
-::: {.callout-note title="Note on Input axes" collapse="true"}
+::: {.callout-note title="About Input axes" collapse="true"}
 This enables edition of the patch size at those selected **spatial** axes.
 
 For example, the "Cells (3D+2Ch)" sample image is three-dimensional, with  "ZYX" spatial axes, and has two color channels. For that image we will extract two-dimensional patches of size $256\times256$ pixels, in the "X" and "Y" spatial axes.
@@ -382,7 +413,7 @@ Therefore, "Input axes"="ZYX" allows to set the patch size at spatial axes "Y" a
 
 2. Change the "Model axes" to "CYX".
 
-::: {.callout-note title="Note on Model axes" collapse="true"}
+::: {.callout-note title="About Model axes" collapse="true"}
 This, on the other hand, specifies the order our model expects to receive its inputs.
 
 In his case, the nuclei model from `cellpose` will be applied to two-dimensional images. Because the "Z" axis is not used, we drop it from the "Model axes" string. This is only possible because the "Z" axis is already set to $1$ slice deep and can be _squeezed_ from the patch.
@@ -394,15 +425,16 @@ Additionally, we append the "C" (color channel) axis to the beginning of the str
 
 ::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 acquisition_fun_cfg.input_axes_le.setText("ZYX")
 acquisition_fun_cfg._set_input_axes()
 acquisition_fun_cfg.model_axes_le.setText("CYX")
 acquisition_fun_cfg._set_model_axes()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -414,6 +446,7 @@ highlight_widget(draw, acquisition_fun_cfg.layout, (8, 9), item_annotation=2, it
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
+
 :::
 
 ::::
@@ -424,15 +457,16 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 ::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 focus_widget = acquisition_fun_cfg.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
 
 acquisition_fun_cfg.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -466,12 +500,13 @@ This directs the Active Learning plugin to sample at random patches of size $256
 
 ::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 acquisition_fun_cfg.max_samples_spn.setValue(4)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -526,16 +561,18 @@ This tells `cellpose` to segment the first channel ($0$) and use the second chan
 :::
 
 ::: {.column width=0.3}
-``` {python}
-#| echo: false
+
+```{python}
+
 acquisition_fun_cfg.methods_cmb.setCurrentIndex(2)
 acquisition_fun_cfg.tunable_segmentation_method.advanced_segmentation_options_chk.setChecked(True)
 acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.channel_axis.value = 0
 acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.channels.value = (0, 1)
 acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -562,7 +599,7 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
 - Click the "Run on all image groups" button
 
 ::: {.callout-note}
@@ -571,9 +608,10 @@ To execute the segmentation only on specific image groups, select the desired im
 
 :::
 
-::: {.column width=0.4}
-``` {python}
-#| echo: false
+::: {.column width=0.3}
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -583,10 +621,12 @@ highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_annotation=None, ite
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 ```
+
 :::
 
 ::::
@@ -599,14 +639,29 @@ _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 Because the input image is 3D, you may have to slide the "Z" index at the bottom of napari's window to look at the samples that were segmented.
 :::
 
-``` {python}
-#| echo: false
+::: {.callout-note title="About the newly added layers" collapse="true"}
+Three new layers were added to the `napari`'s layers list after executing the segmentation pipeline.
+
+The "images acquisition function" presents a map of the confidence prediction made by the chosen model for each sampled patch.
+Lighter intensity correspond to regions where the annotator should pay attention when correcting the output labels, since those are low-confidence predictions.
+On the other hand, darker intensity corresponds to high-confidence predictions, and correcting these labels would not have much impact in the performance of the fine-tuned model as correcting low-confidence (lighter intensity) regions.
+
+The "images sampled positions" show a low-resolution map of the regions that were sampled during the segmentation process.
+
+The "images segmentation" layer are the output labels predicted by the model.
+
+Note that the name of those three generated layers contain the name of the _image group_ from where those patches were sampled, in this case the "images" _image group_.
+:::
+
+```{python}
+
 label_groups_mgr.focus_region(
   label_groups_mgr.labels_group_root.child(0).child(0)
 )
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -619,7 +674,8 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
+
 1. Switch to the _Image groups manager_ tab
 
 2. Click the "Edit mask properties" checkbox
@@ -635,9 +691,10 @@ Because the mask is low-resolution, it uses less space in memory and disk.
 
 :::
 
-::: {.column width=0.4}
-``` {python}
-#| echo: false
+::: {.column width=0.3}
+
+```{python}
+
 image_groups_mgr_dw.raise_()
 
 focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
@@ -646,8 +703,9 @@ focus_widget.setChecked(True)
 image_groups_mgr.mask_generator.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
 image_groups_mgr.mask_generator.generate_mask_layer()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -670,29 +728,28 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
 
 1. Make sure the newly created layer "images mask" is selected.
 
-2. Activate the paint brush tool (or press 2 or P keys in the keyboard as shortcuts).
+2. Activate the _fill bucket_ tool (or press *4* or *F* keys in the keyboard as shortcuts).
 
-3. Move the "brush size" slider to set a size of $1$ pixel in the mask scale. Because we set a scale of $256$ on "X" and "Y" axis, this translates to a region of $256\times256$ pixels on the original image. 
+3. Click the image to draw the mask on the current slice.
 
-4. Click and drag on the image to draw the mask on the current slice.
-
-5. Move the slider at the bottom of napari's window to navigate between slices in the "Z" axis. Select slide $28$ and draw on it as in step $4$. Repeat with slices $29$ and $30$.
+4. Move the slider at the bottom of napari's window to navigate between slices in the "Z" axis. Select slice $28$ and draw on it as in step $3$. Repeat with slices $29$ and $30$.
 
 :::
 
-::: {.column width=0.4}
+::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 viewer.camera.center = (27, 128, 128)
 viewer.dims.current_step = (27, 128, 128)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -714,43 +771,26 @@ viewer.layers.selection.add(layer)
 
 layer_items = layer_list.selectedIndexes()
 
-highlight_layers(draw, layer_list, layer_items[0], item_annotation=1, item_annotation_position="E", item_annotation_fontsize=25, offset_x=offset_x, offset_y=offset_y)
+highlight_layers(draw, layer_list, layer_items[0], item_annotation=1, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 # Select the paint brush
-draw_text(draw, "2", (85, 15), text_size=36)
+draw_text(draw, "2", (150, 15), text_size=36)
 
-draw.rectangle([80, 50, 120, 90], outline="white", width=5)
-draw.rectangle([80, 50, 120, 90], outline="green", width=2)
-
-# Resize brush
-draw_text(draw, "3", (300, 170), text_size=36)
-
-draw.rectangle([5, 170, 280, 200], outline="white", width=5)
-draw.rectangle([5, 170, 280, 200], outline="green", width=2)
+draw.rectangle([140, 50, 180, 90], outline="white", width=5)
+draw.rectangle([140, 50, 180, 90], outline="green", width=2)
 
 # Draw mask
-draw_text(draw, "4", (500, 110), text_size=50)
-draw.circle((500, 200), 150, fill=None, outline='white', width=3)
-draw.circle((1100, 800), 150, fill=None, outline='white', width=3)
-
-control_points = [(500, 200), (850, 400), (750, 600), (1100, 800)]
-
-curve_points = bezier_curve(control_points, num_points=100)
-
-# Draw the Bezier curve
-draw.line(curve_points, fill='green', width=50)
-draw.line(curve_points, fill='white', width=30)
-
-# Slide Z axis
-draw_text(draw, "5", (745, 960), text_size=36)
+draw_text(draw, "3", (750, 300), text_size=50)
+draw_text(draw, "+", (740, 350), text_size=90)
 
 draw.rectangle([295, 1000, 1280, 1035], outline="white", width=5)
 draw.rectangle([295, 1000, 1280, 1035], outline="green", width=2)
 
 cropped_image.resize((int(screenshot_scale * 0.7 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 viewer.camera.center = (27, 128, 128)
 viewer.dims.current_step = (27, 128, 128)
 
@@ -762,24 +802,71 @@ viewer.layers["images mask"].refresh()
 
 ::::
 
-## 4.3. Execute the segmentation process on the masked regions and inspect  the results
+## 4.3. Execute the segmentation process on the masked regions
 
-- Run again the segmentation process (clicking "Run on all image groups" button).
+- Return to the _Acquisition function configuration_ tab and run the segmentation process again (clicking "Run on all image groups" button).
 
-::: {.callout-important}
-All slices between $27$ and $30$ were picked and segmented thanks to the sampling mask!
-:::
+```{python}
 
-``` {python}
-#| echo: false
-_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+acquisition_fun_cfg_dw.raise_()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
+
 image = Image.fromarray(screenshot)
+draw = ImageDraw.Draw(image)
+
+highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+
 image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+```{python}
+
+_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+```
+
+## 4.4. Inspect the results from the segmentation applied only to masked regions
+
+- All slices between $27$ and $30$ were picked and segmented thanks to the sampling mask!
+
+::: {.callout-note}
+At this point, multiple layers have been added to `napari`'s layers list and it could start to look clutered.
+
+The following layers will be used in the remainder of this tutorial: "membrane", "nuclei", "images mask", "images sampled positions [1]", and "images segmentation [1]".
+
+The rest of the layers can be safely removed from the list (i.e. "images acquisition function [1]", "images acquisition function", "images sampled positions", and "images segmentation").
+:::
+
+```{python}
+
+viewer.layers.selection.clear()
+for layer in viewer.layers:
+    if layer.name in ("images segmentation", "images sampled positions", "images acquisition function", "images acquisition function [1]"):
+        viewer.layers.selection.add(layer)
+```
+
+```{python}
+
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+image = Image.fromarray(screenshot)
+draw = ImageDraw.Draw(image)
+
+for layer_index in layer_list.selectedIndexes():
+    highlight_layers(draw, layer_list, layer_index, item_annotation=None, item_annotation_position="E", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+```{python}
+removable_layers = list(viewer.layers.selection)
+for layer in removable_layers:
+    viewer.layers.remove(layer)
 ```
 
 # 5. Fine tune the segmentation model
@@ -792,215 +879,239 @@ You can find the _Label groups manager_ under the _Active Learning_ plugin in na
 Plugins > Active Learning > Label groups manager
 ```
 
-``` {python}
-#| echo: false
+::: {.callout-note title="About the _Label groups manager_" collapse="true"}
+The _Label groups manager_ widget contains the coordinates of the sampled patches acquired by the _Acquisition function configuration_ widget.
+
+This widget allows to navigate between patches without serching them in the complete extent of their corresponding image.
+It additionally permits to edit the pixel data of the selected patch's _labels_ in order to correct the inference output in a _human-in-the-loop_ approach.
+:::
+
+```{python}
+
 label_groups_mgr_dw = viewer.window.add_dock_widget(label_groups_mgr)
 viewer.window._qt_window.tabifyDockWidget(acquisition_fun_cfg_dw, label_groups_mgr_dw)
 
 label_groups_mgr_dw.setWindowTitle("Label groups manager")
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 label_groups_mgr_dw.raise_()
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
 image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
-
-## 5.2. Select a segmented patch to edit
-
-- Double click on any of the segmented patches in the viewer 
-(e.g. any slice between $27$ and $30$)
-
-::: {.callout-note}
-This creates a new editable "Labels edit" layer with a copy of the selected patch.
-:::
-
-``` {python}
-#| echo: false
-label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(1).child(3), 0)
-label_groups_mgr.focus_region(
-  label_groups_mgr.labels_group_root.child(1).child(3),
-  edit_focused_label=True
-)
-```
-``` {python}
-#| echo: false
-screenshot = viewer.screenshot(canvas_only=False, flash=False)
-org_height, org_width = screenshot.shape[:2]
-image = Image.fromarray(screenshot)
-image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
-```
-
-## 5.3. Use napari's layer controls to make changes on the objects of the current patch
-
-::: {.callout-tip}
-You can follow [this tutorial](https://napari.org/dev/howtos/layers/labels.html#creating-deleting-merging-and-splitting-connected-components) to learn how to use the annotation tools in napari.
-:::
-
-``` {python}
-#| echo: false
-screenshot = viewer.screenshot(canvas_only=False, flash=False)
-org_height, org_width = screenshot.shape[:2]
-
-image = Image.fromarray(screenshot)
-image
-
-
-draw = ImageDraw.Draw(image)
-
-# Draw a red rectangle
-draw.rectangle([5, 20, 280, 385], outline="white", width=5)
-draw.rectangle([5, 20, 280, 385], outline="green", width=2)
-
-image
-```
-
-## 5.4. Commit changes to the labels layer
-
-- Once you have finished editing the labels, click the "Commit changes" button on the _Label groups manager_
-
-``` {python}
-#| echo: false
-z_tmp = zarr.open(r"C:\Users\Public\Documents\membrane.zarr\segmentation\0", mode="r")
-
-label_groups_mgr.labels_group_root.child(1).child(3)._position
-viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(1).child(3)._position]
-viewer.layers["Labels edit"].refresh()
-```
-``` {python}
-#| echo: false
-screenshot = viewer.screenshot(canvas_only=False, flash=False)
-org_height, org_width = screenshot.shape[:2]
-
-cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.0, height_prop=0.0)
-
-highlight_widget(draw, label_groups_mgr.layout, 6, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
-cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
-```
-``` {python}
-#| echo: false
-label_groups_mgr.commit()
-```
-
-## 5.5. Navigate between segmented patches
+## 5.2. Navigate between patches with the _Label groups manager_
 
 :::: {.columns}
 
-::: {.column width=0.6}
-1. Expand the second group of labels
+::: {.column width=0.7}
 
-2. Double-click on any of the nested items to open it for editing
+1. Select the last _labels group_ "Labels of groups: images" added to the manager. If you have not removed any layers from `napari`'s layers list, it should be the second group, otherwise, it will be the only group available.
 
-3. Use the navigation buttons to move between segmented patches
+2. Select the first _label_ in such group.
 
-4. Continue editing the segmentation in the current patch and commit the changes when finished
+3. Use the navigation buttons to move between labels.
 
-5. Repeat this with each of the segmented patches.
-
-::: {.callout-note}
-Every time we run the segmentation process, a new _group_ of labels is added to the _Label groups manager_.
+::: {.callout-caution}
+Selecting a _label_ element in the _label groups manager_ will toggle all layers visible.
+You can hide again any layer that blocks the visibility of objects of interest.
 :::
 
 :::
 
-::: {.column width=0.4}
+::: {.column width=0.3}
 
-``` {python}
-#| echo: false
-label_groups_mgr.labels_table_tw.expandItem(label_groups_mgr.labels_group_root.child(1))
-label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(1).child(0), 0)
+```{python}
+
+label_groups_mgr.labels_table_tw.expandItem(label_groups_mgr.labels_group_root.child(0))
+label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(0).child(0), 0)
 label_groups_mgr.focus_region(
-  label_groups_mgr.labels_group_root.child(1).child(0),
+  label_groups_mgr.labels_group_root.child(0).child(0),
   edit_focused_label=True
 )
 ```
-``` {python}
-#| echo: false
-screenshot = viewer.screenshot(canvas_only=False, flash=False)
-org_height, org_width = screenshot.shape[:2]
 
-image = Image.fromarray(screenshot)
+```{python}
 
-offset_x, offset_y = (org_width * 0.7, 0)
-
-roi = (offset_x, offset_y, org_width, org_height)
-
-# Crop the image
-cropped_image = image.crop(roi)
-
-draw = ImageDraw.Draw(cropped_image)
-
-# Draw a red rectangle
-highlight_item(draw, label_groups_mgr.labels_group_root.child(1), label_groups_mgr.labels_table_tw, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
-highlight_item(draw, (label_groups_mgr.labels_group_root.child(1).child(0), label_groups_mgr.labels_group_root.child(1).child(3)), label_groups_mgr.labels_table_tw, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
-highlight_widget(draw, label_groups_mgr.layout, (1, 4), item_annotation=3, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
-highlight_widget(draw, label_groups_mgr.layout, 6, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
-cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
-```
-``` {python}
-#| echo: false
-for c_idx in range(label_groups_mgr.labels_group_root.child(1).childCount()):
-    label_groups_mgr.focus_region(
-        label_groups_mgr.labels_group_root.child(1).child(c_idx),
-        edit_focused_label=True
-    )
-
-    label_groups_mgr.labels_group_root.child(1).child(c_idx)._position
-    viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(1).child(c_idx)._position]
-    label_groups_mgr.commit()
-
-```
-
-:::
-
-::::
-
-## 5.6. Setup fine tuning configuration
-
-:::: {.columns}
-
-::: {.column width=0.6}
-
-1. Go to the _Acquisition function configuration_ widget
-
-2. Click the "Advanced fine tuning parameters" checkbox
-
-3. Change the "save path" to a location where you want to store the fine tuned model
-
-:::
-
-::: {.column width=0.4}
-
-``` {python}
-#| echo: false
-acquisition_fun_cfg_dw.raise_()
-```
-``` {python}
-#| echo: false
-acquisition_fun_cfg.tunable_segmentation_method.advanced_finetuning_options_chk.setChecked(True)
-acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.save_path.value = "C:/Users/Public/Documents/models"
-```
-``` {python}
-#| echo: false
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 1, item_annotation=2, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+# Draw a red rectangle
+highlight_item(draw, label_groups_mgr.labels_group_root.child(0), label_groups_mgr.labels_table_tw, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 6, item_annotation=3, item_annotation_position="NE", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_item(draw, label_groups_mgr.labels_group_root.child(0).child(0), label_groups_mgr.labels_table_tw, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, label_groups_mgr.layout, (1, 4), item_annotation=3, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+:::
+
+::::
+
+## 5.3. Use napari's layer controls to make changes on the objects of the current patch
+
+1. Select the _label_ associated to the patch extracted at slice $27$. That label can be found by looking for the coordinate $(0, 0, 27, 0, 0)$ in the "Sampling top-left" column of the _label groups manager_ table.
+
+::: {.callout-note}
+This creates a new editable "Labels edit" layer with a copy of the selected patch.
+:::
+
+2. Make sure the "Labels edit" layer is selected.
+
+3. Edit the labels on the current patch with `napari`'s annotation tools.
+ 
+::: {.callout-tip title="How to use the annotation tools" collapse="true"}
+
+1. Select the _pick mode_ tool (click the dropper icon or press key _5_ or _L_ on the keyboard) and click on an object in the current patch to get its label index.
+
+2. Use the _paint brush_ (click the brush icon or press key _2_ or _P_ on the keyboard) and add pixels missed by the model.
+
+3. Remove extra pixels with the _label eraser_ tool (click the eraser icon or press key _1_ or _E_ on the keyboard).
+
+4. If an object was not segmented at all, press the _M_ key on the keyboard to get the next _unused_ label index, and use the _paint brush_ as in step $2$ to cover the pixels of that object.
+
+For a more complete guide on annotation with `napari` follow [this tutorial](https://napari.org/stable/howtos/layers/labels.html#creating-deleting-merging-and-splitting-connected-components).
+
+:::
+
+4. Click the "Commit changes" button when finished editing.
+
+```{python}
+
+label_groups_mgr.labels_table_tw.setCurrentItem(label_groups_mgr.labels_group_root.child(0).child(3), 0)
+label_groups_mgr.focus_region(
+  label_groups_mgr.labels_group_root.child(0).child(3),
+  edit_focused_label=True
+)
+```
+
+```{python}
+
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+image = Image.fromarray(screenshot)
+image
+
+draw = ImageDraw.Draw(image)
+
+# Draw a red rectangle
+highlight_item(draw, label_groups_mgr.labels_group_root.child(0).child(3), label_groups_mgr.labels_table_tw, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+
+highlight_layers(draw, layer_list, layer_list.selectedIndexes()[0], item_annotation=2, item_annotation_position="E", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+
+# Draw a red rectangle
+draw.rectangle([5, 20, 280, 385], outline="white", width=5)
+draw.rectangle([5, 20, 280, 385], outline="green", width=2)
+draw_text(draw, "3", (285, 200), text_size=36)
+
+highlight_widget(draw, label_groups_mgr.layout, 6, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+
+image
+```
+
+## 5.4. Edit labels on other slices
+
+- Continue editing the labels of the other patches until these are closer to what the model is expected to predict.
+
+::: {.callout-important}
+The `cellpose` model used in this tutorial does not work with sparse labeling, so its important that all the objects that are of interest should be labeled.
+
+Additionally, the performance of the _fine-tuned_ model will depend highly on how precise the objects were labeled.
+:::
+
+```{python}
+
+z_tmp = zarr.open(r"C:\Users\Public\Documents\membrane.zarr\segmentation\0", mode="r")
+```
+
+```{python}
+
+for c_idx in range(label_groups_mgr.labels_group_root.child(0).childCount()):
+    label_groups_mgr.focus_region(
+        label_groups_mgr.labels_group_root.child(0).child(c_idx),
+        edit_focused_label=True
+    )
+
+    label_groups_mgr.labels_group_root.child(0).child(c_idx)._position
+    viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(0).child(c_idx)._position]
+    label_groups_mgr.commit()
+```
+
+```{python}
+
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+image = Image.fromarray(screenshot)
+
+image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+## 5.5. Select the _layer group_ that will be used as labels for _fine-tuning_
+
+:::: {.columns}
+
+::: {.column width=0.7}
+
+1. Go to the _image groups manager_ widget and select the "segmentation (1)" _layers group_.
+
+::: {.callout-tip}
+The "Group name" column in the groups table can be resized to show the complete names.
+:::
+
+2. Open the _Edit group properties_ view (clicking on the checkbox) and tick the "Use as labels" checkbox.
+
+::: {.callout-note}
+Any _layers group_ can be used as labels for the _fine-tuning_ process, just make sure the layer type is appropriate for the training workflow of the model to fine-tune.
+
+In this tutorial, the labels must be of `napari.layers.Labels` type.
+:::
+
+:::
+
+::: {.column width=0.3}
+
+```{python}
+
+image_groups_mgr_dw.raise_()
+
+focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
+focus_widget.setChecked(True)
+
+image_groups_mgr.image_groups_tw.clearSelection()
+image_groups_mgr.image_groups_tw.setColumnWidth(0, 200)
+
+vertical_scroll_bar = image_groups_mgr.image_groups_tw.verticalScrollBar()
+vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
+
+image_groups_mgr.groups_root.child(0).child(3).setSelected(True)
+```
+
+```{python}
+
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
+
+image_groups_mgr.image_groups_editor.use_as_labels_chk.setChecked(True)
+
+highlight_item(draw, image_groups_mgr.groups_root.child(0).child(3), image_groups_mgr.image_groups_tw, item_annotation=1, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, 14, item_annotation=2, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
@@ -1012,7 +1123,49 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
+
+1. Go to the _Acquisition function configuration_ widget and click the "Advanced fine tuning parameters" checkbox
+
+2. Change the "save path" to a location where you want to store the fine tuned model
+
+:::
+
+::: {.column width=0.3}
+
+```{python}
+
+acquisition_fun_cfg_dw.raise_()
+```
+
+```{python}
+
+acquisition_fun_cfg.tunable_segmentation_method.advanced_finetuning_options_chk.setChecked(True)
+acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.save_path.value = "C:/Users/Public/Documents/models"
+```
+
+```{python}
+
+screenshot = viewer.screenshot(canvas_only=False, flash=False)
+org_height, org_width = screenshot.shape[:2]
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.7, height_prop=0.0)
+
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 1, item_annotation=1, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 6, item_annotation=2, item_annotation_position="NE", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+```
+
+:::
+
+::::
+
+## 5.6. Setup fine tuning configuration
+
+:::: {.columns}
+
+::: {.column width=0.7}
 
 4. Change the "model name" to "nuclei_ft"
 
@@ -1030,10 +1183,10 @@ You can modify other parameters for the training process here, such as the numbe
 
 :::
 
-::: {.column width=0.4}
+::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 vertical_scroll_bar = acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters_scr.verticalScrollBar()
 vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
  
@@ -1041,8 +1194,9 @@ acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.model_nam
 acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.batch_size.value = 3
 acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.learning_rate.value = 0.0001
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -1065,7 +1219,16 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
+
+::: {.callout-caution title="Double check the fine-tuning parameters!" collapse="true"}
+Because _spin boxes_ in this widget can be modified by _hovering_ and _scrolling_ with the mouse, it is possible to change their values when scrolling down the parameters window.
+
+Make sure that the parameters are the same as the shown in the following screenshot, particularly the size of the crops used for _data augmentation_ (_bsize_), and the number of images per epoch (_nimg per epoch_).
+
+![](finetuning_parameter_values.png)
+:::
+
 - Click the "Fine tune model" button to run the training process.
 
 ::: {.callout-caution}
@@ -1074,10 +1237,10 @@ Depending on your computer resources (RAM, CPU), this process might take some mi
 
 :::
 
-::: {.column width=0.4}
+::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -1087,8 +1250,9 @@ highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=None, ite
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 _ = acquisition_fun_cfg.fine_tune()
 ```
 
@@ -1102,8 +1266,8 @@ _ = acquisition_fun_cfg.fine_tune()
 Use the *opacity* slider to compare how the fine tuned model segments the same objects that were labeled for training.
 :::
 
-``` {python}
-#| echo: false
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -1123,28 +1287,24 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
 
 1. Follow the steps from @sec-mask to create a mask, now covering slices $31$ to $34$.
 
-2. Scroll down the _Image groups manager_ tree to show the newest mask layer grup ("mask (1)").
+2. Scroll down the _Image groups manager_ table to show the newest mask layer grup ("mask (1)").
 
 3. Select the "mask (1)" layer group
 
-::: {.callout-tip}
-The "Group name" column in the groups tree can be resized to show the complete names.
+4. Open the _Edit group properties_ (by clicking its checkbox) and make sure that "Use as sampling mask" checkbox is checked.
+
+6. Go to the _Acquisition function configuration_ widget again and click "Run on all image groups" button.
+
 :::
 
-4. Make sure that "Use as sampling mask" checkbox is checked.
+::: {.column width=0.3}
 
+```{python}
 
-5. Click "Run on all image groups" button in the _Acquisition function configuration_ widget again.
-:::
-
-::: {.column width=0.4}
-
-``` {python}
-#| echo: false
 image_groups_mgr_dw.raise_()
 
 focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
@@ -1161,13 +1321,16 @@ viewer.layers["images mask (1)"].refresh()
 
 image_groups_mgr.image_groups_tw.clearSelection()
 
+image_groups_mgr.image_groups_tw.setColumnWidth(0, 200)
+
 vertical_scroll_bar = image_groups_mgr.image_groups_tw.verticalScrollBar()
 vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
 
 image_groups_mgr.groups_root.child(0).child(image_groups_mgr.groups_root.child(0).childCount() - 1).setSelected(True)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -1192,15 +1355,16 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 The fine tuned model can be used in *Cellpose*'s GUI software, their python API package, or any other package that supports pretrained `cellpose` models.
 :::
 
-``` {python}
-#| echo: false
+```{python}
+
 _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 
 viewer.camera.center = (33, 128, 128)
 viewer.dims.current_step = (33, 128, 128)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
@@ -1211,7 +1375,7 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 :::: {.columns}
 
-::: {.column width=0.6}
+::: {.column width=0.7}
 
 1. Choose the "nuclei" model again from the dropdown list in the _Advanced segmentation parameters_ section
 
@@ -1223,10 +1387,10 @@ This will execute the segmentation process with the non-fine-tuned "nuclei" mode
 
 :::
 
-::: {.column width=0.4}
+::: {.column width=0.3}
 
-``` {python}
-#| echo: false
+```{python}
+
 acquisition_fun_cfg_dw.raise_()
  
 vertical_scroll_bar = acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters_scr.verticalScrollBar()
@@ -1234,8 +1398,9 @@ vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
 
 acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
@@ -1247,30 +1412,37 @@ highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_annotation=2, item_a
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 _ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
 ```
+
 :::
 
 ::::
 
 ## 6.4. Compare the results of both models
 
-- Hide all the layers except the "nuclei" and "membrane" layers, and the "images segmentation [2]" and "images segmentation [3]" layers, that are the segmentation outputs from the fine-tuned model and base model, respectively.
+- Remove all the layers except the "nuclei" and "membrane" layers, and the "images segmentation" and "images segmentation [2]" layers, that are the segmentation outputs from the fine-tuned model and base model, respectively.
 
 ::: {.callout-tip}
-Click the **eye** icon in the "layer list" to hide/show layers.
+Click the **eye** icon in the "layer list" to hide/show layers instead of removing the layers.
 :::
 
-
-``` {python}
-#| echo: false
+```{python}
+viewer.layers.selection.clear()
 for layer in viewer.layers:
-    layer.visible = layer.name in ("images segmentation [2]", "images segmentation [3]", "nuclei", "membrane")
+    if layer.name not in ("images segmentation [2]", "images segmentation", "nuclei", "membrane"):
+        viewer.layers.selection.add(layer)
+
+removable_layers = list(viewer.layers.selection)
+for layer in removable_layers:
+    viewer.layers.remove(layer)
 ```
-``` {python}
-#| echo: false
+
+```{python}
+
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 offset_x, offset_y = 0, 0
@@ -1279,7 +1451,7 @@ image = Image.fromarray(screenshot)
 draw = ImageDraw.Draw(image)
 
 viewer.layers.selection.clear()
-layer = viewer.layers["images segmentation [3]"]
+layer = viewer.layers["images segmentation [2]"]
 viewer.layers.selection.add(layer)
 
 # Draw a red rectangle
@@ -1288,7 +1460,7 @@ layer_items = layer_list.selectedIndexes()
 highlight_layers(draw, layer_list, layer_items[0], item_annotation="< base model", item_annotation_position="E", item_annotation_fontsize=25, offset_x=offset_x, offset_y=offset_y)
 
 viewer.layers.selection.clear()
-layer = viewer.layers["images segmentation [2]"]
+layer = viewer.layers["images segmentation"]
 viewer.layers.selection.add(layer)
 
 layer_items = layer_list.selectedIndexes()

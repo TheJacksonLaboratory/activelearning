@@ -1,6 +1,0 @@
-# ImageGroupsManager.get_active_item { #napari_activelearning.ImageGroupsManager.get_active_item }
-
-```python
-ImageGroupsManager.get_active_item()
-```
-

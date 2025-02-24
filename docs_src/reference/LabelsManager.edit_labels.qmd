@@ -1,6 +1,0 @@
-# LabelsManager.edit_labels { #napari_activelearning.LabelsManager.edit_labels }
-
-```python
-LabelsManager.edit_labels()
-```
-

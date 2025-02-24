@@ -1,6 +1,0 @@
-# LayersGroup { #napari_activelearning.LayersGroup }
-
-```python
-LayersGroup(self)
-```
-

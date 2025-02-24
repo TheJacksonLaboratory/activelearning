@@ -1,6 +1,0 @@
-# LabelsManager.add_labels { #napari_activelearning.LabelsManager.add_labels }
-
-```python
-LabelsManager.add_labels(layer_channel, labels)
-```
-

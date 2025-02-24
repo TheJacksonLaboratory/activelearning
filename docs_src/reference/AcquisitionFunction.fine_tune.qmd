@@ -1,6 +1,0 @@
-# AcquisitionFunction.fine_tune { #napari_activelearning.AcquisitionFunction.fine_tune }
-
-```python
-AcquisitionFunction.fine_tune()
-```
-

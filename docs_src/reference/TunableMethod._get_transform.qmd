@@ -1,6 +1,0 @@
-# TunableMethod._get_transform { #napari_activelearning.TunableMethod._get_transform }
-
-```python
-TunableMethod._get_transform()
-```
-
