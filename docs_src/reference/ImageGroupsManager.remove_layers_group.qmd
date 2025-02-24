@@ -1,6 +1,0 @@
-# ImageGroupsManager.remove_layers_group { #napari_activelearning.ImageGroupsManager.remove_layers_group }
-
-```python
-ImageGroupsManager.remove_layers_group()
-```
-

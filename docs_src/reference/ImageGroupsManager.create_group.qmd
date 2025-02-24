@@ -1,6 +1,0 @@
-# ImageGroupsManager.create_group { #napari_activelearning.ImageGroupsManager.create_group }
-
-```python
-ImageGroupsManager.create_group()
-```
-

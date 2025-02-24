@@ -1,6 +1,0 @@
-# LabelsManager.focus_region { #napari_activelearning.LabelsManager.focus_region }
-
-```python
-LabelsManager.focus_region(label=None, edit_focused_label=False)
-```
-

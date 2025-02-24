@@ -1,6 +1,0 @@
-# ImageGroupRoot { #napari_activelearning.ImageGroupRoot }
-
-```python
-ImageGroupRoot(self)
-```
-

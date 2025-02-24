@@ -1,6 +1,0 @@
-# TunableMethod._fine_tune { #napari_activelearning.TunableMethod._fine_tune }
-
-```python
-TunableMethod._fine_tune(train_dataloader, val_dataloader)
-```
-
