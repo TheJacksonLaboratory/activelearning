@@ -191,3 +191,4 @@ docs/tutorials/cellpose_tutorial.quarto_ipynb
 /docs/tutorials/cellpose_tutorial_files
 /docs/styles.css
 docs/tutorials/cellpose_tutorial_notebook.qmd
+/finetuned_models
