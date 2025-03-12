@@ -266,6 +266,20 @@ class MyZarrDataset(zds.ZarrDataset):
     def __len__(self):
         return len(self._toplefts)
 
+    def __getstate__(self):
+        # Custom behavior for pickling the ZarrDataset object.
+        state = self.__dict__.copy()
+        # Remove any attributes that should not be pickled
+        state['_arr_lists'] = None
+        state['_curr_collection'] = None
+        state['_initialized'] = False
+
+        return state
+
+    def __setstate__(self, state):
+        # Custom behavior for unpickling the ZarrDataset object.
+        self.__dict__.update(state)
+
 
 class TunableMethod(SegmentationMethod):
     def __init__(self):

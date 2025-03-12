@@ -13,13 +13,23 @@ from micro_sam.util import export_custom_sam_model
 import napari_activelearning as al
 
 
+def squeeze_labels(x):
+    return x.squeeze()
+
+
+def to_uint8(x):
+    x_float = x.astype(np.float32)
+    x_rescaled = (x_float - x_float.min()) / (x_float.max() - x_float.min())
+    return x_rescaled
+
+
 class TunableMicroSAM(al.TunableMethodWidget):
     def __init__(self):
         super(TunableMicroSAM, self).__init__()
         self._sam_predictor = None
         self._sam_instance_segmenter = None
         self.checkpoint_path = None
-        self.model_type = "vit_t"
+        self.model_type = "vit_b"
         self.lr = 1e-5
         self.n_objects_per_batch = 5
         self.n_epochs = 5
@@ -57,15 +67,6 @@ class TunableMicroSAM(al.TunableMethodWidget):
 
     def _get_transform(self):
         # Ensure labels are squeezed when these are not actual 3D arrays.
-        def squeeze_labels(x):
-            return x.squeeze()
-
-        def to_uint8(x):
-            x_float = x.astype(np.float32)
-            x_rescaled = (x_float - x_float.min())\
-                / (x_float.max() - x_float.min())
-            return (255.0 * x_rescaled).astype(np.uint8)
-
         input_transform = transforms.Compose([
             to_uint8,
         ])
