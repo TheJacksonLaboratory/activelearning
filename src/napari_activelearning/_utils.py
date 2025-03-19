@@ -2,7 +2,6 @@ from typing import Optional, Union, Iterable
 from pathlib import PureWindowsPath, Path
 from urllib.parse import urlparse
 import math
-import tensorstore as ts
 import zarr
 import zarrdataset as zds
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
@@ -22,6 +21,8 @@ except ModuleNotFoundError:
 from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
+from ._models import TunableMethod
+
 
 class SuperPixelGenerator(zds.MaskGenerator):
     """Gerates a labeled mask based on the super pixels computed from the input
@@ -31,7 +32,8 @@ class SuperPixelGenerator(zds.MaskGenerator):
     no channels.
     """
     def __init__(self, num_superpixels: int = 512, axes: str = "YXC",
-                 model_axes: str = "YXC"):
+                 model_axes: str = "YXC",
+                 **kwargs):
 
         super(SuperPixelGenerator, self).__init__(axes=axes)
 
@@ -213,12 +215,14 @@ class StaticPatchSampler(zds.PatchSampler):
 
 
 def get_dataloader(
-        dataset_metadata, patch_size: dict,
+        dataset_metadata: dict,
+        patch_size: dict,
         shuffle: bool = True,
         num_workers: int = 0,
         batch_size: int = 1,
         spatial_axes: str = "YX",
         model_input_axes: str = "YXC",
+        tunable_segmentation_method: Optional[TunableMethod] = None,
         **superpixel_kwargs
 ):
 
@@ -249,7 +253,10 @@ def get_dataloader(
         shuffle=shuffle
     )
 
-    train_dataset.add_transform("images", zds.ToDtype(np.float32))
+    if tunable_segmentation_method is not None:
+        mode_transforms = tunable_segmentation_method.get_inference_transform()
+        for input_mode, transform_mode in mode_transforms.items():
+            train_dataset.add_transform(input_mode, transform_mode)
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(

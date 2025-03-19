@@ -4,8 +4,8 @@ import numpy as np
 from napari_activelearning._acquisition import (AcquisitionFunction,
                                                 compute_acquisition_fun,
                                                 compute_segmentation,
-                                                add_multiscale_output_layer,
-                                                TunableMethod)
+                                                add_multiscale_output_layer)
+from napari_activelearning._models import TunableMethod
 from napari_activelearning._layers import LayerChannel
 
 try:
@@ -19,8 +19,13 @@ class TestTunableMethod(TunableMethod):
     def __init__(self):
         super(TestTunableMethod, self).__init__()
 
-    def _get_transform(self):
-        return lambda x: x, None
+    def get_train_transform(self):
+        mode_transforms = {("images", ): lambda x: x}
+        return mode_transforms
+
+    def get_inference_transform(self):
+        mode_transforms = {("images", ): lambda x: x}
+        return mode_transforms
 
     def _run_pred(self, img, *args, **kwargs):
         return np.random.random((10, 10))

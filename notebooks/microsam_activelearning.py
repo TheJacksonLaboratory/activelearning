@@ -1,26 +1,44 @@
 import os
 import numpy as np
 import torch
-import time
 
-from torchvision import transforms
 from torch_em.transform.label import PerObjectDistanceTransform
+from torch_em.transform.augmentation import get_augmentations
+from torch_em.util.util import ensure_tensor_with_channels
 
 from micro_sam import util
 from micro_sam import automatic_segmentation as msas
 import micro_sam.training as sam_training
 from micro_sam.util import export_custom_sam_model
+
 import napari_activelearning as al
 
 
-def squeeze_labels(x):
-    return x.squeeze()
+class AugmentEnsureInputs:
+    def __init__(self):
+        self.label_transform = PerObjectDistanceTransform(
+            distances=True,
+            boundary_distances=True,
+            directed_distances=False,
+            foreground=True,
+            instances=True,
+            min_size=25
+        )
 
+        self.augmentations = get_augmentations(ndim=2)
 
-def to_uint8(x):
-    x_float = x.astype(np.float32)
-    x_rescaled = (x_float - x_float.min()) / (x_float.max() - x_float.min())
-    return x_rescaled
+    def __call__(self, inputs, labels):
+        inputs = inputs.squeeze()
+        labels = labels.squeeze()
+        labels = self.label_transform(labels)
+
+        inputs, labels = self.augmentations(inputs, labels)
+
+        inputs = ensure_tensor_with_channels(inputs, ndim=2,
+                                             dtype=torch.float32)
+        labels = ensure_tensor_with_channels(labels, ndim=2,
+                                             dtype=torch.float32)
+        return (inputs, labels)
 
 
 class TunableMicroSAM(al.TunableMethodWidget):
@@ -28,67 +46,58 @@ class TunableMicroSAM(al.TunableMethodWidget):
         super(TunableMicroSAM, self).__init__()
         self._sam_predictor = None
         self._sam_instance_segmenter = None
-        self.checkpoint_path = None
-        self.model_type = "vit_b"
-        self.lr = 1e-5
-        self.n_objects_per_batch = 5
-        self.n_epochs = 5
-        self.checkpoint_name = f"{self.model_type}/finetuned"
-        self.save_root = "./finetuned_models/checkpoints"
-        self.export_path = "./finetuned_models"
+        self._checkpoint_path = None
+        self._model_type = "vit_b"
+        self._n_epochs = 5
+        self._checkpoint_name = "vit_b_msam_ft"
+        self._save_path = "./finetuned_models"
+        self._gpu = True
+
+        self.refresh_model = True
 
     def _model_init(self):
-        if self._sam_predictor is not None:
+        if not self.refresh_model:
             return
+
+        device = util.get_device(
+            "cuda" if torch.cuda.is_available() and self._gpu else "cpu"
+        )
 
         (self._sam_predictor,
          self._sam_instance_segmenter) = msas.get_predictor_and_segmenter(
-            model_type=self.model_type,
-            device=util.get_device("cuda"
-                                   if torch.cuda.is_available()
-                                   else "cpu"),
-            amg=True,
-            checkpoint=self.checkpoint_path,
-            stability_score_offset=1.0
+            model_type=self._model_type,
+            device=device,
+            checkpoint=self._checkpoint_path
         )
 
         (self._sam_predictor_dropout,
          self._sam_instance_segmenter_dropout) =\
             msas.get_predictor_and_segmenter(
-                model_type=self.model_type,
-                device=util.get_device("cuda"
-                                       if torch.cuda.is_available()
-                                       else "cpu"),
-                amg=True,
-                checkpoint=self.checkpoint_path,
-                stability_score_offset=1.0)
+                model_type=self._model_type,
+                device=device,
+                checkpoint=self._checkpoint_path)
 
         al.add_dropout(self._sam_predictor_dropout.model)
 
-    def _get_transform(self):
+        self.refresh_model = False
+
+    def get_train_transform(self, *args, **kwargs):
         # Ensure labels are squeezed when these are not actual 3D arrays.
-        input_transform = transforms.Compose([
-            to_uint8,
-        ])
+        mode_transforms = {
+            ("images", "labels"): AugmentEnsureInputs()
+        }
+        return mode_transforms
 
-        label_transform = transforms.Compose([
-            transforms.Lambda(squeeze_labels),
-            PerObjectDistanceTransform(
-                distances=True,
-                boundary_distances=True,
-                directed_distances=False,
-                foreground=True,
-                instances=True,
-                min_size=25
-            )
-        ])
-
-        return input_transform, label_transform
+    def get_inference_transform(self, *args, **kwargs):
+        # Ensure labels are squeezed when these are not actual 3D arrays.
+        mode_transforms = {
+            ("images", ): lambda x: x
+        }
+        return mode_transforms
 
     def _run_pred(self, img, *args, **kwargs):
         self._model_init()
 
-        e_time = time.perf_counter()
         img_embeddings = util.precompute_image_embeddings(
             predictor=self._sam_predictor_dropout,
             input_=img,
@@ -98,20 +107,14 @@ class TunableMicroSAM(al.TunableMethodWidget):
             halo=None,
             verbose=False,
         )
-        e_time = time.perf_counter() - e_time
 
-        e_time = time.perf_counter()
         self._sam_instance_segmenter_dropout.initialize(
             image=img,
             image_embeddings=img_embeddings
         )
-        e_time = time.perf_counter() - e_time
 
-        e_time = time.perf_counter()
         masks = self._sam_instance_segmenter_dropout.generate()
-        e_time = time.perf_counter() - e_time
 
-        e_time = time.perf_counter()
         probs = np.zeros(img.shape[:2], dtype=np.float32)
         for mask in masks:
             probs = np.where(
@@ -119,7 +122,6 @@ class TunableMicroSAM(al.TunableMethodWidget):
                 mask["predicted_iou"],
                 probs
             )
-        e_time = time.perf_counter() - e_time
 
         probs = torch.from_numpy(probs).sigmoid().numpy()
 
@@ -128,7 +130,6 @@ class TunableMicroSAM(al.TunableMethodWidget):
     def _run_eval(self, img, *args, **kwargs):
         self._model_init()
 
-        e_time = time.perf_counter()
         segmentation_mask = msas.automatic_instance_segmentation(
             predictor=self._sam_predictor,
             segmenter=self._sam_instance_segmenter,
@@ -136,7 +137,6 @@ class TunableMicroSAM(al.TunableMethodWidget):
             ndim=2,
             verbose=False
         )
-        e_time = time.perf_counter() - e_time
 
         return segmentation_mask
 
@@ -144,57 +144,43 @@ class TunableMicroSAM(al.TunableMethodWidget):
         self._model_init()
 
         train_dataloader.shuffle = True
-        val_dataloader.shuffle = False
+        val_dataloader.shuffle = True
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # training settings:
-        freeze_parts = None
-
-        # all the stuff we need for training
-        scheduler_kwargs = {
-            "mode": "min",
-            "factor": 0.9,
-            "patience": 10,
-            "verbose": True
-        }
+        device = "cuda" if torch.cuda.is_available() and self._gpu else "cpu"
 
         # Run training.
         sam_training.train_sam(
-            name=self.checkpoint_name,
-            model_type=self.model_type,
+            name=self._checkpoint_name,
+            save_root=self._save_root,
+            model_type=self._model_type,
             train_loader=train_dataloader,
             val_loader=val_dataloader,
+            n_epochs=self._n_epochs,
+            n_objects_per_batch=5,
             with_segmentation_decoder=True,
-            early_stopping=10,
-            n_objects_per_batch=self.n_objects_per_batch,
-            checkpoint_path=self.checkpoint_path,
-            freeze=freeze_parts,
             device=device,
-            lr=self.lr,
-            n_epochs=self.n_epochs,
-            save_root=self.save_root,
-            scheduler_kwargs=scheduler_kwargs,
-            verify_n_labels_in_loader=2,
-            save_every_kth_epoch=10,
-            peft_kwargs=None,
         )
 
-        if self.export_path is not None:
-            self.checkpoint_path = os.path.join(
-                "" if self.save_root is None else self.save_root,
-                "checkpoints",
-                self.checkpoint_name,
-                "best.pt"
-            )
-            export_custom_sam_model(
-                checkpoint_path=self.checkpoint_path,
-                model_type=self.model_type,
-                save_path=self.export_path,
-            )
+        export_source_path = os.path.join(
+            self._save_path,
+            "checkpoints",
+            self._checkpoint_name,
+            "best.pt"
+        )
 
-            self._sam_predictor = None
-            self._sam_instance_segmenter = None
+        self._checkpoint_path = os.path.join(
+            self._save_path,
+            self._checkpoint_name + ".pth"
+        )
+
+        export_custom_sam_model(
+            checkpoint_path=export_source_path,
+            model_type=self._model_type,
+            save_path=self._checkpoint_path,
+            with_segmentation_decoder=True
+        )
+
+        self.refresh_model = True
 
         return True
 

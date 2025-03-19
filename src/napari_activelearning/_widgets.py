@@ -1,4 +1,4 @@
-from ._acquisition import TunableMethod
+from ._models import TunableMethod
 from ._interface import (ImageGroupsManagerWidget,
                          LabelsManagerWidget,
                          AcquisitionFunctionWidget)

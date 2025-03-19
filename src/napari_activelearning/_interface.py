@@ -23,7 +23,8 @@ import numpy as np
 import dask.array as da
 from napari.layers._multiscale_data import MultiScaleData
 
-from ._acquisition import AcquisitionFunction, TunableMethod
+from ._acquisition import AcquisitionFunction
+from ._models import TunableMethod
 from ._layers import (ImageGroupEditor, ImageGroupsManager, LayerScaleEditor,
                       MaskGenerator,
                       ImageGroup,
