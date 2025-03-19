@@ -1,5 +1,4 @@
 import numpy as np
-import random
 import skimage
 
 import zarrdataset as zds
@@ -68,6 +67,9 @@ try:
             self._model_name = None
 
         def _model_init(self):
+            if not self.refresh_model:
+                return
+
             gpu = torch.cuda.is_available() and self._gpu
             if self._pretrained_model is None:
                 model_type = self._model_type
@@ -103,8 +105,7 @@ try:
             self.refresh_model = False
 
         def _run_pred(self, img, *args, **kwargs):
-            if self.refresh_model:
-                self._model_init()
+            self._model_init()
 
             with torch.no_grad():
                 try:
@@ -119,8 +120,7 @@ try:
             return probs
 
         def _run_eval(self, img, *args, **kwargs):
-            if self.refresh_model:
-                self._model_init()
+            self._model_init()
 
             seg, _, _ = self._model.eval(img, diameter=None,
                                          flow_threshold=None,

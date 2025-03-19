@@ -827,11 +827,6 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         )
 
 
-class TunableMethodWidget(TunableMethod, QWidget):
-    def __init__(self):
-        super().__init__()
-
-
 class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
     def __init__(self, image_groups_manager: ImageGroupsManagerWidget,
                  labels_manager: LabelsManagerWidget,

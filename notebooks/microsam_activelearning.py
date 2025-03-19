@@ -41,7 +41,7 @@ class AugmentEnsureInputs:
         return (inputs, labels)
 
 
-class TunableMicroSAM(al.TunableMethodWidget):
+class TunableMicroSAM(al.TunableMethod):
     def __init__(self):
         super(TunableMicroSAM, self).__init__()
         self._sam_predictor = None
@@ -185,5 +185,10 @@ class TunableMicroSAM(al.TunableMethodWidget):
         return True
 
 
+class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
+    def __init__(self):
+        super(TunableMicroSAMWidget, self).__init__()
+
+
 def register_microsam():
-    al.register_model("micro-sam", TunableMicroSAM)
+    al.register_model("micro-sam", TunableMicroSAMWidget)

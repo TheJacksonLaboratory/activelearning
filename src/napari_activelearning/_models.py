@@ -1,6 +1,13 @@
-from typing import Iterable, Union
+from typing import Iterable, Union, Annotated, Literal
+from pathlib import Path
+from functools import partial
+
 import numpy as np
 import zarrdataset as zds
+
+from magicgui import magicgui
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
 
 try:
     import torch
@@ -13,6 +20,10 @@ except ModuleNotFoundError:
 class SegmentationMethod:
     def __init__(self):
         super().__init__()
+
+    def _model_init(self):
+        raise NotImplementedError("This method requies to be overriden by a "
+                                  "derived class.")
 
     def _run_pred(self, img, *args, **kwargs):
         raise NotImplementedError("This method requies to be overriden by a "
@@ -194,3 +205,110 @@ class TunableMethod(SegmentationMethod):
             val_dataloader = val_datasets
 
         return self._fine_tune(train_dataloader, val_dataloader)
+
+
+class TunableWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.refresh_model = True
+
+        (self._segmentation_parameters,
+         segmentation_parameter_names) = self._segmentation_parameters_widget()
+
+        (self._finetuning_parameters,
+         finetuning_parameter_names) = self._finetuning_parameters_widget()
+
+        self.advanced_segmentation_options_chk = QCheckBox(
+            "Advanced segmentation parameters"
+        )
+
+        self.advanced_segmentation_options_chk.setChecked(False)
+        self.advanced_segmentation_options_chk.toggled.connect(
+            self._show_segmentation_parameters
+        )
+
+        self.advanced_finetuning_options_chk = QCheckBox(
+            "Advanced fine tuning parameters"
+        )
+
+        self.advanced_finetuning_options_chk.setChecked(False)
+        self.advanced_finetuning_options_chk.toggled.connect(
+            self._show_finetuning_parameters
+        )
+
+        self._segmentation_parameters_scr = QScrollArea()
+        self._segmentation_parameters_scr.setWidgetResizable(True)
+        self._segmentation_parameters_scr.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
+
+        self._finetuning_parameters_scr = QScrollArea()
+        self._finetuning_parameters_scr.setWidgetResizable(True)
+        self._finetuning_parameters_scr.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
+
+        if self._segmentation_parameters is not None:
+            self._segmentation_parameters_scr.setWidget(
+                self._segmentation_parameters.native
+            )
+
+            for par_name in segmentation_parameter_names:
+                self._segmentation_parameters.__getattr__(par_name)\
+                                                .changed.connect(
+                    partial(self._set_parameter, parameter_key="_" + par_name)
+                )
+
+        if self._finetuning_parameters is not None:
+            self._finetuning_parameters_scr.setWidget(
+                self._finetuning_parameters.native
+            )
+
+            for par_name in finetuning_parameter_names:
+                self._finetuning_parameters.__getattr__(par_name).changed\
+                                                                    .connect(
+                    partial(self._set_parameter, parameter_key="_" + par_name)
+                )
+
+        self.parameters_lyt = QGridLayout()
+        self.parameters_lyt.addWidget(
+            self.advanced_segmentation_options_chk, 0, 0
+        )
+        self.parameters_lyt.addWidget(
+            self.advanced_finetuning_options_chk, 2, 0
+        )
+        self.parameters_lyt.addWidget(
+            self._segmentation_parameters_scr, 1, 0, 1, 2
+        )
+        self.parameters_lyt.addWidget(
+            self._finetuning_parameters_scr, 3, 0, 1, 2
+        )
+        self.setLayout(self.parameters_lyt)
+
+        self._segmentation_parameters_scr.hide()
+        self._finetuning_parameters_scr.hide()
+
+    def _segmentation_parameters_widget(self):
+        raise NotImplementedError("This method requies to be overriden by a "
+                                  "derived class.")
+
+    def _finetuning_parameters_widget(self):
+        raise NotImplementedError("This method requies to be overriden by a "
+                                  "derived class.")
+
+    def _check_parameters(self, parameter_val, parameter_key=None):
+        return parameter_val
+
+    def _set_parameter(self, parameter_val, parameter_key=None):
+        parameter_val = self._check_patameter(parameter_val, parameter_key)
+
+        if getattr(self, parameter_key) != parameter_val:
+            self.refresh_model = True
+            setattr(self, parameter_key, parameter_val)
+
+    def _show_segmentation_parameters(self, show: bool):
+        self._segmentation_parameters_scr.setVisible(show)
+
+    def _show_finetuning_parameters(self, show: bool):
+        self._finetuning_parameters_scr.setVisible(show)
