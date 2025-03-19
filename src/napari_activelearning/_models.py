@@ -301,9 +301,10 @@ class TunableWidget(QWidget):
         return parameter_val
 
     def _set_parameter(self, parameter_val, parameter_key=None):
-        parameter_val = self._check_patameter(parameter_val, parameter_key)
+        parameter_val = self._check_parameter(parameter_val, parameter_key)
 
-        if getattr(self, parameter_key) != parameter_val:
+        if (getattr(self, parameter_key) is None and parameter_val is not None
+           or getattr(self, parameter_key) != parameter_val):
             self.refresh_model = True
             setattr(self, parameter_key, parameter_val)
 

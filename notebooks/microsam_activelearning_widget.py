@@ -1,4 +1,3 @@
-from qtpy.QtWidgets import QWidget
 from typing import Annotated, Literal
 from pathlib import Path
 from magicgui import magicgui
@@ -16,7 +15,6 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
         @magicgui(auto_call=True)
         def microsam_segmentation_parameters(
           checkpoint_path: Annotated[Path, {"widget_type": "FileEdit",
-                                            "visible": False,
                                             "mode": "r"}] = Path(""),
           model_type: Literal["vit_l",
                               "vit_h",
@@ -52,10 +50,7 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
         def microsam_finetuning_parameters(
           save_path: Annotated[Path, {"widget_type": "FileEdit",
                                       "mode": "d"}] = Path(""),
-          model_name: str = "",
-          batch_size: Annotated[int, {"widget_type": "SpinBox",
-                                      "min": 1,
-                                      "max": 1024}] = 8,
+          model_name: str = "micro-sam_finetuned",
           learning_rate: Annotated[float, {"widget_type": "FloatSpinBox",
                                            "min": 1e-5,
                                            "max": 1.0,
@@ -64,7 +59,6 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
                                     "min": 1,
                                     "max": 10000}] = 20):
             return dict(
-                batch_size=batch_size,
                 learning_rate=learning_rate,
                 n_epochs=n_epochs,
                 save_path=save_path,
@@ -72,7 +66,6 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
             )
 
         finetuning_parameter_names = [
-            "batch_size",
             "learning_rate",
             "n_epochs",
             "save_path",
@@ -82,10 +75,12 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
         return microsam_finetuning_parameters, finetuning_parameter_names
 
     def _check_parameter(self, parameter_val, parameter_key=None):
-        if (((parameter_key in ("_checkpoint_path"))
-             and not parameter_val.exists())
-            or (isinstance(parameter_val, (int, float))
-                and parameter_val < 0)):
+        if ((parameter_key in ("_checkpoint_path")
+            and (not parameter_val.exists()
+                 or not (str(parameter_val).endswith(".pth")
+                         or str(parameter_val).endswith(".pt"))))
+           or (isinstance(parameter_val, (int, float))
+               and parameter_val < 0)):
             parameter_val = None
 
         return parameter_val

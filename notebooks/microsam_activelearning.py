@@ -49,7 +49,8 @@ class TunableMicroSAM(al.TunableMethod):
         self._checkpoint_path = None
         self._model_type = "vit_b"
         self._n_epochs = 5
-        self._checkpoint_name = "vit_b_msam_ft"
+        self._learning_rate = 1e-5
+        self._model_name = "vit_b_msam_ft"
         self._save_path = "./finetuned_models"
         self._gpu = True
 
@@ -156,6 +157,7 @@ class TunableMicroSAM(al.TunableMethod):
             train_loader=train_dataloader,
             val_loader=val_dataloader,
             n_epochs=self._n_epochs,
+            lr=self._learning_rate,
             n_objects_per_batch=5,
             with_segmentation_decoder=True,
             device=device,
@@ -164,13 +166,13 @@ class TunableMicroSAM(al.TunableMethod):
         export_source_path = os.path.join(
             self._save_path,
             "checkpoints",
-            self._checkpoint_name,
+            self._model_name,
             "best.pt"
         )
 
         self._checkpoint_path = os.path.join(
             self._save_path,
-            self._checkpoint_name + ".pth"
+            self._model_name + ".pth"
         )
 
         export_custom_sam_model(
