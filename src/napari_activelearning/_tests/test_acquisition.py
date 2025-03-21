@@ -135,7 +135,6 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
     layers_group_name = "layers_group"
     reference_source_axes = "TCZYX"
     reference_scale = {"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1}
-    contrast_limits = [0, 1]
     colormap = "gray"
     use_as_input_labels = False
     use_as_sampling_mask = False
@@ -153,7 +152,6 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
         reference_source_axes,
         reference_scale,
         output_filename,
-        contrast_limits,
         colormap,
         use_as_input_labels,
         use_as_sampling_mask,

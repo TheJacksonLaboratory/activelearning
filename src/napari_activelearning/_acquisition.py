@@ -84,7 +84,6 @@ def add_multiscale_output_layer(
         reference_source_axes: str,
         reference_scale: dict,
         output_filename: Optional[Path] = None,
-        contrast_limits: Optional[Iterable[float]] = None,
         colormap: Optional[str] = None,
         use_as_input_labels: bool = False,
         use_as_sampling_mask: bool = False,
@@ -126,9 +125,6 @@ def add_multiscale_output_layer(
 
     if colormap is not None:
         func_args["colormap"] = colormap
-
-    if contrast_limits is not None:
-        func_args["contrast_limits"] = contrast_limits
 
     new_output_layer = add_func(**func_args)
 
@@ -636,9 +632,6 @@ class AcquisitionFunction:
                     reference_source_axes=displayed_source_axes,
                     reference_scale=displayed_scale,
                     output_filename=output_filename,
-                    contrast_limits=(
-                        0, max(img_sampling_positions).acquisition_val
-                    ),
                     colormap="magma",
                     add_func=viewer.add_image
                 )
