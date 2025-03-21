@@ -47,7 +47,8 @@ def test_compute_acquisition_fun():
         return_value=np.random.random((10, 10))
     )
     result = compute_acquisition_fun(tunable_segmentation_method,
-                                     img, img_sp, MC_repetitions)
+                                     img, MC_repetitions,
+                                     img_superpixel=img_sp)
 
     assert result is not None
     assert tunable_segmentation_method._run_pred.call_count == MC_repetitions

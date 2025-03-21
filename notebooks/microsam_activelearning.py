@@ -8,6 +8,7 @@ from torch_em.util.util import ensure_tensor_with_channels
 
 from micro_sam import util
 from micro_sam import automatic_segmentation as msas
+from micro_sam import instance_segmentation as msis
 import micro_sam.training as sam_training
 from micro_sam.util import export_custom_sam_model
 
@@ -78,7 +79,10 @@ class TunableMicroSAM(al.TunableMethod):
                 device=device,
                 checkpoint=self._checkpoint_path)
 
-        al.add_dropout(self._sam_predictor_dropout.model)
+        al.add_dropout(self._sam_predictor_dropout.model.image_encoder)
+        if isinstance(self._sam_instance_segmenter_dropout,
+                      msas.InstanceSegmentationWithDecoder):
+            al.add_dropout(self._sam_instance_segmenter_dropout._decoder)
 
         self.refresh_model = False
 
@@ -109,22 +113,30 @@ class TunableMicroSAM(al.TunableMethod):
             verbose=False,
         )
 
-        self._sam_instance_segmenter_dropout.initialize(
-            image=img,
-            image_embeddings=img_embeddings
-        )
-
-        masks = self._sam_instance_segmenter_dropout.generate()
-
-        probs = np.zeros(img.shape[:2], dtype=np.float32)
-        for mask in masks:
-            probs = np.where(
-                mask["segmentation"],
-                mask["predicted_iou"],
-                probs
+        if isinstance(self._sam_instance_segmenter_dropout,
+                      msis.AutomaticMaskGenerator):
+            self._sam_instance_segmenter_dropout.initialize(
+                image=img,
+                image_embeddings=img_embeddings
             )
 
-        probs = torch.from_numpy(probs).sigmoid().numpy()
+            masks = self._sam_instance_segmenter_dropout.generate()
+            probs = np.zeros(img.shape[:2], dtype=np.float32)
+            for mask in masks:
+                probs = np.where(
+                    mask["segmentation"],
+                    mask["predicted_iou"],
+                    probs
+                )
+
+            probs = torch.from_numpy(probs).sigmoid().numpy()
+        else:
+            self._sam_instance_segmenter_dropout.initialize(
+                image=img,
+                image_embeddings=img_embeddings
+            )
+
+            probs = self._sam_instance_segmenter_dropout._foreground.copy()
 
         return probs
 
@@ -151,8 +163,8 @@ class TunableMicroSAM(al.TunableMethod):
 
         # Run training.
         sam_training.train_sam(
-            name=self._checkpoint_name,
-            save_root=self._save_root,
+            name=self._model_name,
+            save_root=self._save_path,
             model_type=self._model_type,
             train_loader=train_dataloader,
             val_loader=val_dataloader,

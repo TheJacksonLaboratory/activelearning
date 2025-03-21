@@ -4,7 +4,7 @@ from magicgui import magicgui
 
 import napari_activelearning as al
 
-from .microsam_activelearning import TunableMicroSAM
+from microsam_activelearning import TunableMicroSAM
 
 
 class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
@@ -38,10 +38,10 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
             )
 
         segmentation_parameter_names = [
-                "checkpoint_path",
-                "model_type",
-                "gpu"
-            ]
+            "checkpoint_path",
+            "model_type",
+            "gpu"
+        ]
 
         return microsam_segmentation_parameters, segmentation_parameter_names
 

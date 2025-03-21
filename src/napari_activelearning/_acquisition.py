@@ -33,9 +33,7 @@ def compute_BALD(probs):
     return mutual_info
 
 
-def compute_acquisition_superpixel(probs, super_pixel_labels):
-    mutual_info = compute_BALD(probs)
-
+def compute_acquisition_superpixel(mutual_info, super_pixel_labels):
     super_pixel_indices = np.unique(super_pixel_labels)
 
     u_sp_lab = np.zeros_like(super_pixel_labels, dtype=np.float32)
@@ -51,8 +49,8 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
     return u_sp_lab
 
 
-def compute_acquisition_fun(tunable_segmentation_method, img, img_sp,
-                            MC_repetitions):
+def compute_acquisition_fun(tunable_segmentation_method, img, MC_repetitions,
+                            img_superpixel=None):
     probs = []
     for _ in range(MC_repetitions):
         probs.append(
@@ -60,7 +58,11 @@ def compute_acquisition_fun(tunable_segmentation_method, img, img_sp,
         )
     probs = np.stack(probs, axis=0)
 
-    u_sp_lab = compute_acquisition_superpixel(probs, img_sp)
+    mutual_info = compute_BALD(probs)
+    if img_superpixel is not None:
+        u_sp_lab = compute_acquisition_superpixel(mutual_info, img_superpixel)
+    else:
+        u_sp_lab = mutual_info
 
     return u_sp_lab
 
@@ -437,8 +439,8 @@ class AcquisitionFunction:
                 u_sp_lab = compute_acquisition_fun(
                     self.tunable_segmentation_method,
                     img,
-                    img_sp,
                     self._MC_repetitions,
+                    img_superpixel=img_sp,
                 )
                 acquisition_fun[pos_u_lab] = u_sp_lab[pred_sel]
                 acquisition_val = u_sp_lab.max()
