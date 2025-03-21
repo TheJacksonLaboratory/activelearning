@@ -96,7 +96,7 @@ class TunableMicroSAM(al.TunableMethod):
     def get_inference_transform(self, *args, **kwargs):
         # Ensure labels are squeezed when these are not actual 3D arrays.
         mode_transforms = {
-            ("images", ): lambda x: x
+            ("images", ): lambda x: x.squeeze()
         }
         return mode_transforms
 

@@ -108,13 +108,17 @@ try:
             self._model_init()
 
             with torch.no_grad():
-                try:
-                    y, _ = core.run_net(self._model_dropout.net, img)
-                    logits = torch.from_numpy(y[:, :, 2])
-                except ValueError:
-                    y, _ = core.run_net(self._model_dropout.net,
-                                        img[None, ...])
-                    logits = torch.from_numpy(y[0, :, :, 2])
+                img = img[None, ...]
+
+                if img.ndim < 4:
+                    img = img[..., None]
+
+                if img.shape[-1] == 1:
+                    img = np.repeat(img, 2, axis=-1)
+
+                y, _ = core.run_net(self._model_dropout.net, img)
+
+                logits = torch.from_numpy(y[0, :, :, 2])
                 probs = logits.sigmoid().numpy()
 
             return probs
@@ -136,7 +140,9 @@ try:
             return mode_transforms
 
         def get_inference_transform(self, *args, **kwargs):
-            mode_transforms = {("images", ): lambda x: x}
+            mode_transforms = {
+                ("images", ): lambda x: x.squeeze()
+            }
 
             return mode_transforms
 
@@ -247,8 +253,7 @@ class SimpleTunable(TunableMethod):
         return img
 
     def _run_eval(self, img, *args, **kwargs):
-        if self._transform is None:
-            self._model_init()
+        self._model_init()
 
         labels = skimage.measure.label(img > self._threshold)
         return labels

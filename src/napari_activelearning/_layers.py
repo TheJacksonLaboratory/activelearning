@@ -745,6 +745,8 @@ class ImageGroup(QTreeWidgetItem):
 
     def removeChild(self, child: QTreeWidgetItem):
         if isinstance(child, LayersGroup):
+            # Remove the layers group name from the list of names for its reuse
+            self.layers_groups_names.remove(child.layers_group_name)
             child.takeChildren()
 
         super(ImageGroup, self).removeChild(child)

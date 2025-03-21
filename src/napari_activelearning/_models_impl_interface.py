@@ -157,7 +157,7 @@ if USING_CELLPOSE:
 
             return cellpose_finetuning_parameters, finetuning_parameter_names
 
-        def _check_parameters(self, parameter_val, parameter_key=None):
+        def _check_parameter(self, parameter_val, parameter_key=None):
             if (((parameter_key in {"_save_path", "_pretrained_model"})
                  and not parameter_val.exists())
                or (isinstance(parameter_val, (int, float))
