@@ -374,12 +374,18 @@ class AcquisitionFunction:
         ]
         input_spatial_axes = "".join(input_spatial_axes)
 
+        padding_axes = {
+            ax: ax_ps // 4 if ax_ps > 1 else 0
+            for ax, ax_ps in self._patch_sizes.items()
+        }
+
         output_axes = "TCZYX"
 
         dl = get_dataloader(
             dataset_metadata,
             patch_size=self._patch_sizes,
             spatial_axes=input_spatial_axes,
+            padding=padding_axes,
             model_input_axes=self.model_axes,
             shuffle=True,
             tunable_segmentation_method=self.tunable_segmentation_method)
@@ -388,7 +394,11 @@ class AcquisitionFunction:
         img_sampling_positions = []
 
         pred_sel = tuple(
-            slice(None) if ax in model_spatial_axes else None
+            slice(padding_axes[ax]
+                  if padding_axes[ax] > 0 else None,
+                  self._patch_sizes[ax] + padding_axes[ax]
+                  if padding_axes[ax] > 0 else None)
+            if ax in model_spatial_axes else None
             for ax in output_axes
         )
 
@@ -418,15 +428,16 @@ class AcquisitionFunction:
             if len(drop_axis_sp):
                 img_sp = img_sp.squeeze(drop_axis_sp)
 
-            pos = {
-                ax: slice(pos_ax[0],
-                          pos_ax[1] if pos_ax[1] > 0 else ax_s)
+            pos_padded = {
+                ax: slice(pos_ax[0] + padding_axes.get(ax, 0),
+                          pos_ax[1] - padding_axes.get(ax, 0)
+                          if pos_ax[1] > 0 else ax_s)
                 for ax, ax_s, pos_ax in zip(
                     dataset_metadata["images"]["axes"], img_shape, pos)
             }
 
             pos_u_lab = tuple(
-                pos.get(ax, slice(0, 1))
+                pos_padded.get(ax, slice(0, 1))
                 if ax != "C" else slice(0, 1)
                 for ax in output_axes
             )
@@ -436,8 +447,9 @@ class AcquisitionFunction:
                     self.tunable_segmentation_method,
                     img,
                     self._MC_repetitions,
-                    img_superpixel=img_sp,
+                    # img_superpixel=img_sp,
                 )
+
                 acquisition_fun[pos_u_lab] = u_sp_lab[pred_sel]
                 acquisition_val = u_sp_lab.max()
             else:
@@ -453,11 +465,11 @@ class AcquisitionFunction:
 
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
-                    slice(pos[ax].start
+                    slice(pos_padded[ax].start
                           // self._patch_sizes.get(ax, 1),
-                          pos[ax].stop
+                          pos_padded[ax].stop
                           // self._patch_sizes.get(ax, 1))
-                    if ax in pos and ax != "C" else slice(0, 1)
+                    if ax in pos_padded and ax != "C" else slice(0, 1)
                     for ax in output_axes
                 )
                 sampled_mask[scaled_pos_u_lab] = True

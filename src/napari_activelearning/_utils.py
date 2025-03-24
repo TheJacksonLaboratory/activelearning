@@ -221,6 +221,7 @@ def get_dataloader(
         num_workers: int = 0,
         batch_size: int = 1,
         spatial_axes: str = "YX",
+        padding: dict = None,
         model_input_axes: str = "YXC",
         tunable_segmentation_method: Optional[TunableMethod] = None,
         **superpixel_kwargs
@@ -243,6 +244,7 @@ def get_dataloader(
 
     patch_sampler = zds.PatchSampler(patch_size=patch_size,
                                      spatial_axes=spatial_axes,
+                                     pad=padding,
                                      min_area=0.05)
 
     train_dataset = zds.ZarrDataset(
