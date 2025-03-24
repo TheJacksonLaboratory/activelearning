@@ -36,6 +36,8 @@ try:
         def __init__(self):
             super().__init__()
 
+            self._custom_transform = None
+
             self._model = None
             self._model_dropout = None
 
@@ -102,21 +104,27 @@ try:
             )
             add_dropout(self._model_dropout.net)
             self._model_dropout.net.eval()
+
+            self._custom_transform = CellposeTransform(self._channels,
+                                                       self._channel_axis)
+
             self.refresh_model = False
 
         def _run_pred(self, img, *args, **kwargs):
             self._model_init()
 
             with torch.no_grad():
-                img = img[None, ...]
+                img_t = self._custom_transform(img)
 
-                if img.ndim < 4:
-                    img = img[..., None]
+                img_t = img_t[None, ...]
 
-                if img.shape[-1] == 1:
-                    img = np.repeat(img, 2, axis=-1)
+                if img_t.ndim < 4:
+                    img_t = img_t[..., None]
 
-                y, _ = core.run_net(self._model_dropout.net, img)
+                if img_t.shape[-1] == 1:
+                    img_t = np.repeat(img_t, 2, axis=-1)
+
+                y, _ = core.run_net(self._model_dropout.net, img_t)
 
                 logits = torch.from_numpy(y[0, :, :, 2])
                 probs = logits.sigmoid().numpy()
@@ -126,25 +134,26 @@ try:
         def _run_eval(self, img, *args, **kwargs):
             self._model_init()
 
-            seg, _, _ = self._model.eval(img, diameter=None,
+            img_t = self._custom_transform(img)
+
+            img_t = img_t[None, ...]
+
+            if img_t.ndim < 4:
+                img_t = img_t[..., None]
+
+            if img_t.shape[-1] == 1:
+                img_t = np.repeat(img_t, 2, axis=-1)
+
+            seg, _, _ = self._model.eval(img_t, diameter=None,
                                          flow_threshold=None,
                                          channels=self._channels)
             return seg
 
         def get_train_transform(self, *args, **kwargs):
-            mode_transforms = {
-                ("images", ): CellposeTransform(self._channels,
-                                                self._channel_axis)
-            }
-
-            return mode_transforms
+            return None
 
         def get_inference_transform(self, *args, **kwargs):
-            mode_transforms = {
-                ("images", ): lambda x: x.squeeze()
-            }
-
-            return mode_transforms
+            return None
 
         def _preload_data(self, dataloader):
             raw_data = []

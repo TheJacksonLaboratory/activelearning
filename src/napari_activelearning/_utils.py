@@ -255,8 +255,9 @@ def get_dataloader(
 
     if tunable_segmentation_method is not None:
         mode_transforms = tunable_segmentation_method.get_inference_transform()
-        for input_mode, transform_mode in mode_transforms.items():
-            train_dataset.add_transform(input_mode, transform_mode)
+        if mode_transforms is not None:
+            for input_mode, transform_mode in mode_transforms.items():
+                train_dataset.add_transform(input_mode, transform_mode)
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(

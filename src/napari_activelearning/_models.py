@@ -143,12 +143,12 @@ class TunableMethod(SegmentationMethod):
             )
 
             val_datasets.max_samples_per_image = val_samples
+            if mode_transforms is not None:
+                for input_mode, transform_mode in mode_transforms.items():
+                    train_datasets.add_transform(input_mode, transform_mode)
 
-            for input_mode, transform_mode in mode_transforms.items():
-                train_datasets.add_transform(input_mode, transform_mode)
-
-            for input_mode, transform_mode in mode_transforms.items():
-                val_datasets.add_transform(input_mode, transform_mode)
+                for input_mode, transform_mode in mode_transforms.items():
+                    val_datasets.add_transform(input_mode, transform_mode)
 
             worker_init_fn = zds.zarrdataset_worker_init_fn
 
@@ -177,8 +177,9 @@ class TunableMethod(SegmentationMethod):
                 )
 
                 dataset.max_samples_per_image = self.max_samples_per_image
-                for input_mode, transform_mode in mode_transforms.items():
-                    dataset.add_transform(input_mode, transform_mode)
+                if mode_transforms is not None:
+                    for input_mode, transform_mode in mode_transforms.items():
+                        dataset.add_transform(input_mode, transform_mode)
 
                 if idx in training_indices:
                     train_datasets.append(dataset)
