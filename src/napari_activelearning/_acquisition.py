@@ -239,6 +239,7 @@ class AcquisitionFunction:
         self._patch_sizes = {}
         self._max_samples = 1
         self._MC_repetitions = 3
+        self._add_padding = False
 
         viewer = napari.current_viewer()
         self.input_axes = "".join(viewer.dims.axis_labels).upper()
@@ -374,10 +375,12 @@ class AcquisitionFunction:
         ]
         input_spatial_axes = "".join(input_spatial_axes)
 
-        padding_axes = {
-            ax: ax_ps // 4 if ax_ps > 1 else 0
-            for ax, ax_ps in self._patch_sizes.items()
-        }
+        padding = {}
+        if self._add_padding:
+            padding = {
+                ax: ax_ps // 4
+                for ax, ax_ps in self._patch_sizes.items()
+            }
 
         output_axes = "TCZYX"
 
@@ -385,19 +388,21 @@ class AcquisitionFunction:
             dataset_metadata,
             patch_size=self._patch_sizes,
             spatial_axes=input_spatial_axes,
-            padding=padding_axes,
+            padding=padding,
             model_input_axes=self.model_axes,
             shuffle=True,
-            tunable_segmentation_method=self.tunable_segmentation_method)
+            tunable_segmentation_method=self.tunable_segmentation_method
+        )
+
         segmentation_max = 0
         n_samples = 0
         img_sampling_positions = []
 
         pred_sel = tuple(
-            slice(padding_axes[ax]
-                  if padding_axes[ax] > 0 else None,
-                  self._patch_sizes[ax] + padding_axes[ax]
-                  if padding_axes[ax] > 0 else None)
+            slice(padding.get(ax, 0)
+                  if padding.get(ax, 0) > 0 else None,
+                  self._patch_sizes.get(ax, 0) + padding[ax]
+                  if padding.get(ax, 0) > 0 else None)
             if ax in model_spatial_axes else None
             for ax in output_axes
         )
@@ -429,8 +434,8 @@ class AcquisitionFunction:
                 img_sp = img_sp.squeeze(drop_axis_sp)
 
             pos_padded = {
-                ax: slice(pos_ax[0] + padding_axes.get(ax, 0),
-                          pos_ax[1] - padding_axes.get(ax, 0)
+                ax: slice(pos_ax[0] + padding.get(ax, 0),
+                          pos_ax[1] - padding.get(ax, 0)
                           if pos_ax[1] > 0 else ax_s)
                 for ax, ax_s, pos_ax in zip(
                     dataset_metadata["images"]["axes"], img_shape, pos)

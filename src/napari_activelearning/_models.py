@@ -1,4 +1,4 @@
-from typing import Iterable, Union, Annotated, Literal
+from typing import Iterable, Union, Optional
 from pathlib import Path
 from functools import partial
 
@@ -85,7 +85,7 @@ class TunableMethod(SegmentationMethod):
 
     def fine_tune(self, dataset_metadata_list: Iterable[dict],
                   train_data_proportion: float = 0.8,
-                  patch_sizes: Union[dict, int] = 256):
+                  patch_sizes: Union[dict, int] = 256) -> bool:
 
         mode_transforms = self.get_train_transform()
 
