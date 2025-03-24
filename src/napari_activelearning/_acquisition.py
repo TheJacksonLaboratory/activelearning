@@ -1,19 +1,15 @@
-from typing import Optional, Iterable, Tuple, Callable, Union
-
-from pathlib import Path
-import numpy as np
-import random
-import math
-import dask.array as da
-
-import zarrdataset as zds
+from typing import Optional, Iterable, Tuple, Callable
 
 try:
     import torch
-    from torch.utils.data import DataLoader, ChainDataset, random_split
     USING_PYTORCH = True
 except ModuleNotFoundError:
     USING_PYTORCH = False
+
+from pathlib import Path
+import numpy as np
+import math
+import dask.array as da
 
 import napari
 from napari.layers._multiscale_data import MultiScaleData
@@ -37,9 +33,7 @@ def compute_BALD(probs):
     return mutual_info
 
 
-def compute_acquisition_superpixel(probs, super_pixel_labels):
-    mutual_info = compute_BALD(probs)
-
+def compute_acquisition_superpixel(mutual_info, super_pixel_labels):
     super_pixel_indices = np.unique(super_pixel_labels)
 
     u_sp_lab = np.zeros_like(super_pixel_labels, dtype=np.float32)
@@ -55,8 +49,8 @@ def compute_acquisition_superpixel(probs, super_pixel_labels):
     return u_sp_lab
 
 
-def compute_acquisition_fun(tunable_segmentation_method, img, img_sp,
-                            MC_repetitions):
+def compute_acquisition_fun(tunable_segmentation_method, img, MC_repetitions,
+                            img_superpixel=None):
     probs = []
     for _ in range(MC_repetitions):
         probs.append(
@@ -64,7 +58,11 @@ def compute_acquisition_fun(tunable_segmentation_method, img, img_sp,
         )
     probs = np.stack(probs, axis=0)
 
-    u_sp_lab = compute_acquisition_superpixel(probs, img_sp)
+    mutual_info = compute_BALD(probs)
+    if img_superpixel is not None:
+        u_sp_lab = compute_acquisition_superpixel(mutual_info, img_superpixel)
+    else:
+        u_sp_lab = mutual_info
 
     return u_sp_lab
 
@@ -86,7 +84,6 @@ def add_multiscale_output_layer(
         reference_source_axes: str,
         reference_scale: dict,
         output_filename: Optional[Path] = None,
-        contrast_limits: Optional[Iterable[float]] = None,
         colormap: Optional[str] = None,
         use_as_input_labels: bool = False,
         use_as_sampling_mask: bool = False,
@@ -128,9 +125,6 @@ def add_multiscale_output_layer(
 
     if colormap is not None:
         func_args["colormap"] = colormap
-
-    if contrast_limits is not None:
-        func_args["contrast_limits"] = contrast_limits
 
     new_output_layer = add_func(**func_args)
 
@@ -238,179 +232,6 @@ else:
         pass
 
 
-class SegmentationMethod:
-    def __init__(self):
-        super().__init__()
-
-    def _run_pred(self, img, *args, **kwargs):
-        raise NotImplementedError("This method requies to be overriden by a "
-                                  "derived class.")
-
-    def _run_eval(self, img, *args, **kwargs):
-        raise NotImplementedError("This method requies to be overriden by a "
-                                  "derived class.")
-
-    def probs(self, img, *args, **kwargs):
-        probs = self._run_pred(img, *args, **kwargs)
-        return probs
-
-    def segment(self, img, *args, **kwargs):
-        out = self._run_eval(img, *args, **kwargs)
-        return out
-
-
-class MyZarrDataset(zds.ZarrDataset):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __len__(self):
-        return len(self._toplefts)
-
-
-class TunableMethod(SegmentationMethod):
-    def __init__(self):
-        self._num_workers = 0
-        super().__init__()
-
-    def _get_transform(self):
-        raise NotImplementedError("This method requies to be overriden by a "
-                                  "derived class.")
-
-    def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
-        raise NotImplementedError("This method requies to be overriden by a "
-                                  "derived class.")
-
-    def fine_tune(self, dataset_metadata_list: Iterable[dict],
-                  train_data_proportion: float = 0.8,
-                  patch_sizes: Union[dict, int] = 256):
-
-        transform, labels_transform = self._get_transform()
-
-        worker_init_fn = None
-
-        if len(dataset_metadata_list) == 1:
-            sampling_mask = np.copy(
-                dataset_metadata_list[0]["masks"]["filenames"]
-            )
-
-            sampling_locations = np.nonzero(sampling_mask)
-            sampling_locations = np.ravel_multi_index(sampling_locations,
-                                                      sampling_mask.shape)
-            sampling_locations = np.random.choice(
-                sampling_locations,
-                size=int(train_data_proportion * len(sampling_locations)),
-                replace=False
-            )
-            sampling_locations = np.unravel_index(sampling_locations,
-                                                  sampling_mask.shape)
-
-            train_mask = np.zeros_like(sampling_mask)
-            train_mask[sampling_locations] = True
-            val_mask = np.bitwise_xor(train_mask, sampling_mask)
-
-            patch_sampler = zds.PatchSampler(
-                patch_size=patch_sizes,
-                spatial_axes=dataset_metadata_list[0]["labels"]["axes"],
-                min_area=0.01
-            )
-
-            dataset_metadata_list[0]["masks"]["filenames"] = train_mask
-
-            train_datasets = MyZarrDataset(
-                list(dataset_metadata_list[0].values()),
-                return_positions=False,
-                draw_same_chunk=False,
-                patch_sampler=patch_sampler,
-                shuffle=True,
-            )
-
-            dataset_metadata_list[0]["masks"]["filenames"] = val_mask
-
-            val_datasets = MyZarrDataset(
-                list(dataset_metadata_list[0].values()),
-                return_positions=False,
-                draw_same_chunk=False,
-                patch_sampler=patch_sampler,
-                shuffle=True,
-            )
-
-            train_datasets.add_transform("images", zds.ToDtype(np.float32))
-            if transform:
-                train_datasets.add_transform("images", transform)
-
-            train_datasets.add_transform("labels", zds.ToDtype(np.int32))
-            if labels_transform:
-                train_datasets.add_transform("labels", labels_transform)
-
-            val_datasets.add_transform("images", zds.ToDtype(np.float32))
-            if transform:
-                val_datasets.add_transform("images", transform)
-
-            val_datasets.add_transform("labels", zds.ToDtype(np.int32))
-            if labels_transform:
-                val_datasets.add_transform("labels", labels_transform)
-
-            worker_init_fn = zds.zarrdataset_worker_init_fn
-
-        else:
-            train_datasets = []
-            val_datasets = []
-
-            training_indices = np.random.choice(
-                len(dataset_metadata_list),
-                int(train_data_proportion * len(dataset_metadata_list))
-            ).tolist()
-
-            for idx, dataset_metadata in enumerate(dataset_metadata_list):
-                patch_sampler = zds.PatchSampler(
-                    patch_size=patch_sizes,
-                    spatial_axes=dataset_metadata["labels"]["axes"],
-                    min_area=0.01
-                )
-
-                dataset = MyZarrDataset(
-                    list(dataset_metadata.values()),
-                    return_positions=False,
-                    draw_same_chunk=False,
-                    patch_sampler=patch_sampler,
-                    shuffle=True,
-                )
-
-                dataset.add_transform("images", zds.ToDtype(np.float32))
-                if transform:
-                    dataset.add_transform("images", transform)
-
-                dataset.add_transform("labels", zds.ToDtype(np.int32))
-                if labels_transform:
-                    dataset.add_transform("labels", labels_transform)
-
-                if idx in training_indices:
-                    train_datasets.append(dataset)
-                else:
-                    val_datasets.append(dataset)
-
-            train_datasets = ChainDataset(train_datasets)
-            val_datasets = ChainDataset(val_datasets)
-            worker_init_fn = zds.chained_zarrdataset_worker_init_fn
-
-        if USING_PYTORCH:
-            train_dataloader = DataLoader(
-                train_datasets,
-                num_workers=self._num_workers,
-                worker_init_fn=worker_init_fn
-            )
-            val_dataloader = DataLoader(
-                val_datasets,
-                num_workers=self._num_workers,
-                worker_init_fn=worker_init_fn
-            )
-        else:
-            train_dataloader = train_datasets
-            val_dataloader = val_datasets
-
-        return self._fine_tune(train_dataloader, val_dataloader)
-
-
 class AcquisitionFunction:
     def __init__(self, image_groups_manager: ImageGroupsManager,
                  labels_manager: LabelsManager,
@@ -418,6 +239,7 @@ class AcquisitionFunction:
         self._patch_sizes = {}
         self._max_samples = 1
         self._MC_repetitions = 3
+        self._add_padding = False
 
         viewer = napari.current_viewer()
         self.input_axes = "".join(viewer.dims.axis_labels).upper()
@@ -527,6 +349,8 @@ class AcquisitionFunction:
         if tunable_segmentation_method_cls is not None:
             self.tunable_segmentation_method =\
                 tunable_segmentation_method_cls()
+            self.tunable_segmentation_method.max_samples_per_image =\
+                self._max_samples
         else:
             self.tunable_segmentation_method = None
 
@@ -551,18 +375,35 @@ class AcquisitionFunction:
         ]
         input_spatial_axes = "".join(input_spatial_axes)
 
+        padding = {}
+        if self._add_padding:
+            padding = {
+                ax: ax_ps // 4
+                for ax, ax_ps in self._patch_sizes.items()
+            }
+
         output_axes = "TCZYX"
 
-        dl = get_dataloader(dataset_metadata, patch_size=self._patch_sizes,
-                            spatial_axes=input_spatial_axes,
-                            model_input_axes=self.model_axes,
-                            shuffle=True)
+        dl = get_dataloader(
+            dataset_metadata,
+            patch_size=self._patch_sizes,
+            spatial_axes=input_spatial_axes,
+            padding=padding,
+            model_input_axes=self.model_axes,
+            shuffle=True,
+            tunable_segmentation_method=self.tunable_segmentation_method
+        )
+
         segmentation_max = 0
         n_samples = 0
         img_sampling_positions = []
 
         pred_sel = tuple(
-            slice(None) if ax in model_spatial_axes else None
+            slice(padding.get(ax, 0)
+                  if padding.get(ax, 0) > 0 else None,
+                  self._patch_sizes.get(ax, 0) + padding[ax]
+                  if padding.get(ax, 0) > 0 else None)
+            if ax in model_spatial_axes else None
             for ax in output_axes
         )
 
@@ -592,15 +433,16 @@ class AcquisitionFunction:
             if len(drop_axis_sp):
                 img_sp = img_sp.squeeze(drop_axis_sp)
 
-            pos = {
-                ax: slice(pos_ax[0],
-                          pos_ax[1] if pos_ax[1] > 0 else ax_s)
+            pos_padded = {
+                ax: slice(pos_ax[0] + padding.get(ax, 0),
+                          pos_ax[1] - padding.get(ax, 0)
+                          if pos_ax[1] > 0 else ax_s)
                 for ax, ax_s, pos_ax in zip(
                     dataset_metadata["images"]["axes"], img_shape, pos)
             }
 
             pos_u_lab = tuple(
-                pos.get(ax, slice(0, 1))
+                pos_padded.get(ax, slice(0, 1))
                 if ax != "C" else slice(0, 1)
                 for ax in output_axes
             )
@@ -609,9 +451,10 @@ class AcquisitionFunction:
                 u_sp_lab = compute_acquisition_fun(
                     self.tunable_segmentation_method,
                     img,
-                    img_sp,
                     self._MC_repetitions,
+                    # img_superpixel=img_sp,
                 )
+
                 acquisition_fun[pos_u_lab] = u_sp_lab[pred_sel]
                 acquisition_val = u_sp_lab.max()
             else:
@@ -627,11 +470,11 @@ class AcquisitionFunction:
 
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
-                    slice(pos[ax].start
+                    slice(pos_padded[ax].start
                           // self._patch_sizes.get(ax, 1),
-                          pos[ax].stop
+                          pos_padded[ax].stop
                           // self._patch_sizes.get(ax, 1))
-                    if ax in pos and ax != "C" else slice(0, 1)
+                    if ax in pos_padded and ax != "C" else slice(0, 1)
                     for ax in output_axes
                 )
                 sampled_mask[scaled_pos_u_lab] = True
@@ -806,9 +649,6 @@ class AcquisitionFunction:
                     reference_source_axes=displayed_source_axes,
                     reference_scale=displayed_scale,
                     output_filename=output_filename,
-                    contrast_limits=(
-                        0, max(img_sampling_positions).acquisition_val
-                    ),
                     colormap="magma",
                     add_func=viewer.add_image
                 )
@@ -846,7 +686,6 @@ class AcquisitionFunction:
 
             if (not segmentation_only
                and image_group is not None):
-               # and image_group.labels_group is None):
                 new_label_group = self.labels_manager.add_labels(
                     segmentation_channel,
                     img_sampling_positions

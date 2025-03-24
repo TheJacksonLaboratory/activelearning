@@ -23,7 +23,8 @@ import numpy as np
 import dask.array as da
 from napari.layers._multiscale_data import MultiScaleData
 
-from ._acquisition import AcquisitionFunction, TunableMethod
+from ._acquisition import AcquisitionFunction
+from ._models import TunableMethod
 from ._layers import (ImageGroupEditor, ImageGroupsManager, LayerScaleEditor,
                       MaskGenerator,
                       ImageGroup,
@@ -826,11 +827,6 @@ class LabelsManagerWidget(LabelsManager, QWidget):
         )
 
 
-class TunableMethodWidget(TunableMethod, QWidget):
-    def __init__(self):
-        super().__init__()
-
-
 class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
     def __init__(self, image_groups_manager: ImageGroupsManagerWidget,
                  labels_manager: LabelsManagerWidget,
@@ -872,6 +868,9 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
                                            value=self._MC_repetitions,
                                            singleStep=10)
 
+        self.add_padding_chk = QCheckBox("Add padding")
+        self.add_padding_chk.setChecked(self._add_padding)
+
         self.input_axes_le = QLineEdit()
         self.input_axes_le.setText(self.input_axes)
 
@@ -892,7 +891,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.finetuning_btn = QPushButton("Fine tune model")
 
         acquisition_lyt = QGridLayout()
-        acquisition_lyt.addWidget(patch_sizes_chk, 0, 0)
+        acquisition_lyt.addWidget(patch_sizes_chk, 0, 0, 1, 2)
+        acquisition_lyt.addWidget(self.add_padding_chk, 0, 2, 1, 2)
         acquisition_lyt.addWidget(self.patch_sizes_widget, 1, 0, 1, 3)
         acquisition_lyt.addWidget(QLabel("Maximum samples:"), 2, 0)
         acquisition_lyt.addWidget(self.max_samples_spn, 2, 1)
@@ -917,6 +917,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         patch_sizes_chk.toggled.connect(self._show_patch_sizes)
         self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
+        self.add_padding_chk.toggled.connect(self._set_add_padding)
         self.max_samples_spn.valueChanged.connect(self._set_max_samples)
         self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
         self.input_axes_le.textChanged.connect(self._set_input_axes)
@@ -951,6 +952,9 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_patch_size(self, patch_sizes: dict):
         self._patch_sizes = patch_sizes
+
+    def _set_add_padding(self):
+        self._add_padding = self.add_padding_chk.isChecked()
 
     def _set_MC_repetitions(self):
         self._MC_repetitions = self.MC_repetitions_spn.value()

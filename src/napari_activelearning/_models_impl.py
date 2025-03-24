@@ -1,10 +1,10 @@
 import numpy as np
-import random
 import skimage
 
 import zarrdataset as zds
 
-from ._acquisition import TunableMethod, add_dropout, USING_PYTORCH
+from ._acquisition import add_dropout, USING_PYTORCH
+from ._models import TunableMethod
 
 try:
     import cellpose
@@ -36,11 +36,12 @@ try:
         def __init__(self):
             super().__init__()
 
+            self._custom_transform = None
+
             self._model = None
             self._model_dropout = None
 
             self.refresh_model = True
-            self._transform = None
 
             self._pretrained_model = None
             self._model_type = "cyto"
@@ -68,6 +69,9 @@ try:
             self._model_name = None
 
         def _model_init(self):
+            if not self.refresh_model:
+                return
+
             gpu = torch.cuda.is_available() and self._gpu
             if self._pretrained_model is None:
                 model_type = self._model_type
@@ -100,39 +104,56 @@ try:
             )
             add_dropout(self._model_dropout.net)
             self._model_dropout.net.eval()
-            self._transform = CellposeTransform(self._channels,
-                                                self._channel_axis)
+
+            self._custom_transform = CellposeTransform(self._channels,
+                                                       self._channel_axis)
 
             self.refresh_model = False
 
         def _run_pred(self, img, *args, **kwargs):
-            if self.refresh_model:
-                self._model_init()
-
-            x = self._transform(img)
+            self._model_init()
 
             with torch.no_grad():
-                try:
-                    y, _ = core.run_net(self._model_dropout.net, x)
-                    logits = torch.from_numpy(y[:, :, 2])
-                except ValueError:
-                    y, _ = core.run_net(self._model_dropout.net, x[None, ...])
-                    logits = torch.from_numpy(y[0, :, :, 2])
+                img_t = self._custom_transform(img)
+
+                img_t = img_t[None, ...]
+
+                if img_t.ndim < 4:
+                    img_t = img_t[..., None]
+
+                if img_t.shape[-1] == 1:
+                    img_t = np.repeat(img_t, 2, axis=-1)
+
+                y, _ = core.run_net(self._model_dropout.net, img_t)
+
+                logits = torch.from_numpy(y[0, :, :, 2])
                 probs = logits.sigmoid().numpy()
 
             return probs
 
         def _run_eval(self, img, *args, **kwargs):
-            if self.refresh_model:
-                self._model_init()
+            self._model_init()
 
-            seg, _, _ = self._model.eval(img, diameter=None,
+            img_t = self._custom_transform(img)
+
+            img_t = img_t[None, ...]
+
+            if img_t.ndim < 4:
+                img_t = img_t[..., None]
+
+            if img_t.shape[-1] == 1:
+                img_t = np.repeat(img_t, 2, axis=-1)
+
+            seg, _, _ = self._model.eval(img_t, diameter=None,
                                          flow_threshold=None,
                                          channels=self._channels)
             return seg
 
-        def _get_transform(self):
-            return lambda x: x, None
+        def get_train_transform(self, *args, **kwargs):
+            return None
+
+        def get_inference_transform(self, *args, **kwargs):
+            return None
 
         def _preload_data(self, dataloader):
             raw_data = []
@@ -230,40 +251,35 @@ class SimpleTunable(TunableMethod):
     def __init__(self):
         super().__init__()
         self._channel_axis = 2
-        self._transform = None
         self._threshold = 0.5
 
     def _model_init(self):
-        self._transform = BaseTransform(channel_axis=self._channel_axis)
+        pass
 
     def _run_pred(self, img, *args, **kwargs):
-        if self._transform is None:
-            self._model_init()
-
-        img_g = self._transform(img)
-        img_g = img_g + 1e-3 * np.random.randn(*img_g.shape)
-        img_g = (img_g - img_g.min()) / (img_g.max() - img_g.min() + 1e-12)
-        return img_g
+        img = img + 1e-3 * np.random.randn(*img.shape)
+        img = (img - img.min()) / (img.max() - img.min() + 1e-12)
+        return img
 
     def _run_eval(self, img, *args, **kwargs):
-        if self._transform is None:
-            self._model_init()
+        self._model_init()
 
-        img_g = self._transform(img)
-
-        labels = skimage.measure.label(img_g > self._threshold)
+        labels = skimage.measure.label(img > self._threshold)
         return labels
 
-    def _get_transform(self):
-        if self._transform is None:
-            self._model_init()
+    def get_train_transform(self, *args, **kwargs):
+        mode_transforms = {
+            ("images", ): BaseTransform(channel_axis=self._channel_axis)
+        }
 
-        return self._transform, None
+        return mode_transforms
 
-    # def _fine_tune(self, data_loader,
-    #                train_data_proportion: float = 0.8) -> bool:
+    def get_inference_transform(self, *args, **kwargs):
+        mode_transforms = {
+            ("images", ): BaseTransform(channel_axis=self._channel_axis)
+        }
+
+        return mode_transforms
+
     def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
-        if self._transform is None:
-            self._model_init()
-
         return True
