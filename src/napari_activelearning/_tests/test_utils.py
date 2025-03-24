@@ -185,7 +185,8 @@ def test_get_dataloader(dataset_metadata):
         num_workers=num_workers,
         batch_size=batch_size,
         spatial_axes=spatial_axes,
-        model_input_axes=model_input_axes
+        model_input_axes=model_input_axes,
+        tunable_method=None
     )
 
     if USING_PYTORCH:

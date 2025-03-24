@@ -4,8 +4,8 @@ import numpy as np
 from napari_activelearning._acquisition import (AcquisitionFunction,
                                                 compute_acquisition_fun,
                                                 compute_segmentation,
-                                                add_multiscale_output_layer,
-                                                TunableMethod)
+                                                add_multiscale_output_layer)
+from napari_activelearning._models import TunableMethod
 from napari_activelearning._layers import LayerChannel
 
 try:
@@ -19,8 +19,13 @@ class TestTunableMethod(TunableMethod):
     def __init__(self):
         super(TestTunableMethod, self).__init__()
 
-    def _get_transform(self):
-        return lambda x: x, None
+    def get_train_transform(self):
+        mode_transforms = {("images", ): lambda x: x}
+        return mode_transforms
+
+    def get_inference_transform(self):
+        mode_transforms = {("images", ): lambda x: x}
+        return mode_transforms
 
     def _run_pred(self, img, *args, **kwargs):
         return np.random.random((10, 10))
@@ -42,7 +47,8 @@ def test_compute_acquisition_fun():
         return_value=np.random.random((10, 10))
     )
     result = compute_acquisition_fun(tunable_segmentation_method,
-                                     img, img_sp, MC_repetitions)
+                                     img, MC_repetitions,
+                                     img_superpixel=img_sp)
 
     assert result is not None
     assert tunable_segmentation_method._run_pred.call_count == MC_repetitions
@@ -129,7 +135,6 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
     layers_group_name = "layers_group"
     reference_source_axes = "TCZYX"
     reference_scale = {"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1}
-    contrast_limits = [0, 1]
     colormap = "gray"
     use_as_input_labels = False
     use_as_sampling_mask = False
@@ -147,7 +152,6 @@ def test_add_multiscale_output_layer(single_scale_type_variant_array,
         reference_source_axes,
         reference_scale,
         output_filename,
-        contrast_limits,
         colormap,
         use_as_input_labels,
         use_as_sampling_mask,
