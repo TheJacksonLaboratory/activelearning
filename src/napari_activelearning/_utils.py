@@ -3,6 +3,7 @@ from pathlib import PureWindowsPath, Path
 from urllib.parse import urlparse
 import math
 import zarr
+import tifffile
 import zarrdataset as zds
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 from ome_zarr.format import FormatV04
@@ -529,10 +530,24 @@ def get_source_data(layer: Layer):
 
         input_filename = input_scheme + input_netloc + input_path
 
+        zarr_like = False
         if ".zarr" in input_filename:
-            z_grp = zarr.open(input_filename, mode="r")
-            while not isinstance(z_grp[data_group], zarr.Array):
-                data_group = str(Path(data_group) / "0")
+            zarr_like = True
+            z_fp = input_filename
+        else:
+            # Try to read as a TIFF file if not a Zarr
+            try:
+                z_fp = tifffile.imread(input_filename, aszarr=True)
+                zarr_like = True
+            except tifffile.TiffFileError:
+                zarr_like = False
+
+        if zarr_like:
+            # Set up the Zarr group
+            z_grp = zarr.open(z_fp, mode="r")
+            if not isinstance(z_grp, zarr.Array):
+                while not isinstance(z_grp[data_group], zarr.Array):
+                    data_group = str(Path(data_group) / "0")
 
     else:
         return layer.data, None
