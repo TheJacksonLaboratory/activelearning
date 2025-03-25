@@ -180,7 +180,7 @@ venv/
 
 .quarto
 models
-/docs_src/tutorials/cellpose_tutorial_notebook.qmd
 /finetuned_models
 /docs_src/tutorials/cellpose_tutorial/.jupyter_cache
 /docs_src/reference
+*.quarto_ipynb
