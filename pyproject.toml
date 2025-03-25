@@ -30,6 +30,7 @@ dependencies = [
     "magicgui",
     "qtpy",
     "scikit-image",
+    "tifffile",
     "tensorstore==0.1.59",
     "ome-zarr==0.9.0",
     "zarr>=2.12.0,<3.0.0",
