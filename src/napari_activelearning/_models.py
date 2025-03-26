@@ -3,6 +3,7 @@ from pathlib import Path
 from functools import partial
 
 import numpy as np
+import zarr
 import zarrdataset as zds
 
 from magicgui import magicgui
@@ -92,9 +93,23 @@ class TunableMethod(SegmentationMethod):
         worker_init_fn = None
 
         if len(dataset_metadata_list) == 1:
-            sampling_mask = np.copy(
-                dataset_metadata_list[0]["masks"]["filenames"]
-            )
+            if isinstance(dataset_metadata_list[0]["masks"]["filenames"], str):
+                z_grp = zarr.open(
+                    dataset_metadata_list[0]["masks"]["filenames"],
+                    mode="r"
+                )
+
+                sampling_mask = np.copy(
+                    z_grp[dataset_metadata_list[0]["masks"]["data_group"]][:]
+                )
+            elif isinstance(dataset_metadata_list[0]["masks"]["filenames"],
+                            np.ndarray):
+                sampling_mask = np.copy(
+                    dataset_metadata_list[0]["masks"]["filenames"]
+                )
+            else:
+                raise ValueError("The mask filenames must be a numpy array or "
+                                 "a Zarr file.")
 
             sampling_locations = np.nonzero(sampling_mask)
             sampling_locations = np.ravel_multi_index(sampling_locations,
