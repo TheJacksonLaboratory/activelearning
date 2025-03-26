@@ -103,7 +103,7 @@ class TunableMethod(SegmentationMethod):
                     z_grp[dataset_metadata_list[0]["masks"]["data_group"]][:]
                 )
             elif isinstance(dataset_metadata_list[0]["masks"]["filenames"],
-                            np.array):
+                            np.ndarray):
                 sampling_mask = np.copy(
                     dataset_metadata_list[0]["masks"]["filenames"]
                 )
