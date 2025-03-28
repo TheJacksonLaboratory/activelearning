@@ -543,7 +543,8 @@ class LayersGroup(QTreeWidgetItem):
             dtype=source_data.dtype,
             metadata=metadata,
             is_label=is_label,
-            is_multiscale=is_multiscale
+            is_multiscale=is_multiscale,
+            overwrite=False
         )
 
         for idx in range(self.childCount()):
@@ -1277,7 +1278,7 @@ class MaskGenerator(PropertiesEditor):
             mask_output_filename = (self._active_image_group.group_dir
                                     / (self._active_image_group.group_name
                                        + ".zarr"))
-            mask_root = save_zarr(
+            _, mask_grp = save_zarr(
                 mask_output_filename,
                 data=None,
                 shape=mask_shape,
@@ -1285,10 +1286,9 @@ class MaskGenerator(PropertiesEditor):
                 name=masks_group_name,
                 dtype=np.uint8,
                 is_label=True,
-                is_multiscale=True
+                is_multiscale=True,
+                overwrite=False
             )
-
-            mask_grp = mask_root[f"{masks_group_name}/0"]
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None

@@ -104,16 +104,22 @@ def test_save_zarr(sample_layer, output_group):
 
     is_multiscale = isinstance(layer.data, (MultiScaleData, list))
 
-    out_grp = save_zarr(output_group, layer.data, layer.data.shape,
-                        True, name,
-                        layer.data.dtype,
-                        is_multiscale=is_multiscale,
-                        metadata=None,
-                        is_label=True)
+    out_grp, out_grp_data = save_zarr(
+        output_group,
+        layer.data,
+        layer.data.shape,
+        True,
+        name,
+        layer.data.dtype,
+        is_multiscale=is_multiscale,
+        metadata=None,
+        is_label=True,
+        overwrite=True
+    )
 
     assert group_name in out_grp
     assert (not is_multiscale
-            or len(out_grp[group_name]) == len(layer.data))
+            or len(out_grp[name]) == len(layer.data))
     assert (isinstance(out_grp.store, zarr.MemoryStore)
             or layer.data.dtype in (np.float32, np.float64)
             or (isinstance(out_grp.store, (zarr.MemoryStore,

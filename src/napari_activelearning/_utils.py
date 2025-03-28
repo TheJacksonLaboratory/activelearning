@@ -315,7 +315,8 @@ def validate_name(group_names, previous_child_name, new_child_name):
 def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
               is_multiscale: bool = False,
               metadata: Optional[dict] = None,
-              is_label: bool = False):
+              is_label: bool = False,
+              overwrite: bool = True):
     if not metadata:
         metadata = {}
 
@@ -337,7 +338,10 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
     else:
         chunks_size_axes = chunk_size
 
-    group_name = name
+    if overwrite:
+        group_name = name
+    else:
+        group_name = get_next_name(name, list(out_grp.keys()))
 
     if isinstance(data, MultiScaleData):
         data_ms = data
@@ -374,7 +378,7 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
                                                 zarr.DirectoryStore))):
         write_label_metadata(out_grp, group_name, fmt=FormatV04(), **metadata)
 
-    return out_grp
+    return out_grp, out_grp[group_ms_names[0]]
 
 
 def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
