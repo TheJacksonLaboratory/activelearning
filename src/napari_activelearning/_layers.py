@@ -1278,7 +1278,7 @@ class MaskGenerator(PropertiesEditor):
             mask_output_filename = (self._active_image_group.group_dir
                                     / (self._active_image_group.group_name
                                        + ".zarr"))
-            _, mask_grp = save_zarr(
+            mask_root, mask_grp_name = save_zarr(
                 mask_output_filename,
                 data=None,
                 shape=mask_shape,
@@ -1289,6 +1289,7 @@ class MaskGenerator(PropertiesEditor):
                 is_multiscale=True,
                 overwrite=False
             )
+            mask_grp = mask_root[mask_grp_name]
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None

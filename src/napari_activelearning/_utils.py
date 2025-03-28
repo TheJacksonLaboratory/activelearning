@@ -378,7 +378,7 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
                                                 zarr.DirectoryStore))):
         write_label_metadata(out_grp, group_name, fmt=FormatV04(), **metadata)
 
-    return out_grp, out_grp[group_ms_names[0]]
+    return out_grp, group_name
 
 
 def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,

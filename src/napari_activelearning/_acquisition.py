@@ -559,7 +559,7 @@ class AcquisitionFunction:
             ]
 
             if not segmentation_only:
-                acquisition_root, acquisition_fun_grp = save_zarr(
+                acquisition_root, acquisition_fun_grp_name = save_zarr(
                     output_filename,
                     data=None,
                     shape=output_shape,
@@ -570,10 +570,13 @@ class AcquisitionFunction:
                     is_multiscale=True,
                     overwrite=False
                 )
+                acquisition_fun_grp =\
+                    acquisition_root[f"{acquisition_fun_grp_name}/0"]
+
             else:
                 acquisition_fun_grp = None
 
-            segmentation_root, segmentation_grp = save_zarr(
+            segmentation_root, segmentation_group_name = save_zarr(
                 output_filename,
                 data=None,
                 shape=output_shape,
@@ -584,6 +587,9 @@ class AcquisitionFunction:
                 is_multiscale=True,
                 overwrite=False
             )
+
+            segmentation_grp =\
+                segmentation_root[f"{segmentation_group_name}/0"]
 
             dataset_metadata = self._prepare_datasets_metadata(
                  displayed_shape,
@@ -604,7 +610,7 @@ class AcquisitionFunction:
                     for ax in output_axes
                 }
 
-                sampled_root, sampled_grp = save_zarr(
+                sampled_root, sampled_grp_name = save_zarr(
                     output_filename,
                     data=None,
                     shape=sampling_output_shape,
@@ -615,6 +621,8 @@ class AcquisitionFunction:
                     is_multiscale=True,
                     overwrite=False
                 )
+                sampled_grp = sampled_root[f"{sampled_grp_name}/0"]
+
             else:
                 sampled_grp = None
 
@@ -637,7 +645,7 @@ class AcquisitionFunction:
                     acquisition_root,
                     axes=output_axes,
                     scale=displayed_scale,
-                    data_group="acquisition_fun/0",
+                    data_group=f"{acquisition_fun_grp_name}/0",
                     group_name=group_name + " acquisition function",
                     layers_group_name="acquisition",
                     image_group=image_group,
@@ -653,7 +661,7 @@ class AcquisitionFunction:
                     sampled_root,
                     axes=output_axes,
                     scale=sampling_output_scale,
-                    data_group="sampled_positions/0",
+                    data_group=f"{sampled_grp_name}/0",
                     group_name=group_name + " sampled positions",
                     layers_group_name="sampled positions",
                     image_group=image_group,
