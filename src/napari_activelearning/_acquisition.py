@@ -559,7 +559,7 @@ class AcquisitionFunction:
             ]
 
             if not segmentation_only:
-                acquisition_root = save_zarr(
+                acquisition_root, acquisition_fun_grp = save_zarr(
                     output_filename,
                     data=None,
                     shape=output_shape,
@@ -567,14 +567,13 @@ class AcquisitionFunction:
                     name="acquisition_fun",
                     dtype=np.float32,
                     is_label=False,
-                    is_multiscale=True
+                    is_multiscale=True,
+                    overwrite=False
                 )
-
-                acquisition_fun_grp = acquisition_root["acquisition_fun/0"]
             else:
                 acquisition_fun_grp = None
 
-            segmentation_root = save_zarr(
+            segmentation_root, segmentation_grp = save_zarr(
                 output_filename,
                 data=None,
                 shape=output_shape,
@@ -582,12 +581,9 @@ class AcquisitionFunction:
                 name=segmentation_group_name,
                 dtype=np.int32,
                 is_label=True,
-                is_multiscale=True
+                is_multiscale=True,
+                overwrite=False
             )
-
-            segmentation_grp = segmentation_root[
-                f"{segmentation_group_name}/0"
-            ]
 
             dataset_metadata = self._prepare_datasets_metadata(
                  displayed_shape,
@@ -608,7 +604,7 @@ class AcquisitionFunction:
                     for ax in output_axes
                 }
 
-                sampled_root = save_zarr(
+                sampled_root, sampled_grp = save_zarr(
                     output_filename,
                     data=None,
                     shape=sampling_output_shape,
@@ -616,10 +612,9 @@ class AcquisitionFunction:
                     name="sampled_positions",
                     dtype=np.uint8,
                     is_label=True,
-                    is_multiscale=True
+                    is_multiscale=True,
+                    overwrite=False
                 )
-
-                sampled_grp = sampled_root["sampled_positions/0"]
             else:
                 sampled_grp = None
 
