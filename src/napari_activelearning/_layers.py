@@ -1289,7 +1289,7 @@ class MaskGenerator(PropertiesEditor):
                 is_multiscale=True,
                 overwrite=False
             )
-            mask_grp = mask_root[mask_grp_name]
+            mask_grp = mask_root[f"{mask_grp_name}/0"]
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None
