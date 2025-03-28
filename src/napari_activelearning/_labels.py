@@ -214,17 +214,23 @@ class LabelsManager:
             segmentation_channel = self._active_layers_group.child(0)
             segmentation_channel_layer = segmentation_channel.layer
             if isinstance(segmentation_channel.layer.data, MultiScaleData):
-                segmentation_channel_data =\
-                    segmentation_channel_layer.data[0]
-            else:
                 segmentation_channel_data = segmentation_channel_layer.data
+            else:
+                segmentation_channel_data = [segmentation_channel_layer.data]
 
         if isinstance(self._transaction, ts.Transaction):
             self._transaction.commit_async()
         elif (self._active_label.position is not None
                 and segmentation_channel_data is not None):
-            segmentation_channel_data[self._active_label.position] =\
-                label_data
+            for s_scl, seg_data in enumerate(segmentation_channel_data):
+                curr_position = tuple(
+                    list(self._active_label.position[:3])
+                    + [slice(pos_sel.start // 2**s_scl,
+                             pos_sel.stop // 2**s_scl)
+                       for pos_sel in self._active_label.position[3:]]
+                )
+                seg_data[curr_position] =\
+                    label_data[..., ::2**s_scl, ::2**s_scl]
 
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
