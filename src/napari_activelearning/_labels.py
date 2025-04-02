@@ -6,6 +6,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
 import tensorstore as ts
+import tifffile
 import zarr
 
 import napari
@@ -210,24 +211,50 @@ class LabelsManager:
         return label_data
 
     def _write_label_data(self, label_data: np.ndarray):
-        if self._active_layers_group:
-            segmentation_channel = self._active_layers_group.child(0)
-            segmentation_channel_layer = segmentation_channel.layer
-            if isinstance(segmentation_channel.layer.data, MultiScaleData):
-                segmentation_channel_data = segmentation_channel_layer.data
-            else:
-                segmentation_channel_data = [segmentation_channel_layer.data]
-
         if isinstance(self._transaction, ts.Transaction):
             self._transaction.commit_async()
         elif (self._active_label.position is not None
-                and segmentation_channel_data is not None):
+                and self._active_layers_group is not None):
+            input_filename = self._active_layers_group.source_data
+            data_group = self._active_layers_group.data_group
+
+            if isinstance(input_filename, (Path, str)):
+                if ".zarr" in str(input_filename):
+                    segmentation_channel_group = input_filename
+                else:
+                    raise ValueError("File format not supported for "
+                                        "writing labels.")
+
+                segmentation_channel_group = zarr.open(
+                    segmentation_channel_group,
+                    mode="r+")
+
+                if data_group is not None:
+                    data_group_base = "/".join(data_group.split("/")[:-1])
+
+                down_scales = len(
+                    segmentation_channel_group[data_group_base].keys()
+                )
+
+                segmentation_channel_data = [
+                    segmentation_channel_group[f"{data_group_base}/{grp}"]
+                    for grp in range(down_scales)
+                ]
+
+            elif isinstance(input_filename, MultiScaleData):
+                segmentation_channel_data =\
+                    self._active_layers_group.source_data
+            else:
+                segmentation_channel_data = [
+                    self._active_layers_group.source_data
+                ]
+
             for s_scl, seg_data in enumerate(segmentation_channel_data):
                 curr_position = tuple(
-                    list(self._active_label.position[:3])
+                    list(self._active_label.position[:-2])
                     + [slice(pos_sel.start // 2**s_scl,
                              pos_sel.stop // 2**s_scl)
-                       for pos_sel in self._active_label.position[3:]]
+                       for pos_sel in self._active_label.position[-2:]]
                 )
                 seg_data[curr_position] =\
                     label_data[..., ::2**s_scl, ::2**s_scl]

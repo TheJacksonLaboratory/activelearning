@@ -43,6 +43,24 @@ class SegmentationMethod:
         return out
 
 
+class AxesCorrector:
+    def __init__(self, out_axes: str, target_axes: str):
+        self.out_axes = list(out_axes)
+        self.target_axes = list(target_axes)
+        self._drop_axes = list(set(out_axes) - set(target_axes))
+        self.permute_order = zds.map_axes_order(out_axes, target_axes)
+
+    def __call__(self, img):
+        img = img.transpose(self.permute_order)
+
+        # Drop axes with length 1 that are not in `axes`.
+        out_shape = [s
+                     for s, p_a in zip(img.shape, self.permute_order)
+                     if self.out_axes[p_a] not in self._drop_axes]
+        img = img.reshape(out_shape)
+        return img
+
+
 class MyZarrDataset(zds.ZarrDataset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,6 +103,7 @@ class TunableMethod(SegmentationMethod):
                                   "derived class.")
 
     def fine_tune(self, dataset_metadata_list: Iterable[dict],
+                  model_axes: str,
                   train_data_proportion: float = 0.8,
                   patch_sizes: Union[dict, int] = 256) -> bool:
 
@@ -160,10 +179,26 @@ class TunableMethod(SegmentationMethod):
             val_datasets.max_samples_per_image = val_samples
             if mode_transforms is not None:
                 for input_mode, transform_mode in mode_transforms.items():
-                    train_datasets.add_transform(input_mode, transform_mode)
+                    if len(input_mode) == 1:
+                        dataset_source_axes =\
+                            dataset_metadata_list[0][input_mode[0]]["axes"]
+                        train_datasets.add_transform(input_mode, AxesCorrector(
+                                dataset_source_axes,
+                                model_axes
+                        ))
+                    train_datasets.add_transform(input_mode, transform_mode,
+                                                 append=True)
 
                 for input_mode, transform_mode in mode_transforms.items():
-                    val_datasets.add_transform(input_mode, transform_mode)
+                    if len(input_mode) == 1:
+                        dataset_source_axes =\
+                            dataset_metadata_list[0][input_mode[0]]["axes"]
+                        val_datasets.add_transform(input_mode, AxesCorrector(
+                                dataset_source_axes,
+                                model_axes
+                        ))
+                    val_datasets.add_transform(input_mode, transform_mode,
+                                               append=True)
 
             worker_init_fn = zds.zarrdataset_worker_init_fn
 
@@ -194,6 +229,13 @@ class TunableMethod(SegmentationMethod):
                 dataset.max_samples_per_image = self.max_samples_per_image
                 if mode_transforms is not None:
                     for input_mode, transform_mode in mode_transforms.items():
+                        if len(input_mode) == 1:
+                            dataset_source_axes =\
+                                dataset_metadata[input_mode[0]]["axes"]
+                            dataset.add_transform(input_mode, AxesCorrector(
+                                dataset_source_axes,
+                                model_axes
+                            ))
                         dataset.add_transform(input_mode, transform_mode)
 
                 if idx in training_indices:

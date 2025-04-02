@@ -22,7 +22,7 @@ except ModuleNotFoundError:
 from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
-from ._models import TunableMethod
+from ._models import TunableMethod, AxesCorrector
 
 
 class SuperPixelGenerator(zds.MaskGenerator):
@@ -260,7 +260,23 @@ def get_dataloader(
         mode_transforms = tunable_segmentation_method.get_inference_transform()
         if mode_transforms is not None:
             for input_mode, transform_mode in mode_transforms.items():
-                train_dataset.add_transform(input_mode, transform_mode)
+                if len(input_mode) == 1:
+                    dataset_source_axes =\
+                        dataset_metadata[input_mode[0]]["axes"]
+                    train_dataset.add_transform(input_mode, AxesCorrector(
+                            dataset_source_axes,
+                            model_input_axes
+                    ))
+                train_dataset.add_transform(input_mode, transform_mode,
+                                            append=True)
+
+        if "superpixels" in dataset_metadata:
+            dataset_source_axes = dataset_metadata["images"]["axes"]
+            train_dataset.add_transform(
+                "superpixels",
+                AxesCorrector(dataset_source_axes, model_input_axes),
+                append=True
+            )
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(

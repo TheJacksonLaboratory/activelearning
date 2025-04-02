@@ -407,16 +407,9 @@ class AcquisitionFunction:
             for ax in output_axes
         )
 
-        drop_axis = tuple(
-            ax_idx
-            for ax_idx, ax in enumerate(
-                dataset_metadata["images"]["axes"])
-            if ax != "C" and ax not in model_spatial_axes
-        )
-
-        drop_axis_sp = list(drop_axis)
+        drop_axis_sp = []
         if "C" in dataset_metadata["images"]["axes"]:
-            drop_axis_sp.append(dataset_metadata["images"]["axes"].index("C"))
+            drop_axis_sp.append(self.model_axes.index("C"))
         drop_axis_sp = tuple(drop_axis_sp)
 
         self._reset_patch_progressbar()
@@ -427,18 +420,21 @@ class AcquisitionFunction:
                 img_sp = img_sp[0].numpy()
 
             img_shape = img.shape
-            if len(drop_axis):
-                img = img.squeeze(drop_axis)
-
             if len(drop_axis_sp):
                 img_sp = img_sp.squeeze(drop_axis_sp)
+
+            pos_axes = [
+                pos_ax
+                for ax, pos_ax in zip(input_spatial_axes, pos)
+                if ax in model_spatial_axes
+            ]
 
             pos_padded = {
                 ax: slice(pos_ax[0] + padding.get(ax, 0),
                           pos_ax[1] - padding.get(ax, 0)
                           if pos_ax[1] > 0 else ax_s)
-                for ax, ax_s, pos_ax in zip(
-                    dataset_metadata["images"]["axes"], img_shape, pos)
+                for ax, ax_s, pos_ax in zip(model_spatial_axes, img_shape,
+                                            pos_axes)
             }
 
             pos_u_lab = tuple(
@@ -779,6 +775,7 @@ class AcquisitionFunction:
 
         success = self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
+            model_axes=self.model_axes,
             patch_sizes=self._patch_sizes
         )
 
