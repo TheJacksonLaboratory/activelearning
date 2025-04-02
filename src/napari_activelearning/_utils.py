@@ -258,25 +258,35 @@ def get_dataloader(
 
     if tunable_segmentation_method is not None:
         mode_transforms = tunable_segmentation_method.get_inference_transform()
-        if mode_transforms is not None:
-            for input_mode, transform_mode in mode_transforms.items():
-                if len(input_mode) == 1:
-                    dataset_source_axes =\
-                        dataset_metadata[input_mode[0]]["axes"]
-                    train_dataset.add_transform(input_mode, AxesCorrector(
-                            dataset_source_axes,
-                            model_input_axes
-                    ))
-                train_dataset.add_transform(input_mode, transform_mode,
-                                            append=True)
 
-        if "superpixels" in dataset_metadata:
-            dataset_source_axes = dataset_metadata["images"]["axes"]
-            train_dataset.add_transform(
-                "superpixels",
-                AxesCorrector(dataset_source_axes, model_input_axes),
-                append=True
-            )
+        if mode_transforms is None:
+            mode_transforms = {}
+
+        mode_transforms = {
+            input_mode: [mode_transforms]
+            for input_mode, mode_transforms in mode_transforms.items()
+        }
+
+        # Complete the transforms for individial input modes
+        mode_transforms.update({
+            (input_mode, ): []
+            for input_mode in dataset_metadata.keys()
+            if (input_mode, ) not in mode_transforms
+        })
+
+        for input_mode in dataset_metadata.keys():
+            mode_transforms[(input_mode, )].insert(0, AxesCorrector(
+                dataset_metadata[input_mode]["axes"],
+                model_input_axes
+            ))
+
+        for input_mode, transform_mode in mode_transforms.items():
+            for transform_step in transform_mode:
+                train_dataset.add_transform(
+                    input_mode,
+                    transform_step,
+                    append=True
+                )
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(

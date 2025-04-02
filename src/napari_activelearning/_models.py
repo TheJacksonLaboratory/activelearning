@@ -109,6 +109,27 @@ class TunableMethod(SegmentationMethod):
 
         mode_transforms = self.get_train_transform()
 
+        if mode_transforms is None:
+            mode_transforms = {}
+
+        mode_transforms = {
+            input_mode: [mode_transforms]
+            for input_mode, mode_transforms in mode_transforms.items()
+        }
+
+        # Complete the transforms for individial input modes
+        mode_transforms.update({
+            (input_mode, ): []
+            for input_mode in dataset_metadata_list[0].keys()
+            if (input_mode, ) not in mode_transforms
+        })
+
+        for input_mode in dataset_metadata_list[0].keys():
+            mode_transforms[(input_mode, )].insert(0, AxesCorrector(
+                dataset_metadata_list[0][input_mode]["axes"],
+                model_axes
+            ))
+
         worker_init_fn = None
 
         if len(dataset_metadata_list) == 1:
@@ -177,28 +198,21 @@ class TunableMethod(SegmentationMethod):
             )
 
             val_datasets.max_samples_per_image = val_samples
-            if mode_transforms is not None:
-                for input_mode, transform_mode in mode_transforms.items():
-                    if len(input_mode) == 1:
-                        dataset_source_axes =\
-                            dataset_metadata_list[0][input_mode[0]]["axes"]
-                        train_datasets.add_transform(input_mode, AxesCorrector(
-                                dataset_source_axes,
-                                model_axes
-                        ))
-                    train_datasets.add_transform(input_mode, transform_mode,
-                                                 append=True)
+            for input_mode, transform_mode in mode_transforms.items():
+                for transform_step in transform_mode:
+                    train_datasets.add_transform(
+                        input_mode,
+                        transform_step,
+                        append=True
+                    )
 
-                for input_mode, transform_mode in mode_transforms.items():
-                    if len(input_mode) == 1:
-                        dataset_source_axes =\
-                            dataset_metadata_list[0][input_mode[0]]["axes"]
-                        val_datasets.add_transform(input_mode, AxesCorrector(
-                                dataset_source_axes,
-                                model_axes
-                        ))
-                    val_datasets.add_transform(input_mode, transform_mode,
-                                               append=True)
+            for input_mode, transform_mode in mode_transforms.items():
+                for transform_step in transform_mode:
+                    val_datasets.add_transform(
+                        input_mode,
+                        transform_step,
+                        append=True
+                    )
 
             worker_init_fn = zds.zarrdataset_worker_init_fn
 
@@ -227,16 +241,13 @@ class TunableMethod(SegmentationMethod):
                 )
 
                 dataset.max_samples_per_image = self.max_samples_per_image
-                if mode_transforms is not None:
-                    for input_mode, transform_mode in mode_transforms.items():
-                        if len(input_mode) == 1:
-                            dataset_source_axes =\
-                                dataset_metadata[input_mode[0]]["axes"]
-                            dataset.add_transform(input_mode, AxesCorrector(
-                                dataset_source_axes,
-                                model_axes
-                            ))
-                        dataset.add_transform(input_mode, transform_mode)
+                for input_mode, transform_mode in mode_transforms.items():
+                    for transform_step in transform_mode:
+                        dataset.add_transform(
+                            input_mode,
+                            transform_step,
+                            append=True
+                        )
 
                 if idx in training_indices:
                     train_datasets.append(dataset)
