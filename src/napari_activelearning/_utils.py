@@ -257,22 +257,25 @@ def get_dataloader(
     )
 
     if tunable_segmentation_method is not None:
-        mode_transforms = tunable_segmentation_method.get_inference_transform()
+        base_mode_transforms =\
+            tunable_segmentation_method.get_inference_transform()
 
-        if mode_transforms is None:
-            mode_transforms = {}
+        if base_mode_transforms is None:
+            base_mode_transforms = {}
 
-        mode_transforms = {
+        base_mode_transforms = {
             input_mode: [mode_transforms]
-            for input_mode, mode_transforms in mode_transforms.items()
+            for input_mode, mode_transforms in
+            base_mode_transforms.items()
         }
 
         # Complete the transforms for individial input modes
-        mode_transforms.update({
+        mode_transforms = {
             (input_mode, ): []
             for input_mode in dataset_metadata.keys()
-            if (input_mode, ) not in mode_transforms
-        })
+            if (input_mode, ) not in base_mode_transforms
+        }
+        mode_transforms.update(base_mode_transforms)
 
         for input_mode in dataset_metadata.keys():
             mode_transforms[(input_mode, )].insert(0, AxesCorrector(

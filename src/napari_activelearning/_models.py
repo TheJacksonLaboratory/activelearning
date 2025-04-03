@@ -51,14 +51,14 @@ class AxesCorrector:
         self.permute_order = zds.map_axes_order(out_axes, target_axes)
 
     def __call__(self, img):
-        img = img.transpose(self.permute_order)
+        img_corr = img.transpose(self.permute_order)
 
         # Drop axes with length 1 that are not in `axes`.
         out_shape = [s
-                     for s, p_a in zip(img.shape, self.permute_order)
+                     for s, p_a in zip(img_corr.shape, self.permute_order)
                      if self.out_axes[p_a] not in self._drop_axes]
-        img = img.reshape(out_shape)
-        return img
+        img_corr = img_corr.reshape(out_shape)
+        return img_corr
 
 
 class MyZarrDataset(zds.ZarrDataset):
@@ -107,22 +107,24 @@ class TunableMethod(SegmentationMethod):
                   train_data_proportion: float = 0.8,
                   patch_sizes: Union[dict, int] = 256) -> bool:
 
-        mode_transforms = self.get_train_transform()
+        base_mode_transforms = self.get_train_transform()
 
-        if mode_transforms is None:
-            mode_transforms = {}
+        if base_mode_transforms is None:
+            base_mode_transforms = {}
 
-        mode_transforms = {
+        base_mode_transforms = {
             input_mode: [mode_transforms]
-            for input_mode, mode_transforms in mode_transforms.items()
+            for input_mode, mode_transforms in
+            base_mode_transforms.items()
         }
 
         # Complete the transforms for individial input modes
-        mode_transforms.update({
+        mode_transforms = {
             (input_mode, ): []
             for input_mode in dataset_metadata_list[0].keys()
-            if (input_mode, ) not in mode_transforms
-        })
+            if (input_mode, ) not in base_mode_transforms
+        }
+        mode_transforms.update(base_mode_transforms)
 
         for input_mode in dataset_metadata_list[0].keys():
             mode_transforms[(input_mode, )].insert(0, AxesCorrector(
