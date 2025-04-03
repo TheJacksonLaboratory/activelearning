@@ -102,14 +102,14 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
             mock_dataloader.return_value = [
                 (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10],
                                     [0, -1]]]),
-                 torch.zeros((1, 1, 1, 10, 10, 3)),
-                 torch.zeros((1, 1, 1, 10, 10, 1)))
+                 torch.zeros((1, 10, 10, 3)),
+                 torch.zeros((1, 10, 10, 1)))
             ]
         else:
             mock_dataloader.return_value = [
                 (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
-                 np.zeros((1, 1, 10, 10, 3)),
-                 np.zeros((1, 1, 10, 10, 1)))
+                 np.zeros((10, 10, 3)),
+                 np.zeros((10, 10, 1)))
             ]
 
         result = acquisition_function.compute_acquisition(
@@ -245,14 +245,14 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
             mock_dataloader.return_value = [
                 (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10],
                                     [0, -1]]]),
-                 torch.zeros((1, 1, 1, 10, 10, 3)),
-                 torch.zeros((1, 1, 1, 10, 10, 1)))
+                 torch.zeros((1, 10, 10, 3)),
+                 torch.zeros((1, 10, 10, 1)))
             ]
         else:
             mock_dataloader.return_value = [
                 (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
-                 np.zeros((1, 1, 10, 10, 3)),
-                 np.zeros((1, 1, 10, 10, 1)))
+                 np.zeros((10, 10, 3)),
+                 np.zeros((10, 10, 1)))
             ]
 
         mock_add_ms_layer.return_value = multiscale_layer_channel
