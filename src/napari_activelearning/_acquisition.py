@@ -240,6 +240,7 @@ class AcquisitionFunction:
         self._max_samples = 1
         self._MC_repetitions = 3
         self._add_padding = False
+        self._padding_factor = 4
 
         viewer = napari.current_viewer()
         self.input_axes = "".join(viewer.dims.axis_labels).upper()
@@ -368,6 +369,8 @@ class AcquisitionFunction:
         ]
         model_spatial_axes = "".join(model_spatial_axes)
 
+        batch_axes = dataset_metadata["images"]["axes"]
+
         input_spatial_axes = [
             ax
             for ax in dataset_metadata["images"]["source_axes"]
@@ -378,7 +381,7 @@ class AcquisitionFunction:
         padding = {}
         if self._add_padding:
             padding = {
-                ax: ax_ps // 4
+                ax: ax_ps // self._padding_factor
                 for ax, ax_ps in self._patch_sizes.items()
             }
 
@@ -419,22 +422,26 @@ class AcquisitionFunction:
                 img = img[0].numpy()
                 img_sp = img_sp[0].numpy()
 
-            img_shape = img.shape
             if len(drop_axis_sp):
                 img_sp = img_sp.squeeze(drop_axis_sp)
 
-            pos_axes = [
-                pos_ax
-                for ax, pos_ax in zip(input_spatial_axes, pos)
-                if ax in model_spatial_axes
-            ]
+            pos_axes = {
+                ax: pos_ax
+                for ax, pos_ax in zip(batch_axes, pos)
+            }
+
+            img_shape = {
+                ax: ax_s
+                for ax, ax_s in zip(self.model_axes, img.shape)
+            }
 
             pos_padded = {
-                ax: slice(pos_ax[0] + padding.get(ax, 0),
-                          pos_ax[1] - padding.get(ax, 0)
-                          if pos_ax[1] > 0 else ax_s)
-                for ax, ax_s, pos_ax in zip(model_spatial_axes, img_shape,
-                                            pos_axes)
+                ax: slice(pos_axes.get(ax, (0, 0))[0] + padding.get(ax, 0),
+                          pos_axes.get(ax, (0, 0))[1] - padding.get(ax, 0)
+                          if pos_axes.get(ax, (0, 0))[1] > 0 else
+                          img_shape.get(ax, 1))
+                if ax != "C" or ax in self.model_axes else slice(0, 1)
+                for ax in output_axes
             }
 
             pos_u_lab = tuple(
