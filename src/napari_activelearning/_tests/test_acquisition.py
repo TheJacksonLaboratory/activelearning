@@ -16,6 +16,8 @@ except ModuleNotFoundError:
 
 
 class TestTunableMethod(TunableMethod):
+    model_axes = "YXC"
+
     def __init__(self):
         super(TestTunableMethod, self).__init__()
 
@@ -85,14 +87,14 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
 
     dataset_metadata = {
         "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
-        "masks": {"source_axes": "TCZYX", "axes": "TCZYX"}
+        "masks": {"source_axes": "TZYX", "axes": "TZYX"}
     }
-    acquisition_fun = np.zeros((1, 1, 1, 10, 10))
-    segmentation_out = np.zeros((1, 1, 1, 10, 10))
+    acquisition_fun = np.zeros((1, 1, 10, 10))
+    segmentation_out = np.zeros((1, 1, 10, 10))
     segmentation_only = False
 
     acquisition_function.set_model("test")
-    acquisition_function.patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
+    acquisition_function._patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):
@@ -110,7 +112,7 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
                  np.zeros((10, 10, 1)))
             ]
 
-        result = acquisition_function.compute_acquisition(
+        result, unique_labels = acquisition_function.compute_acquisition(
             dataset_metadata,
             acquisition_fun=acquisition_fun,
             segmentation_out=segmentation_out,
@@ -118,6 +120,7 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
         )
 
         assert len(result) == 1
+        assert unique_labels == set({0, 1})
 
 
 def test_add_multiscale_output_layer(single_scale_type_variant_array,

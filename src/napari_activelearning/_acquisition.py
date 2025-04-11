@@ -502,7 +502,8 @@ class AcquisitionFunction:
             segmentation_out[pos_u_lab] = seg_out[pred_sel]
             segmentation_max = max(segmentation_max, seg_out.max())
             unique_labels = unique_labels.union(
-                set(np.unique(seg_out[pred_sel])))
+                set(np.unique(seg_out[pred_sel]))
+            )
 
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
