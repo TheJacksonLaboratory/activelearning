@@ -24,8 +24,7 @@ import dask.array as da
 from napari.layers._multiscale_data import MultiScaleData
 
 from ._acquisition import AcquisitionFunction
-from ._models import TunableMethod
-from ._layers import (ImageGroupEditor, ImageGroupsManager, LayerScaleEditor,
+from ._layers import (ImageGroupEditor, ImageGroupsManager,
                       MaskGenerator,
                       ImageGroup,
                       ImageGroupRoot)
@@ -406,6 +405,19 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
 
     def update_source_axes(self):
         super().update_source_axes(self.edit_axes_le.text())
+        if self._active_layer_channel is not None:
+            self.edit_scale_mdspn.sizes = {
+                ax: ax_scl
+                for ax, ax_scl in zip(self._active_layer_channel.source_axes,
+                                      self._active_layer_channel.scale)
+                if ax != "C"
+            }
+            self.edit_translate_mdspn.sizes = {
+                ax: ax_scl
+                for ax, ax_scl in zip(self._active_layer_channel.source_axes,
+                                      self._active_layer_channel.translate)
+                if ax != "C"
+            }
 
     def update_layers_group_name(self):
         if super().update_layers_group_name(
@@ -507,8 +519,8 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
     def _set_patch_size(self, patch_sizes):
         super().set_patch_size(list(patch_sizes.values()))
 
-    def _update_reference_info(self):
-        if super()._update_reference_info():
+    def update_reference_info(self):
+        if super().update_reference_info():
             self.generate_mask_btn.setEnabled(True)
             self.patch_sizes_mspn.axes = self._mask_axes
 
@@ -528,7 +540,16 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
 
         # Re-instanciate the following objects with their widget versions.
         self.image_groups_editor = ImageGroupEditorWidget()
+        self.image_groups_editor.register_listener(self)
+
         self.mask_generator = MaskGeneratorWidget()
+        # Replace registered mask generator with its widget version.
+        for listener in self._listeners:
+            if isinstance(listener, MaskGenerator):
+                self._listeners.remove(listener)
+                break
+
+        self.register_listener(self.mask_generator)
 
         self.image_groups_tw = QTreeWidget()
         self.image_groups_tw.setColumnCount(5)
@@ -852,6 +873,10 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         patch_sizes_chk = QCheckBox("Edit patch sizes")
         patch_sizes_chk.setChecked(False)
 
+        self.input_axes_lbl = QLabel("No image groups added", )
+        self.model_axes_lbl = QLabel("No method selected")
+
+        self.input_axes = ""
         spatial_input_axes = self.input_axes
         if "C" in spatial_input_axes:
             spatial_input_axes = list(spatial_input_axes)
@@ -870,12 +895,6 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         self.add_padding_chk = QCheckBox("Add padding")
         self.add_padding_chk.setChecked(self._add_padding)
-
-        self.input_axes_le = QLineEdit()
-        self.input_axes_le.setText(self.input_axes)
-
-        self.model_axes_le = QLineEdit()
-        self.model_axes_le.setText(self.model_axes)
 
         self.methods_cmb = QComboBox()
         self.methods_cmb.setEditable(False)
@@ -899,9 +918,9 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         acquisition_lyt.addWidget(QLabel("Monte Carlo repetitions"), 3, 0)
         acquisition_lyt.addWidget(self.MC_repetitions_spn, 3, 1)
         acquisition_lyt.addWidget(QLabel("Input axes"), 4, 0)
-        acquisition_lyt.addWidget(self.input_axes_le, 4, 1)
+        acquisition_lyt.addWidget(self.input_axes_lbl, 4, 1)
         acquisition_lyt.addWidget(QLabel("Model axes"), 4, 2)
-        acquisition_lyt.addWidget(self.model_axes_le, 4, 3)
+        acquisition_lyt.addWidget(self.model_axes_lbl, 4, 3)
         acquisition_lyt.addWidget(QLabel("Model"), 5, 0)
         acquisition_lyt.addWidget(self.methods_cmb, 5, 1, 1, 3)
         acquisition_lyt.addWidget(self.execute_selected_btn, 7, 0)
@@ -920,8 +939,6 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.add_padding_chk.toggled.connect(self._set_add_padding)
         self.max_samples_spn.valueChanged.connect(self._set_max_samples)
         self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
-        self.input_axes_le.textChanged.connect(self._set_input_axes)
-        self.model_axes_le.textChanged.connect(self._set_model_axes)
         self.methods_cmb.currentIndexChanged.connect(self._set_model)
         self.execute_selected_btn.clicked.connect(
             partial(self.compute_acquisition_layers, run_all=False)
@@ -932,6 +949,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.finetuning_btn.clicked.connect(self.fine_tune)
 
         self.patch_sizes_mspn.update_spin_boxes()
+
+        self.update_reference_info()
 
     def _show_patch_sizes(self, show: bool):
         self.patch_sizes_widget.setVisible(show)
@@ -962,12 +981,20 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
     def _set_max_samples(self):
         self._max_samples = self.max_samples_spn.value()
 
-    def _set_input_axes(self):
-        self.input_axes = self.input_axes_le.text()
+    def update_reference_info(self):
+        super().update_reference_info()
         self.patch_sizes_mspn.axes = self.input_axes
+        if self.tunable_segmentation_method is not None:
+            self.model_axes_lbl.setText(
+                self.tunable_segmentation_method.model_axes
+            )
+        else:
+            self.model_axes_lbl.setText("No method selected")
 
-    def _set_model_axes(self):
-        self.model_axes = self.model_axes_le.text()
+        if len(self.input_axes):
+            self.input_axes_lbl.setText(self.input_axes)
+        else:
+            self.input_axes_lbl.setText("No image groups added")
 
     def _set_model(self, selected_model_index: int):
         if self.tunable_segmentation_method is not None:
@@ -975,4 +1002,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
             self.tunable_segmentation_method.deleteLater()
 
         self.set_model(self.methods_cmb.itemText(selected_model_index))
+        if self.tunable_segmentation_method is not None:
+            self.model_axes_lbl.setText(
+                self.tunable_segmentation_method.model_axes
+            )
+        else:
+            self.model_axes_lbl.setText("No method selected")
+
         self.layout().addWidget(self.tunable_segmentation_method, 6, 0, 1, 4)

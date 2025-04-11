@@ -1,12 +1,10 @@
-from typing import Iterable, Union, Optional
-from pathlib import Path
+from typing import Iterable, Union
 from functools import partial
 
 import numpy as np
 import zarr
 import zarrdataset as zds
 
-from magicgui import magicgui
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
 
@@ -19,6 +17,8 @@ except ModuleNotFoundError:
 
 
 class SegmentationMethod:
+    model_axes = ""
+
     def __init__(self):
         super().__init__()
 

@@ -6,7 +6,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
 import tensorstore as ts
-import tifffile
+import random
 import zarr
 
 import napari
@@ -14,6 +14,7 @@ from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
 from ._layers import ImageGroup, LayersGroup, LayerChannel
+from ._utils import update_labels
 
 
 class LabelItem(QTreeWidgetItem):
@@ -223,11 +224,12 @@ class LabelsManager:
                     segmentation_channel_group = input_filename
                 else:
                     raise ValueError("File format not supported for "
-                                        "writing labels.")
+                                     "writing labels.")
 
                 segmentation_channel_group = zarr.open(
                     segmentation_channel_group,
-                    mode="r+")
+                    mode="r+"
+                )
 
                 if data_group is not None:
                     data_group_base = "/".join(data_group.split("/")[:-1])
@@ -240,6 +242,11 @@ class LabelsManager:
                     segmentation_channel_group[f"{data_group_base}/{grp}"]
                     for grp in range(down_scales)
                 ]
+
+                update_labels(
+                    segmentation_channel_group[f"{data_group_base}"],
+                    label_data
+                )
 
             elif isinstance(input_filename, MultiScaleData):
                 segmentation_channel_data =\
@@ -417,6 +424,9 @@ class LabelsManager:
                                                                      []):
             for label in map(lambda idx: label_group.child(idx),
                              range(label_group.childCount())):
+                if not isinstance(label, LabelItem):
+                    continue
+
                 if all(ax_pos.start <= ax_coord < ax_pos.stop
                        for ax_pos, ax_coord in zip(label.position, curr_pos)):
                     clicked_label = label

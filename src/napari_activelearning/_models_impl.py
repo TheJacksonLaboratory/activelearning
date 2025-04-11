@@ -33,6 +33,8 @@ try:
             return img_t
 
     class CellposeTunable(TunableMethod):
+        model_axes = "YXC"
+
         def __init__(self):
             super().__init__()
 
@@ -248,6 +250,8 @@ class BaseTransform(zds.MaskGenerator):
 
 
 class SimpleTunable(TunableMethod):
+    model_axes = "YXC"
+
     def __init__(self):
         super().__init__()
         self._channel_axis = 2

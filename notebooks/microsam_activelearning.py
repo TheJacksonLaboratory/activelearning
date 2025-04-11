@@ -29,20 +29,28 @@ class AugmentEnsureInputs:
         self.augmentations = get_augmentations(ndim=2)
 
     def __call__(self, inputs, labels):
-        inputs = inputs.squeeze()
-        labels = labels.squeeze()
-        labels = self.label_transform(labels)
+        inputs_tr = inputs.copy()
+        labels_tr = labels.copy()
 
-        inputs, labels = self.augmentations(inputs, labels)
+        if inputs_tr.ndim == 3 and inputs_tr.shape[-1] == 1:
+            inputs_tr = inputs_tr.squeeze()
 
-        inputs = ensure_tensor_with_channels(inputs, ndim=2,
-                                             dtype=torch.float32)
-        labels = ensure_tensor_with_channels(labels, ndim=2,
-                                             dtype=torch.float32)
-        return (inputs, labels)
+        labels_tr = self.label_transform(labels_tr)
+
+        inputs_tr, labels_tr = self.augmentations(inputs_tr, labels_tr)
+
+        inputs_tr = ensure_tensor_with_channels(inputs_tr, ndim=2,
+                                                dtype=torch.float32)
+        labels_tr = ensure_tensor_with_channels(labels_tr, ndim=2,
+                                                dtype=torch.float32)
+        inputs_tr = inputs_tr.contiguous()
+        labels_tr = labels_tr.contiguous()
+        return (inputs_tr, labels_tr)
 
 
 class TunableMicroSAM(al.TunableMethod):
+    model_axes = "YXC"
+
     def __init__(self):
         super(TunableMicroSAM, self).__init__()
         self._sam_predictor = None
@@ -96,7 +104,7 @@ class TunableMicroSAM(al.TunableMethod):
     def get_inference_transform(self, *args, **kwargs):
         # Ensure labels are squeezed when these are not actual 3D arrays.
         mode_transforms = {
-            ("images", ): lambda x: x.squeeze()
+            ("images", ): lambda x: x
         }
         return mode_transforms
 
@@ -105,7 +113,7 @@ class TunableMicroSAM(al.TunableMethod):
 
         img_embeddings = util.precompute_image_embeddings(
             predictor=self._sam_predictor_dropout,
-            input_=img,
+            input_=img.squeeze(),
             save_path=None,
             ndim=2,
             tile_shape=None,
@@ -116,12 +124,12 @@ class TunableMicroSAM(al.TunableMethod):
         if isinstance(self._sam_instance_segmenter_dropout,
                       msis.AutomaticMaskGenerator):
             self._sam_instance_segmenter_dropout.initialize(
-                image=img,
+                image=img.squeeze(),
                 image_embeddings=img_embeddings
             )
 
             masks = self._sam_instance_segmenter_dropout.generate()
-            probs = np.zeros(img.shape[:2], dtype=np.float32)
+            probs = np.zeros(img.squeeze().shape[:2], dtype=np.float32)
             for mask in masks:
                 probs = np.where(
                     mask["segmentation"],
@@ -132,7 +140,7 @@ class TunableMicroSAM(al.TunableMethod):
             probs = torch.from_numpy(probs).sigmoid().numpy()
         else:
             self._sam_instance_segmenter_dropout.initialize(
-                image=img,
+                image=img.squeeze(),
                 image_embeddings=img_embeddings
             )
 
@@ -146,7 +154,7 @@ class TunableMicroSAM(al.TunableMethod):
         segmentation_mask = msas.automatic_instance_segmentation(
             predictor=self._sam_predictor,
             segmenter=self._sam_instance_segmenter,
-            input_path=img,
+            input_path=img.squeeze(),
             ndim=2,
             verbose=False
         )
@@ -154,7 +162,7 @@ class TunableMicroSAM(al.TunableMethod):
         return segmentation_mask
 
     def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
-        self._model_init()
+        # self._model_init()
 
         train_dataloader.shuffle = True
         val_dataloader.shuffle = True

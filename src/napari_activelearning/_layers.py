@@ -1,8 +1,7 @@
 from typing import Iterable, Union, Optional
 import operator
-from functools import partial
 from pathlib import Path
-from qtpy.QtCore import Qt, QObject, Signal, Slot
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
@@ -15,7 +14,9 @@ from napari.layers import Image, Labels, Layer
 from napari.layers._multiscale_data import MultiScaleData
 
 from ._utils import (get_source_data, validate_name, get_basename, save_zarr,
-                     get_next_name)
+                     get_next_name,
+                     update_labels,
+                     downsample_image)
 
 
 class LayerChannel(QTreeWidgetItem):
@@ -213,7 +214,7 @@ class LayersGroup(QTreeWidgetItem):
 
                 self._source_data = merge_fun(
                     [layer_channel.source_data
-                        for _, layer_channel in sorted(layers_channels)],
+                     for _, layer_channel in sorted(layers_channels)],
                     axis=self._source_axes.index("C")
                 )
 
@@ -593,6 +594,8 @@ class ImageGroup(QTreeWidgetItem):
 
     @group_dir.setter
     def group_dir(self, group_dir: Union[Path, str]):
+        # TODO: When changing the group dir, either the existing directory
+        # should be renamed, or its contents be copied to the new path.
         if isinstance(group_dir, str):
             group_dir = Path(group_dir)
 
@@ -988,6 +991,15 @@ class ImageGroupEditor(PropertiesEditor):
         self._edit_channel = None
         self._output_dir = None
 
+        self._listeners = []
+
+    def register_listener(self, listener):
+        self._listeners.append(listener)
+
+    def post_update(self):
+        for listener in self._listeners:
+            listener.editor_updated()
+
     def update_output_dir(self, output_dir: Optional[Union[Path, str]] = None):
         if output_dir:
             self._output_dir = str(output_dir)
@@ -1003,6 +1015,8 @@ class ImageGroupEditor(PropertiesEditor):
         if self._active_image_group.group_dir != self._output_dir:
             self._active_image_group.group_dir = self._output_dir
 
+        self.post_update()
+
     def update_group_name(self, group_name: Optional[str] = None):
         if not self._active_image_group:
             return
@@ -1012,6 +1026,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         if self._active_image_group.group_name != self._group_name:
             self._active_image_group.group_name = self._group_name
+
+        self.post_update()
 
     def update_channels(self, channel: Optional[int] = None):
         if not self._active_layer_channel or not self._active_layers_group:
@@ -1024,6 +1040,8 @@ class ImageGroupEditor(PropertiesEditor):
         if prev_channel != self._edit_channel:
             self._active_layers_group.move_channel(prev_channel,
                                                    self._edit_channel)
+
+        self.post_update()
 
     def update_source_axes(self, source_axes: str):
         if not self._active_layers_group and not self._active_layer_channel:
@@ -1050,6 +1068,8 @@ class ImageGroupEditor(PropertiesEditor):
                 display_source_axes = "".join(display_source_axes)
 
             viewer.dims.axis_labels = tuple(display_source_axes)
+
+        self.post_update()
 
     def update_layers_group_name(self,
                                  layers_group_name: Optional[str] = None):
@@ -1080,6 +1100,8 @@ class ImageGroupEditor(PropertiesEditor):
 
             return True
 
+        self.post_update()
+
         return False
 
     def update_use_as_input(self, use_it: bool):
@@ -1098,6 +1120,8 @@ class ImageGroupEditor(PropertiesEditor):
         elif self._active_image_group.input_layers_group == layers_group_idx:
             self._active_image_group.input_layers_group = None
 
+        self.post_update()
+
     def update_use_as_labels(self, use_it: bool):
         if not self._active_layers_group:
             return
@@ -1113,6 +1137,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         elif self._active_image_group.labels_layers_group == layers_group_idx:
             self._active_image_group.labels_layers_group = None
+
+        self.post_update()
 
     def update_use_as_sampling(self, use_it: bool):
         if not self._active_layers_group:
@@ -1132,6 +1158,8 @@ class ImageGroupEditor(PropertiesEditor):
               == layers_group_idx):
             self._active_image_group.sampling_mask_layers_group = None
 
+        self.post_update()
+
     def update_scale(self, scale: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
@@ -1140,6 +1168,8 @@ class ImageGroupEditor(PropertiesEditor):
         self._edit_scale = scale
         self._active_layer_channel.scale = self._edit_scale
 
+        self.post_update()
+
     def update_translate(self, translate: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
@@ -1147,6 +1177,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         self._edit_translate = translate
         self._active_layer_channel.translate = self._edit_translate
+
+        self.post_update()
 
 
 class LayerScaleEditor(PropertiesEditor):
@@ -1177,7 +1209,7 @@ class MaskGenerator(PropertiesEditor):
         self._im_translate = None
         self._im_source_axes = None
 
-    def _update_reference_info(self):
+    def update_reference_info(self):
         if (self._active_image_group is None
            or self._active_image_group.input_layers_group is None
            or not self._active_image_group.child(
@@ -1257,22 +1289,20 @@ class MaskGenerator(PropertiesEditor):
         mask_shape = [
             max(1, reference_shape.get(ax, 1)
                 // reference_patch_sizes.get(ax, 1))
-            for ax in "TCZYX"
+            for ax in self._mask_axes
         ]
 
         mask_translate = tuple([
             (reference_translate.get(ax, 0)
              + (reference_scale.get(ax, 1)
                 * (reference_patch_sizes.get(ax, 1) - 1) / 2.0))
-            if ax in self._im_source_axes else 0
-            for ax in "TCZYX"
+            for ax in self._mask_axes
         ])
 
-        mask_scale = tuple([
-            (reference_scale.get(ax, 1) * reference_patch_sizes.get(ax, 1))
-            if ax in self._mask_axes else 1
-            for ax in "TCZYX"
-        ])
+        mask_scale_dict = {
+            ax: (reference_scale.get(ax, 1) * reference_patch_sizes.get(ax, 1))
+            for ax in self._mask_axes
+        }
 
         if self._active_image_group.group_dir:
             mask_output_filename = (self._active_image_group.group_dir
@@ -1288,11 +1318,30 @@ class MaskGenerator(PropertiesEditor):
                 is_label=True,
                 is_multiscale=True,
                 overwrite=False
-            )
+             )
             mask_grp = mask_root[f"{mask_grp_name}/0"]
+
+            downsample_image(
+                mask_output_filename,
+                self._mask_axes,
+                f"{mask_grp_name}/0",
+                scale=1,
+                num_scales=0,
+                reference_source_axes=self._mask_axes,
+                reference_scale=mask_scale_dict,
+                reference_units=None
+            )
+
+            update_labels(
+                mask_root[f"{mask_grp_name}"],
+                set({1})
+            )
+
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None
+
+        mask_scale = tuple(mask_scale_dict[ax] for ax in self._mask_axes)
 
         viewer = napari.current_viewer()
         new_mask_layer = viewer.add_labels(
@@ -1309,7 +1358,7 @@ class MaskGenerator(PropertiesEditor):
         if masks_layers_group is None:
             masks_layers_group = self._active_image_group.add_layers_group(
                 masks_group_name,
-                source_axes="TCZYX",
+                source_axes=self._mask_axes,
                 use_as_sampling_mask=True
             )
 
@@ -1348,7 +1397,7 @@ class MaskGenerator(PropertiesEditor):
                                         .fset(self, active_image_group)
 
         if self._patch_sizes is None:
-            self._update_reference_info()
+            self.update_reference_info()
 
 
 class ImageGroupsManager:
@@ -1372,10 +1421,13 @@ class ImageGroupsManager:
                            + default_axis_labels)
 
         viewer.dims.axis_labels = list(axis_labels)
+        self._listeners = []
 
         self.image_groups_editor = ImageGroupEditor()
+        self.image_groups_editor.register_listener(self)
         self.layer_scale_editor = LayerScaleEditor()
         self.mask_generator = MaskGenerator()
+        self.register_listener(self.mask_generator)
 
         super().__init__()
 
@@ -1589,3 +1641,10 @@ class ImageGroupsManager:
                     raise ValueError("Some images in this group are arrays, "
                                      "save them as zarr files to generate the"
                                      "metadata file.")
+
+    def editor_updated(self):
+        for listener in self._listeners:
+            listener.update_reference_info()
+
+    def register_listener(self, listener):
+        self._listeners.append(listener)

@@ -16,7 +16,7 @@ from napari.layers._multiscale_data import MultiScaleData
 
 from ._layers import ImageGroupsManager, ImageGroup, LayersGroup
 from ._labels import LabelsManager, LabelItem
-from ._utils import get_dataloader, save_zarr, downsample_image
+from ._utils import get_dataloader, save_zarr, downsample_image, update_labels
 
 
 def compute_BALD(probs):
@@ -118,7 +118,7 @@ def add_multiscale_output_layer(
         translate=tuple(
             (reference_scale.get(ax, 1) - 1) / 2.0
             if reference_scale.get(ax, 1) > 1 else 0
-            for ax in reference_source_axes
+            for ax in axes
             ),
         blending="translucent_no_depth",
     )
@@ -237,16 +237,17 @@ class AcquisitionFunction:
                  labels_manager: LabelsManager,
                  tunable_segmentation_methods: dict):
         self._patch_sizes = {}
+        self.input_axes = ""
+
         self._max_samples = 1
+        self._prev_max_samples = 0
         self._MC_repetitions = 3
         self._add_padding = False
         self._padding_factor = 4
 
-        viewer = napari.current_viewer()
-        self.input_axes = "".join(viewer.dims.axis_labels).upper()
-        self.model_axes = "".join(viewer.dims.axis_labels).upper()
-
         self.image_groups_manager = image_groups_manager
+        self.image_groups_manager.register_listener(self)
+
         self.labels_manager = labels_manager
         self.tunable_segmentation_method = None
         self._tunable_segmentation_methods = tunable_segmentation_methods
@@ -303,7 +304,7 @@ class AcquisitionFunction:
                                           - displayed_shape[ax]
                                           % self._patch_sizes.get(ax, 1))))
                     if (ax in displayed_shape
-                        and (ax in self.model_axes
+                        and (ax in self.tunable_segmentation_method.model_axes
                              or ax_s > self._patch_sizes.get(ax, 1)))
                     else slice(0, 1, None)
                     for ax, ax_s in layers_group_shape.items()
@@ -325,11 +326,14 @@ class AcquisitionFunction:
                 # Add axes that are not used by the model.
                 # These are removed later in the acquisition function.
                 model_spatial_axes = list(filter(
-                    lambda ax: ax not in self.model_axes,
+                    lambda ax:
+                    ax not in self.tunable_segmentation_method.model_axes,
                     layers_group.source_axes
                 ))
 
-                model_spatial_axes += list(self.model_axes)
+                model_spatial_axes += list(
+                    self.tunable_segmentation_method.model_axes
+                )
                 model_spatial_axes = "".join(model_spatial_axes)
                 reference_axes = model_spatial_axes
 
@@ -355,6 +359,28 @@ class AcquisitionFunction:
         else:
             self.tunable_segmentation_method = None
 
+    def update_reference_info(self):
+        self.input_axes = []
+
+        for idx in range(self.image_groups_manager.groups_root.childCount()):
+            child = self.image_groups_manager.groups_root.child(idx)
+            if isinstance(child, ImageGroup):
+                image_group = child
+            else:
+                continue
+
+            input_layers_group_idx = image_group.input_layers_group
+            if input_layers_group_idx is None:
+                continue
+
+            input_layers_group = image_group.child(input_layers_group_idx)
+            input_layers_source_axes = input_layers_group.source_axes
+            self.input_axes += list(input_layers_source_axes)
+
+        self.input_axes = "".join(
+            reversed(sorted(set(self.input_axes) - set({"C"})))
+        )
+
     def compute_acquisition(self, dataset_metadata, acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
@@ -362,21 +388,19 @@ class AcquisitionFunction:
         if self.tunable_segmentation_method is None:
             return
 
-        model_spatial_axes = [
+        model_spatial_axes = "".join([
             ax
-            for ax in self.model_axes
+            for ax in self.tunable_segmentation_method.model_axes
             if ax != "C"
-        ]
-        model_spatial_axes = "".join(model_spatial_axes)
+        ])
 
         batch_axes = dataset_metadata["images"]["axes"]
 
-        input_spatial_axes = [
+        input_spatial_axes = "".join([
             ax
             for ax in dataset_metadata["images"]["source_axes"]
             if ax in self.input_axes and ax != "C"
-        ]
-        input_spatial_axes = "".join(input_spatial_axes)
+        ])
 
         padding = {}
         if self._add_padding:
@@ -385,19 +409,20 @@ class AcquisitionFunction:
                 for ax, ax_ps in self._patch_sizes.items()
             }
 
-        output_axes = "TCZYX"
+        output_axes = "".join(self._patch_sizes.keys())
 
         dl = get_dataloader(
             dataset_metadata,
             patch_size=self._patch_sizes,
             spatial_axes=input_spatial_axes,
             padding=padding,
-            model_input_axes=self.model_axes,
+            model_input_axes=self.tunable_segmentation_method.model_axes,
             shuffle=True,
             tunable_segmentation_method=self.tunable_segmentation_method
         )
 
         segmentation_max = 0
+        unique_labels = set()
         n_samples = 0
         img_sampling_positions = []
 
@@ -412,7 +437,9 @@ class AcquisitionFunction:
 
         drop_axis_sp = []
         if "C" in dataset_metadata["images"]["axes"]:
-            drop_axis_sp.append(self.model_axes.index("C"))
+            drop_axis_sp.append(
+                self.tunable_segmentation_method.model_axes.index("C")
+            )
         drop_axis_sp = tuple(drop_axis_sp)
 
         self._reset_patch_progressbar()
@@ -432,7 +459,9 @@ class AcquisitionFunction:
 
             img_shape = {
                 ax: ax_s
-                for ax, ax_s in zip(self.model_axes, img.shape)
+                for ax, ax_s in zip(
+                    self.tunable_segmentation_method.model_axes,
+                    img.shape)
             }
 
             pos_padded = {
@@ -440,7 +469,9 @@ class AcquisitionFunction:
                           pos_axes.get(ax, (0, 0))[1] - padding.get(ax, 0)
                           if pos_axes.get(ax, (0, 0))[1] > 0 else
                           img_shape.get(ax, 1))
-                if ax != "C" or ax in self.model_axes else slice(0, 1)
+                if (ax != "C"
+                    or ax in self.tunable_segmentation_method.model_axes)
+                else slice(0, 1)
                 for ax in output_axes
             }
 
@@ -470,6 +501,8 @@ class AcquisitionFunction:
             )
             segmentation_out[pos_u_lab] = seg_out[pred_sel]
             segmentation_max = max(segmentation_max, seg_out.max())
+            unique_labels = unique_labels.union(
+                set(np.unique(seg_out[pred_sel])))
 
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
@@ -493,7 +526,7 @@ class AcquisitionFunction:
             self._update_patch_progressbar(n_samples)
 
         self._update_patch_progressbar(self._max_samples)
-        return img_sampling_positions
+        return img_sampling_positions, unique_labels
 
     def compute_acquisition_layers(
             self,
@@ -554,11 +587,21 @@ class AcquisitionFunction:
                                       input_layers_group.scale)
             }
 
-            output_axes = "TCZYX"
+            output_scale = dict(displayed_scale)
+
+            output_axes = displayed_source_axes
+            if "C" in output_axes:
+                output_axes = list(output_axes)
+                output_axes.remove("C")
+                output_axes = "".join(output_axes)
+
+                output_shape = dict(displayed_shape)
+                del output_scale["C"]
+
             output_shape = [
                 displayed_shape.get(ax, 1)
-                if ax != "C" else 1
                 for ax in output_axes
+                if ax != "C"
             ]
 
             if not segmentation_only:
@@ -600,7 +643,9 @@ class AcquisitionFunction:
                   (sampling_mask_layers_group, "masks")]
                 )
 
-            if "sampled_positions" not in segmentation_root.keys():
+            if ("sampled_positions" not in segmentation_root.keys()
+               or self._max_samples != self._prev_max_samples):
+                self._prev_max_samples = self._max_samples
                 sampling_output_shape = [
                     math.ceil(displayed_shape.get(ax, 1)
                               // self._patch_sizes.get(ax, 1))
@@ -622,7 +667,7 @@ class AcquisitionFunction:
                     dtype=np.uint8,
                     is_label=True,
                     is_multiscale=True,
-                    overwrite=False
+                    overwrite=True
                 )
                 sampled_grp = sampled_root[f"{sampled_grp_name}/0"]
 
@@ -630,7 +675,7 @@ class AcquisitionFunction:
                 sampled_grp = None
 
             # Compute acquisition function of the current image
-            img_sampling_positions = self.compute_acquisition(
+            img_sampling_positions, unique_labels = self.compute_acquisition(
                 dataset_metadata,
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
@@ -647,7 +692,7 @@ class AcquisitionFunction:
                 add_multiscale_output_layer(
                     acquisition_root,
                     axes=output_axes,
-                    scale=displayed_scale,
+                    scale=output_scale,
                     data_group=f"{acquisition_fun_grp_name}/0",
                     group_name=group_name + " acquisition function",
                     layers_group_name="acquisition",
@@ -675,10 +720,15 @@ class AcquisitionFunction:
                     add_func=viewer.add_labels
                 )
 
+            update_labels(
+                segmentation_root[f"{segmentation_group_name}"],
+                unique_labels
+            )
+
             segmentation_channel = add_multiscale_output_layer(
                 segmentation_root,
                 axes=output_axes,
-                scale=displayed_scale,
+                scale=output_scale,
                 data_group=f"{segmentation_group_name}/0",
                 group_name=group_name + f" {segmentation_group_name}",
                 layers_group_name=segmentation_group_name,
@@ -782,7 +832,7 @@ class AcquisitionFunction:
 
         success = self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
-            model_axes=self.model_axes,
+            model_axes=self.tunable_segmentation_method.model_axes,
             patch_sizes=self._patch_sizes
         )
 

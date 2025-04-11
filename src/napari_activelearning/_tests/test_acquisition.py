@@ -92,8 +92,6 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
     segmentation_only = False
 
     acquisition_function.set_model("test")
-    acquisition_function.input_axes = "TZYX"
-    acquisition_function.model_axes = "YXC"
     acquisition_function.patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
@@ -177,8 +175,6 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 
     acquisition_function.set_model("test")
     acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
-    acquisition_function.input_axes = "TZYX"
-    acquisition_function.model_axes = "YXC"
 
     # Define the input parameters for the method
     displayed_shape = {"T": 1, "C": 3, "Z": 10, "Y": 10, "X": 10}
@@ -264,8 +260,6 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
 
         acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
-        acquisition_function.input_axes = "TZYX"
-        acquisition_function.model_axes = "YXC"
 
         image_groups_manager.set_active_item(image_group)
 
@@ -330,8 +324,6 @@ def test_fine_tune(image_groups_manager, simple_image_group,
 
         acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 10, "Y": 10, "Z": 1}
-        acquisition_function.input_axes = "TZYX"
-        acquisition_function.model_axes = "YXC"
 
         assert acquisition_function.fine_tune()
 

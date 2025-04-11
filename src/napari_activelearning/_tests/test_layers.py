@@ -558,7 +558,7 @@ def test_update_reference_info(simple_image_group):
 
     mask_generator.active_image_group = image_group
     assert mask_generator.active_image_group == image_group
-    assert mask_generator._update_reference_info() is True
+    assert mask_generator.update_reference_info() is True
     assert all(map(operator.eq, mask_generator._im_shape, expected_im_shape))
     assert all(map(operator.eq, mask_generator._im_scale, expected_im_scale))
     assert all(map(operator.eq, mask_generator._im_translate,
