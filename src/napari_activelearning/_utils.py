@@ -285,12 +285,7 @@ def get_dataloader(
             ))
 
         for input_mode, transform_mode in mode_transforms.items():
-            for transform_step in transform_mode:
-                train_dataset.add_transform(
-                    input_mode,
-                    transform_step,
-                    append=True
-                )
+            train_dataset.add_transform(input_mode, transform_mode)
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(
