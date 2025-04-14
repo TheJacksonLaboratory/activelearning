@@ -596,9 +596,6 @@ class AcquisitionFunction:
                 output_axes.remove("C")
                 output_axes = "".join(output_axes)
 
-                output_shape = dict(displayed_shape)
-                del output_scale["C"]
-
             output_shape = [
                 displayed_shape.get(ax, 1)
                 for ax in output_axes
