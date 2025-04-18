@@ -6,11 +6,12 @@ try:
 except ModuleNotFoundError:
     USING_PYTORCH = False
 
+import os
 from pathlib import Path
 import numpy as np
 import math
 import dask.array as da
-
+import zarr
 import napari
 from napari.layers._multiscale_data import MultiScaleData
 
@@ -375,13 +376,20 @@ class AcquisitionFunction:
 
             input_layers_group = image_group.child(input_layers_group_idx)
             input_layers_source_axes = input_layers_group.source_axes
-            self.input_axes += list(input_layers_source_axes)
+            self.input_axes += [
+                ax
+                for ax in input_layers_source_axes
+                if ax not in self.input_axes
+            ]
 
-        self.input_axes = "".join(
-            reversed(sorted(set(self.input_axes) - set({"C"})))
-        )
+        self.input_axes = "".join([
+            ax
+            for ax in self.input_axes
+            if ax != "C"
+        ])
 
-    def compute_acquisition(self, dataset_metadata, acquisition_fun,
+    def compute_acquisition(self, dataset_metadata, output_axes, mask_axes,
+                            acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
                             segmentation_only=False):
@@ -408,8 +416,6 @@ class AcquisitionFunction:
                 ax: ax_ps // self._padding_factor
                 for ax, ax_ps in self._patch_sizes.items()
             }
-
-        output_axes = "".join(self._patch_sizes.keys())
 
         dl = get_dataloader(
             dataset_metadata,
@@ -511,8 +517,7 @@ class AcquisitionFunction:
                           // self._patch_sizes.get(ax, 1),
                           pos_padded[ax].stop
                           // self._patch_sizes.get(ax, 1))
-                    if ax in pos_padded and ax != "C" else slice(0, 1)
-                    for ax in output_axes
+                    for ax in mask_axes
                 )
                 sampled_mask[scaled_pos_u_lab] = True
 
@@ -557,7 +562,7 @@ class AcquisitionFunction:
 
         viewer = napari.current_viewer()
         for n, image_group in enumerate(image_groups):
-            image_group.setSelected(True)
+            self.image_groups_manager.set_active_item(image_group)
             group_name = image_group.group_name
             if image_group.group_dir:
                 output_filename = image_group.group_dir / (group_name
@@ -571,10 +576,12 @@ class AcquisitionFunction:
 
             input_layers_group = image_group.child(input_layers_group_idx)
             sampling_mask_layers_group = None
+            mask_axes = None
             if image_group.sampling_mask_layers_group is not None:
                 sampling_mask_layers_group = image_group.child(
                     image_group.sampling_mask_layers_group
                 )
+                mask_axes = sampling_mask_layers_group.source_axes
 
             displayed_source_axes = input_layers_group.source_axes
             displayed_shape = {
@@ -588,6 +595,12 @@ class AcquisitionFunction:
                                       input_layers_group.scale)
             }
 
+            dataset_metadata = self._prepare_datasets_metadata(
+                 displayed_shape,
+                 [(input_layers_group, "images"),
+                  (sampling_mask_layers_group, "masks")]
+            )
+
             output_scale = dict(displayed_scale)
 
             output_axes = displayed_source_axes
@@ -595,6 +608,9 @@ class AcquisitionFunction:
                 output_axes = list(output_axes)
                 output_axes.remove("C")
                 output_axes = "".join(output_axes)
+
+            if "C" in output_scale:
+                output_scale.pop("C")
 
             output_shape = [
                 displayed_shape.get(ax, 1)
@@ -635,51 +651,59 @@ class AcquisitionFunction:
             segmentation_grp =\
                 segmentation_root[f"{segmentation_group_name}/0"]
 
-            dataset_metadata = self._prepare_datasets_metadata(
-                 displayed_shape,
-                 [(input_layers_group, "images"),
-                  (sampling_mask_layers_group, "masks")]
-                )
-
-            if ("sampled_positions" not in segmentation_root.keys()
-               or self._max_samples != self._prev_max_samples):
-                self._prev_max_samples = self._max_samples
-                sampling_output_shape = [
-                    math.ceil(displayed_shape.get(ax, 1)
-                              // self._patch_sizes.get(ax, 1))
-                    if ax != "C" else 1
-                    for ax in output_axes
-                ]
+            if sampling_mask_layers_group is None:
                 sampling_output_scale = {
-                    ax: (displayed_scale.get(ax, 1)
-                         * self._patch_sizes.get(ax, 1))
+                    ax: int(displayed_scale.get(ax, 1)
+                            * self._patch_sizes.get(ax, 1))
                     for ax in output_axes
                 }
-
-                sampled_root, sampled_grp_name = save_zarr(
-                    output_filename,
-                    data=None,
-                    shape=sampling_output_shape,
-                    chunk_size=True,
-                    name="sampled_positions",
-                    dtype=np.uint8,
-                    is_label=True,
-                    is_multiscale=True,
-                    overwrite=True
+                self.image_groups_manager.mask_generator\
+                                         .update_reference_info()
+                self.image_groups_manager.mask_generator.set_patch_size(
+                    [
+                        sampling_output_scale.get(ax, 1)
+                        for ax in self.image_groups_manager.mask_generator
+                                                           ._mask_axes
+                    ]
                 )
-                sampled_grp = sampled_root[f"{sampled_grp_name}/0"]
 
+                self.image_groups_manager.mask_generator.generate_mask_layer()
+
+                sampling_mask_layers_group = image_group.child(
+                    image_group.sampling_mask_layers_group
+                )
+
+                if isinstance(sampling_mask_layers_group.source_data,
+                              (str, Path)):
+                    sampled_grp = zarr.open(
+                        os.path.join(
+                            sampling_mask_layers_group.source_data,
+                            sampling_mask_layers_group.data_group
+                        ),
+                        mode="r+"
+                    )
+
+                else:
+                    sampled_grp = sampling_mask_layers_group.source_data
+
+                mask_axes = sampling_mask_layers_group.source_axes
             else:
                 sampled_grp = None
 
             # Compute acquisition function of the current image
             img_sampling_positions, unique_labels = self.compute_acquisition(
                 dataset_metadata,
+                output_axes=output_axes,
+                mask_axes=mask_axes,
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
                 sampled_mask=sampled_grp,
-                segmentation_only=segmentation_only
+                segmentation_only=segmentation_only,
             )
+
+            if (sampled_grp is not None
+               and sampling_mask_layers_group is not None):
+                sampling_mask_layers_group.child(0).layer.refresh()
 
             self._update_image_progressbar(n + 1)
 
@@ -700,22 +724,6 @@ class AcquisitionFunction:
                     output_filename=output_filename,
                     colormap="magma",
                     add_func=viewer.add_image
-                )
-
-            if sampled_grp is not None:
-                add_multiscale_output_layer(
-                    sampled_root,
-                    axes=output_axes,
-                    scale=sampling_output_scale,
-                    data_group=f"{sampled_grp_name}/0",
-                    group_name=group_name + " sampled positions",
-                    layers_group_name="sampled positions",
-                    image_group=image_group,
-                    reference_source_axes=output_axes,
-                    reference_scale=sampling_output_scale,
-                    output_filename=output_filename,
-                    use_as_sampling_mask=True,
-                    add_func=viewer.add_labels
                 )
 
             update_labels(

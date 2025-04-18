@@ -114,6 +114,8 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
 
         result, unique_labels = acquisition_function.compute_acquisition(
             dataset_metadata,
+            output_axes="TZYX",
+            mask_axes="TZYX",
             acquisition_fun=acquisition_fun,
             segmentation_out=segmentation_out,
             segmentation_only=segmentation_only
