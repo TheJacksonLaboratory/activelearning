@@ -247,7 +247,7 @@ def get_dataloader(
     patch_sampler = zds.PatchSampler(patch_size=patch_size,
                                      spatial_axes=spatial_axes,
                                      pad=padding,
-                                     min_area=0.05)
+                                     min_area=1)
 
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),
@@ -486,7 +486,9 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         if data_group is None:
             data_group = ""
         else:
-            data_group = "/".join(data_group.split("/")[:-1])
+            data_group_parts = Path(data_group).parts
+            if len(data_group_parts) > 1:
+                data_group = str(Path(*data_group_parts[:-1]))
 
         groups_root = data_group + "/%i"
 
@@ -514,9 +516,12 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
 
         for s in range(1, num_scales):
             target_arr = source_arr[downscale_selection]
+            # Don't generate chunks smaller than 256 per side or the current
+            # size of the source array.
             target_arr = target_arr.rechunk(
                 tuple(
-                    max(1, chk // reference_scale[ax]) if ax in "XY" else chk
+                    max(min(256, chk), chk // reference_scale[ax])
+                    if ax in "XY" else chk
                     for chk, ax in zip(source_arr.chunksize, source_axes)
                 )
             )
@@ -569,9 +574,13 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
     return z_ms
 
 
-def get_source_data(layer: Layer):
+def get_source_data(layer: Layer, data_group_init: Optional[str] = None):
+    if data_group_init is None:
+        data_group_init = ""
+
     input_filename = layer._source.path
-    data_group = ""
+    data_group = data_group_init
+    available_data_groups = []
 
     if input_filename:
         input_url = urlparse(input_filename)
@@ -586,11 +595,13 @@ def get_source_data(layer: Layer):
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = input_filename_parts[extension_idx + 1:]
-            if len(data_group):
-                data_group = Path(*data_group)
+            data_group_filename = input_filename_parts[extension_idx + 1:]
+            if len(data_group_filename):
+                data_group_filename = Path(*data_group_filename)
             else:
-                data_group = ""
+                data_group_filename = ""
+
+            data_group = data_group_filename if not data_group else data_group
 
             input_path = Path(
                 *input_filename_parts[:extension_idx + 1]
@@ -629,11 +640,21 @@ def get_source_data(layer: Layer):
             # Set up the Zarr group
             z_grp = zarr.open(z_fp, mode="r")
             if not isinstance(z_grp, zarr.Array):
-                while not isinstance(z_grp[data_group], zarr.Array):
+                parent_group = ""
+                while True:
+                    if (data_group not in z_grp
+                       or isinstance(z_grp[data_group], zarr.Array)):
+                        break
+                    parent_group = data_group
                     data_group = str(Path(data_group) / "0")
 
+                available_data_groups = [
+                    str(Path(parent_group) / group_name)
+                    for group_name in list(z_grp[parent_group].keys())
+                ]
+
     else:
-        return layer.data, None
+        return layer.data, None, []
 
     if not input_filename:
         input_filename = None
@@ -641,4 +662,4 @@ def get_source_data(layer: Layer):
     if not data_group:
         data_group = None
 
-    return input_filename, data_group
+    return input_filename, data_group, available_data_groups

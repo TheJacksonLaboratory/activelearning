@@ -25,7 +25,7 @@ except ModuleNotFoundError:
 
 def test_get_source_data(sample_layer):
     layer, org_source_data, org_input_filename, org_data_group = sample_layer
-    input_filename, data_group = get_source_data(layer)
+    input_filename, data_group, available_data_groups = get_source_data(layer)
 
     assert (not isinstance(input_filename, (Path, str))
             or (Path(input_filename.lower())
@@ -38,6 +38,8 @@ def test_get_source_data(sample_layer):
             or (Path(str(data_group).lower())
                 == Path(str(org_data_group).lower())))
 
+    assert isinstance(available_data_groups, list)
+    
 
 def test_downsample_image(single_scale_type_variant_array):
     (source_data,
@@ -48,7 +50,11 @@ def test_downsample_image(single_scale_type_variant_array):
     scale = 2
     num_scales = 10
     if data_group and "/" in data_group:
-        data_group_root = data_group.split("/")[0]
+        data_group_parts = Path(data_group).parts[0]
+        if len(data_group_parts) == 1:
+            data_group_root = data_group_parts[0]
+        else:
+            data_group_root = str(Path(*data_group_parts[:-1]))
     else:
         data_group_root = ""
 

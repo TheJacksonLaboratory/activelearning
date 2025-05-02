@@ -232,7 +232,7 @@ class LabelsManager:
                 )
 
                 if data_group is not None:
-                    data_group_base = "/".join(data_group.split("/")[:-1])
+                    data_group_base = str(Path(*Path(data_group).parts[:-1]))
 
                 down_scales = len(
                     segmentation_channel_group[data_group_base].keys()

@@ -200,6 +200,13 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.edit_axes_le.setEnabled(False)
         self.edit_axes_le.returnPressed.connect(self.update_source_axes)
 
+        self.data_groups_cmb = QComboBox()
+        self.data_groups_cmb.setEditable(False)
+        self.data_groups_cmb.currentIndexChanged.connect(
+            self.update_layers_data_groups
+        )
+        self.data_groups_cmb.setEnabled(False)
+
         self.output_dir_lbl = QLabel("Output directory:")
         self.output_dir_le = QLineEdit("Unset")
         self.output_dir_dlg = QFileDialog(fileMode=QFileDialog.Directory)
@@ -253,6 +260,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         editor_grid_lyt.addWidget(self.edit_channel_spn, 1, 3)
         editor_grid_lyt.addWidget(QLabel("Axes order:"), 2, 0)
         editor_grid_lyt.addWidget(self.edit_axes_le, 2, 1)
+        editor_grid_lyt.addWidget(QLabel("Group/Level:"), 2, 2)
+        editor_grid_lyt.addWidget(self.data_groups_cmb, 2, 3)
         editor_grid_lyt.addWidget(QLabel("Output directory:"), 3, 0)
         editor_grid_lyt.addWidget(self.output_dir_le, 3, 1, 1, 3)
         editor_grid_lyt.addWidget(self.output_dir_btn, 3, 3)
@@ -274,6 +283,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.setLayout(editor_lyt)
 
         self.editor_widget.setVisible(False)
+
+        self._finished_clearing = False
 
     def _show_editor(self, show: bool):
         self.editor_widget.setVisible(show)
@@ -302,12 +313,15 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.edit_translate_mdspn.axes = ""
 
     def _clear_layer_channel(self):
+        self._finished_clearing = False
+
         self.display_name_lbl.setText("None selected")
         self.edit_channel_spn.setValue(0)
         self.edit_channel_spn.setMaximum(0)
         self.edit_channel_spn.setEnabled(False)
         self.edit_scale_mdspn.setEnabled(False)
         self.edit_translate_mdspn.setEnabled(False)
+        self.data_groups_cmb.setEnabled(False)
 
     def _fill_image_group(self):
         self._clear_image_group()
@@ -390,6 +404,21 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             }
             self.edit_translate_mdspn.setEnabled(True)
 
+            self.data_groups_cmb.clear()
+            if self._active_layer_channel.available_data_groups:
+                self.data_groups_cmb.addItems(
+                    self._active_layer_channel.available_data_groups
+                )
+
+                self.data_groups_cmb.setCurrentIndex(
+                    self._active_layer_channel.available_data_groups.index(
+                        self._active_layer_channel.data_group
+                    )
+                )
+            self.data_groups_cmb.setEnabled(True)
+
+        self._finished_clearing = True
+
     def _update_output_dir_edit(self, path):
         self.output_dir_le.setText(self.output_dir_dlg.selectedFiles()[0])
         self.update_output_dir()
@@ -418,6 +447,14 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
                                       self._active_layer_channel.translate)
                 if ax != "C"
             }
+
+    def update_layers_data_groups(self, selected_index: int):
+        if not self._finished_clearing or selected_index < 0:
+            return
+
+        super().update_layers_data_groups(
+            self.data_groups_cmb.itemText(selected_index)
+        )
 
     def update_layers_group_name(self):
         if super().update_layers_group_name(
@@ -522,7 +559,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
     def update_reference_info(self):
         if super().update_reference_info():
             self.generate_mask_btn.setEnabled(True)
-            self.patch_sizes_mspn.axes = self._mask_axes
+            self.patch_sizes_mspn.sizes = self._patch_sizes
 
         else:
             self.generate_mask_btn.setEnabled(False)
@@ -983,7 +1020,9 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def update_reference_info(self):
         super().update_reference_info()
-        self.patch_sizes_mspn.axes = self.input_axes
+        # self.patch_sizes_mspn.axes = self.input_axes
+        self.patch_sizes_mspn.sizes = self._patch_sizes
+
         if self.tunable_segmentation_method is not None:
             self.model_axes_lbl.setText(
                 self.tunable_segmentation_method.model_axes

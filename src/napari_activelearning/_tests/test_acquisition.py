@@ -116,6 +116,7 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
             dataset_metadata,
             output_axes="TZYX",
             mask_axes="TZYX",
+            reference_scale={"T": 1, "Z": 1, "Y": 1, "X": 1},
             acquisition_fun=acquisition_fun,
             segmentation_out=segmentation_out,
             segmentation_only=segmentation_only
@@ -183,6 +184,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 
     # Define the input parameters for the method
     displayed_shape = {"T": 1, "C": 3, "Z": 10, "Y": 10, "X": 10}
+    displayed_scale = {"T": 1, "Z": 1, "Y": 1, "X": 1}
 
     layers_group = image_group.child(0)
     layer_types = [(layers_group, "images")]
@@ -190,6 +192,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     # Call the method
     dataset_metadata = acquisition_function._prepare_datasets_metadata(
          displayed_shape,
+         displayed_scale,
          layer_types)
 
     expected_dataset_metadata = {

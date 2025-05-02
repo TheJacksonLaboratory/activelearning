@@ -43,6 +43,15 @@ class AugmentEnsureInputs:
                                                 dtype=torch.float32)
         labels_tr = ensure_tensor_with_channels(labels_tr, ndim=2,
                                                 dtype=torch.float32)
+
+        if (inputs_tr.ndim == 3
+           and (inputs_tr.shape[-1] == 1
+                or inputs_tr.shape[-1] == 3)):
+            if isinstance(inputs_tr, np.ndarray):
+                inputs_tr = np.moveaxis(inputs_tr, -1, 0)
+            elif isinstance(inputs_tr, torch.Tensor):
+                inputs_tr = torch.transpose(inputs_tr, -1, 0)
+
         inputs_tr = inputs_tr.contiguous()
         labels_tr = labels_tr.contiguous()
         return (inputs_tr, labels_tr)

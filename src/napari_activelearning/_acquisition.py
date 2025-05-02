@@ -270,6 +270,7 @@ class AcquisitionFunction:
     def _prepare_datasets_metadata(
             self,
             displayed_shape: dict,
+            displayed_scale: dict,
             layer_types: Iterable[Tuple[LayersGroup, str]]):
         dataset_metadata = {}
 
@@ -292,24 +293,32 @@ class AcquisitionFunction:
             layers_group_shape = {
                 ax: ax_s
                 for ax, ax_s in zip(layers_group.source_axes,
-                                    layers_group.shape)
+                                    layers_group.selected_level_shape)
             }
 
             dataset_metadata[layer_type] = layers_group.metadata
             dataset_metadata[layer_type]["roi"] = None
 
+            scaled_patch_sizes = {
+                ax: ax_ps // displayed_scale.get(ax, 1)
+                for ax, ax_ps in self._patch_sizes.items()
+            }
+
             if layer_type in ["images", "labels", "masks"]:
-                dataset_metadata[layer_type]["roi"] = [tuple(
-                    slice(0, math.ceil(ax_s / displayed_shape[ax]
-                                       * (displayed_shape[ax]
-                                          - displayed_shape[ax]
-                                          % self._patch_sizes.get(ax, 1))))
-                    if (ax in displayed_shape
-                        and (ax in self.tunable_segmentation_method.model_axes
-                             or ax_s > self._patch_sizes.get(ax, 1)))
-                    else slice(0, 1, None)
-                    for ax, ax_s in layers_group_shape.items()
-                )]
+                try:
+                    dataset_metadata[layer_type]["roi"] = [tuple(
+                        slice(0, math.ceil(ax_s / displayed_shape[ax]
+                                        * (displayed_shape[ax]
+                                            - displayed_shape[ax]
+                                            % scaled_patch_sizes.get(ax, 1))))
+                        if (ax in displayed_shape
+                            and (ax in self.tunable_segmentation_method.model_axes
+                                or ax_s > scaled_patch_sizes.get(ax, 1)))
+                        else slice(0, 1, None)
+                        for ax, ax_s in layers_group_shape.items()
+                    )]
+                except TypeError as err:
+                    print(f"Error: {err}")
 
             if isinstance(dataset_metadata[layer_type]["filenames"],
                           MultiScaleData):
@@ -362,6 +371,7 @@ class AcquisitionFunction:
 
     def update_reference_info(self):
         self.input_axes = []
+        self._patch_sizes = {}
 
         for idx in range(self.image_groups_manager.groups_root.childCount()):
             child = self.image_groups_manager.groups_root.child(idx)
@@ -376,11 +386,22 @@ class AcquisitionFunction:
 
             input_layers_group = image_group.child(input_layers_group_idx)
             input_layers_source_axes = input_layers_group.source_axes
+            input_layers_shapes = input_layers_group.selected_level_shape
+
             self.input_axes += [
                 ax
                 for ax in input_layers_source_axes
                 if ax not in self.input_axes
             ]
+
+            self._patch_sizes.update({
+                ax: min(128, ax_ps) if ax_ps else 128
+                for ax, ax_ps in zip(input_layers_source_axes,
+                                     input_layers_shapes)
+            })
+
+        if "C" in self._patch_sizes:
+            del self._patch_sizes["C"]
 
         self.input_axes = "".join([
             ax
@@ -389,6 +410,7 @@ class AcquisitionFunction:
         ])
 
     def compute_acquisition(self, dataset_metadata, output_axes, mask_axes,
+                            reference_scale,
                             acquisition_fun,
                             segmentation_out,
                             sampled_mask=None,
@@ -410,16 +432,21 @@ class AcquisitionFunction:
             if ax in self.input_axes and ax != "C"
         ])
 
+        scaled_patch_sizes = {
+            ax: ax_ps // reference_scale.get(ax, 1)
+            for ax, ax_ps in self._patch_sizes.items()
+        }
+
         padding = {}
         if self._add_padding:
             padding = {
                 ax: ax_ps // self._padding_factor
-                for ax, ax_ps in self._patch_sizes.items()
+                for ax, ax_ps in scaled_patch_sizes.items()
             }
 
         dl = get_dataloader(
             dataset_metadata,
-            patch_size=self._patch_sizes,
+            patch_size=scaled_patch_sizes,
             spatial_axes=input_spatial_axes,
             padding=padding,
             model_input_axes=self.tunable_segmentation_method.model_axes,
@@ -435,8 +462,8 @@ class AcquisitionFunction:
         pred_sel = tuple(
             slice(padding.get(ax, 0)
                   if padding.get(ax, 0) > 0 else None,
-                  self._patch_sizes.get(ax, 0) + padding[ax]
-                  if padding.get(ax, 0) > 0 else None)
+                  scaled_patch_sizes.get(ax, 0)
+                  + padding[ax] if padding.get(ax, 0) > 0 else None)
             if ax in model_spatial_axes else None
             for ax in output_axes
         )
@@ -514,9 +541,9 @@ class AcquisitionFunction:
             if sampled_mask is not None:
                 scaled_pos_u_lab = tuple(
                     slice(pos_padded[ax].start
-                          // self._patch_sizes.get(ax, 1),
+                          // scaled_patch_sizes.get(ax, 1),
                           pos_padded[ax].stop
-                          // self._patch_sizes.get(ax, 1))
+                          // scaled_patch_sizes.get(ax, 1))
                     for ax in mask_axes
                 )
                 sampled_mask[scaled_pos_u_lab] = True
@@ -587,16 +614,17 @@ class AcquisitionFunction:
             displayed_shape = {
                 ax: ax_s
                 for ax, ax_s in zip(displayed_source_axes,
-                                    input_layers_group.shape)
+                                    input_layers_group.selected_level_shape)
             }
             displayed_scale = {
                 ax: ax_scl
                 for ax, ax_scl in zip(displayed_source_axes,
-                                      input_layers_group.scale)
+                                      input_layers_group.selected_level_scale)
             }
 
             dataset_metadata = self._prepare_datasets_metadata(
                  displayed_shape,
+                 displayed_scale,
                  [(input_layers_group, "images"),
                   (sampling_mask_layers_group, "masks")]
             )
@@ -695,6 +723,7 @@ class AcquisitionFunction:
                 dataset_metadata,
                 output_axes=output_axes,
                 mask_axes=mask_axes,
+                reference_scale=displayed_scale,
                 acquisition_fun=acquisition_fun_grp,
                 segmentation_out=segmentation_grp,
                 sampled_mask=sampled_grp,
@@ -715,7 +744,7 @@ class AcquisitionFunction:
                     acquisition_root,
                     axes=output_axes,
                     scale=output_scale,
-                    data_group=f"{acquisition_fun_grp_name}/0",
+                    data_group=str(Path(acquisition_fun_grp_name) / "0"),
                     group_name=group_name + " acquisition function",
                     layers_group_name="acquisition",
                     image_group=image_group,
@@ -735,7 +764,7 @@ class AcquisitionFunction:
                 segmentation_root,
                 axes=output_axes,
                 scale=output_scale,
-                data_group=f"{segmentation_group_name}/0",
+                data_group=str(Path(segmentation_group_name) / "0"),
                 group_name=group_name + f" {segmentation_group_name}",
                 layers_group_name=segmentation_group_name,
                 image_group=image_group,
@@ -801,7 +830,12 @@ class AcquisitionFunction:
             displayed_shape = {
                 ax: ax_s
                 for ax, ax_s in zip(displayed_source_axes,
-                                    input_layers_group.shape)
+                                    input_layers_group.selected_level_shape)
+            }
+            displayed_scale = {
+                ax: ax_scl
+                for ax, ax_scl in zip(displayed_source_axes,
+                                      input_layers_group.selected_level_scale)
             }
 
             output_axes = displayed_source_axes
@@ -831,6 +865,7 @@ class AcquisitionFunction:
 
             dataset_metadata = self._prepare_datasets_metadata(
                  displayed_shape,
+                 displayed_scale,
                  layer_types,
                 )
 
