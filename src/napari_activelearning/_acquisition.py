@@ -96,9 +96,10 @@ def add_multiscale_output_layer(
     # Downsample the acquisition function
     output_fun_ms = downsample_image(
         root,
-        source_axes=axes,
+        axes=axes,
+        scale=scale,
         data_group=data_group,
-        scale=2,
+        downsample_scale=2,
         num_scales=5,
         reference_source_axes=reference_source_axes,
         reference_scale=reference_scale
@@ -115,10 +116,13 @@ def add_multiscale_output_layer(
         name=group_name,
         multiscale=is_multiscale,
         opacity=0.8,
-        scale=list(scale.values()),
+        scale=list(
+            reference_scale.get(ax, 1) * scale.get(ax, 1)
+            for ax in axes
+        ),
         translate=tuple(
-            (reference_scale.get(ax, 1) - 1) / 2.0
-            if reference_scale.get(ax, 1) > 1 else 0
+            (reference_scale.get(ax, 1) * scale.get(ax, 1) - 1) / 2.0
+            if (reference_scale.get(ax, 1) * scale.get(ax, 1)) > 1 else 0
             for ax in axes
             ),
         blending="translucent_no_depth",
@@ -616,6 +620,11 @@ class AcquisitionFunction:
                 for ax, ax_s in zip(displayed_source_axes,
                                     input_layers_group.selected_level_shape)
             }
+            displayed_reference_scale = {
+                ax: ax_scl
+                for ax, ax_scl in zip(displayed_source_axes,
+                                      input_layers_group.scale)
+            }
             displayed_scale = {
                 ax: ax_scl
                 for ax, ax_scl in zip(displayed_source_axes,
@@ -749,7 +758,7 @@ class AcquisitionFunction:
                     layers_group_name="acquisition",
                     image_group=image_group,
                     reference_source_axes=displayed_source_axes,
-                    reference_scale=displayed_scale,
+                    reference_scale=displayed_reference_scale,
                     output_filename=output_filename,
                     colormap="magma",
                     add_func=viewer.add_image
@@ -769,7 +778,7 @@ class AcquisitionFunction:
                 layers_group_name=segmentation_group_name,
                 image_group=image_group,
                 reference_source_axes=displayed_source_axes,
-                reference_scale=displayed_scale,
+                reference_scale=displayed_reference_scale,
                 output_filename=output_filename,
                 use_as_input_labels=True,
                 add_func=viewer.add_labels
@@ -837,6 +846,7 @@ class AcquisitionFunction:
                 for ax, ax_scl in zip(displayed_source_axes,
                                       input_layers_group.selected_level_scale)
             }
+
 
             output_axes = displayed_source_axes
             if "C" in output_axes:

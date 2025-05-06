@@ -465,13 +465,21 @@ class LabelsManager:
             blending="translucent_no_depth",
             opacity=0.7,
             translate=[
-                ax_roi.start * ax_scl
-                for ax_roi, ax_scl in zip(
+                ax_roi.start * ax_scl * ax_sl_scl
+                for ax_roi, ax_sl_scl, ax_scl in zip(
                     self._active_label.position,
+                    self._active_layer_channel.selected_level_scale,
                     self._active_layer_channel.layer.scale
                 )
             ],
-            scale=self._active_layer_channel.layer.scale
+            # scale=self._active_layer_channel.layer.scale
+            scale=[
+                ax_scl * ax_sl_scl
+                for ax_sl_scl, ax_scl in zip(
+                    self._active_layer_channel.selected_level_scale,
+                    self._active_layer_channel.layer.scale
+                )
+            ]
         )
         viewer.layers["Labels edit"].bounding_box.visible = True
         self._active_layer_channel.layer.visible = False

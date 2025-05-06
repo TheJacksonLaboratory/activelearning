@@ -1490,9 +1490,10 @@ class MaskGenerator(PropertiesEditor):
 
             downsample_image(
                 mask_output_filename,
-                self._mask_axes,
-                f"{mask_grp_name}/0",
-                scale=1,
+                axes=self._mask_axes,
+                scale={ax: 1 for ax in self._mask_axes},
+                data_group=f"{mask_grp_name}/0",
+                downsample_scale=1,
                 num_scales=0,
                 reference_source_axes=self._mask_axes,
                 reference_scale=mask_scale_dict,

@@ -444,25 +444,30 @@ def update_labels(labels_group: zarr.Group,
         }
 
 
-def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
+def downsample_image(z_root, axes, scale, data_group,
+                     downsample_scale=4,
+                     num_scales=5,
                      reference_source_axes=None,
                      reference_scale=None,
                      reference_units=None):
     if reference_source_axes is None or reference_scale is None:
-        reference_source_axes = source_axes
+        reference_source_axes = axes
         reference_scale = {
             ax: 1.0
-            for ax in source_axes
+            for ax in axes
         }
 
     datasets = [{
         "coordinateTransformations": [{
             "type": "scale",
-            "scale": [reference_scale.get(ax, 1.0) for ax in source_axes],
+            "scale": [scale.get(ax, 1) * reference_scale.get(ax, 1.0)
+                      for ax in axes],
             "translation": [
-                0.5 * (reference_scale[ax] - 1)
-                if ax in "YX" and reference_scale.get(ax, 1) > 1 else 0.0
-                for ax in source_axes
+                0.5 * (scale.get(ax, 1) * reference_scale.get(ax) - 1)
+                if (ax in "YX"
+                    and (scale.get(ax, 1) * reference_scale.get(ax)) > 1)
+                else 0.0
+                for ax in axes
             ]
         }],
         "path": "0"
@@ -492,20 +497,20 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
 
         groups_root = data_group + "/%i"
 
-        source_arr_shape = {ax: source_arr.shape[source_axes.index(ax)]
-                            for ax in source_axes}
+        source_arr_shape = {ax: source_arr.shape[axes.index(ax)]
+                            for ax in axes}
 
         min_spatial_shape = min(source_arr_shape[ax]
-                                for ax in "YX" if ax in source_axes)
+                                for ax in "YX" if ax in axes)
 
         num_scales = min(num_scales, int(np.log(min_spatial_shape)
-                                         / np.log(scale)))
+                                         / np.log(downsample_scale)))
 
         downscale_selection = tuple(
-            slice(None, None, scale)
+            slice(None, None, downsample_scale)
             if ax in "YX" and ax_s > 1
             else slice(None)
-            for ax, ax_s in zip(source_axes, source_arr.shape)
+            for ax, ax_s in zip(axes, source_arr.shape)
         )
 
         if not reference_units:
@@ -520,9 +525,10 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
             # size of the source array.
             target_arr = target_arr.rechunk(
                 tuple(
-                    max(min(256, chk), chk // reference_scale[ax])
+                    max(min(256, chk),
+                        chk // (scale.get(ax, 1) * reference_scale.get(ax, 1)))
                     if ax in "XY" else chk
-                    for chk, ax in zip(source_arr.chunksize, source_axes)
+                    for chk, ax in zip(source_arr.chunksize, axes)
                 )
             )
 
@@ -544,16 +550,21 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
                         {
                             "type": "scale",
                             "scale": [
-                                4.0 ** s * reference_scale.get(ax, 1.0)
+                                (float(downsample_scale) ** s
+                                 * scale.get(ax, 1.0)
+                                 * reference_scale.get(ax, 1.0))
                                 if ax in "YX" else 1.0
-                                for ax in source_axes
+                                for ax in axes
                             ],
                             "translation": [
-                                0.5 * (4.0 ** s * reference_scale[ax] - 1)
+                                0.5 * (float(downsample_scale) ** s
+                                       * scale.get(ax, 1.0)
+                                       * reference_scale.get(ax, 1.0) - 1)
                                 if (ax in "YX"
-                                    and reference_scale.get(ax, 1) > 1)
+                                    and (scale.get(ax, 1)
+                                         * reference_scale.get(ax, 1)) > 1)
                                 else 0
-                                for ax in source_axes
+                                for ax in axes
                             ]
                         }
                     ],
@@ -569,7 +580,7 @@ def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
         write_multiscales_metadata(z_grp, datasets,
                                    fmt=FormatV04(),
                                    name=data_group,
-                                   axes=list(source_axes.lower()))
+                                   axes=list(axes.lower()))
 
     return z_ms
 
