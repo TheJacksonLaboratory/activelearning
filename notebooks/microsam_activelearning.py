@@ -72,6 +72,10 @@ class TunableMicroSAM(al.TunableMethod):
         self._save_path = "./finetuned_models"
         self._gpu = True
 
+        self._pred_iou_thresh = 0.88
+        self._stability_score_thresh = 0.95
+        self._box_nms_thresh = 0.7
+
         self.refresh_model = True
 
     def _model_init(self):
@@ -137,7 +141,18 @@ class TunableMicroSAM(al.TunableMethod):
                 image_embeddings=img_embeddings
             )
 
-            masks = self._sam_instance_segmenter_dropout.generate()
+            generate_kwargs = {}
+            if not isinstance(self._sam_instance_segmenter_dropout,
+                            msas.InstanceSegmentationWithDecoder):
+                generate_kwargs["pred_iou_thresh"] = self._pred_iou_thresh
+                generate_kwargs["stability_score_thresh"] =\
+                    self._stability_score_thresh
+                generate_kwargs["box_nms_thresh"] = self._box_nms_thresh
+
+            masks = self._sam_instance_segmenter_dropout.generate(
+                **generate_kwargs
+            )
+
             probs = np.zeros(img.squeeze().shape[:2], dtype=np.float32)
             for mask in masks:
                 probs = np.where(
@@ -160,12 +175,21 @@ class TunableMicroSAM(al.TunableMethod):
     def _run_eval(self, img, *args, **kwargs):
         self._model_init()
 
+        generate_kwargs = {}
+        if not isinstance(self._sam_instance_segmenter_dropout,
+                          msas.InstanceSegmentationWithDecoder):
+            generate_kwargs["pred_iou_thresh"] = self._pred_iou_thresh
+            generate_kwargs["stability_score_thresh"] =\
+                self._stability_score_thresh
+            generate_kwargs["box_nms_thresh"] = self._box_nms_thresh
+
         segmentation_mask = msas.automatic_instance_segmentation(
             predictor=self._sam_predictor,
             segmenter=self._sam_instance_segmenter,
             input_path=img.squeeze(),
             ndim=2,
-            verbose=False
+            verbose=False,
+            **generate_kwargs
         )
 
         return segmentation_mask

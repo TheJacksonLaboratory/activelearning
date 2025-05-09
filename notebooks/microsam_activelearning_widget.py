@@ -30,16 +30,37 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
                               "vit_l_histopathology",
                               "vit_h_histopathology",
                               "vit_b_medical_imaging"] = "vit_b",
+          pred_iou_thresh: Annotated[float,
+                                     {"widget_type": "FloatSpinBox",
+                                      "min": 0.0,
+                                      "max": 1.0,
+                                      "step": 0.01}] = 0.75,
+          stability_score_thresh: Annotated[float,
+                                            {"widget_type": "FloatSpinBox",
+                                             "min": 0.0,
+                                             "max": 1.0,
+                                             "step": 0.01}] = 0.9,
+          box_nms_thresh: Annotated[float,
+                                    {"widget_type": "FloatSpinBox",
+                                     "min": 0.0,
+                                     "max": 1.0,
+                                     "step": 0.01}] = 0.4,
           gpu: bool = True):
             return dict(
                 checkpoint_path=checkpoint_path,
                 model_type=model_type,
+                pred_iou_thresh=pred_iou_thresh,
+                stability_score_thresh=stability_score_thresh,
+                box_nms_thresh=box_nms_thresh,
                 gpu=gpu
             )
 
         segmentation_parameter_names = [
             "checkpoint_path",
             "model_type",
+            "pred_iou_thresh",
+            "stability_score_thresh",
+            "box_nms_thresh",
             "gpu"
         ]
 

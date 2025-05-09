@@ -311,13 +311,15 @@ class AcquisitionFunction:
             if layer_type in ["images", "labels", "masks"]:
                 try:
                     dataset_metadata[layer_type]["roi"] = [tuple(
-                        slice(0, math.ceil(ax_s / displayed_shape[ax]
+                        slice(0,
+                              math.ceil(ax_s / displayed_shape[ax]
                                         * (displayed_shape[ax]
-                                            - displayed_shape[ax]
-                                            % scaled_patch_sizes.get(ax, 1))))
+                                           - displayed_shape[ax]
+                                           % scaled_patch_sizes.get(ax, 1))))
                         if (ax in displayed_shape
-                            and (ax in self.tunable_segmentation_method.model_axes
-                                or ax_s > scaled_patch_sizes.get(ax, 1)))
+                            and (ax in self.tunable_segmentation_method
+                                           .model_axes
+                                 or ax_s > scaled_patch_sizes.get(ax, 1)))
                         else slice(0, 1, None)
                         for ax, ax_s in layers_group_shape.items()
                     )]
@@ -810,6 +812,7 @@ class AcquisitionFunction:
             return False
 
         dataset_metadata_list = []
+        scaled_patch_sizes = dict(self._patch_sizes)
 
         for image_group in image_groups:
             image_group.setSelected(True)
@@ -847,12 +850,16 @@ class AcquisitionFunction:
                                       input_layers_group.selected_level_scale)
             }
 
-
             output_axes = displayed_source_axes
             if "C" in output_axes:
                 output_axes = list(output_axes)
                 output_axes.remove("C")
                 output_axes = "".join(output_axes)
+
+            scaled_patch_sizes = {
+                ax: ax_ps // displayed_scale.get(ax, 1)
+                for ax, ax_ps in self._patch_sizes.items()
+            }
 
             if sampling_mask_layers_group is not None:
                 layer_types.append((sampling_mask_layers_group, "masks"))
@@ -860,8 +867,7 @@ class AcquisitionFunction:
                 self.image_groups_manager.mask_generator.active_image_group =\
                     image_group
                 self.image_groups_manager.mask_generator.set_patch_size(
-                    [self._patch_sizes.get(ax, 1)
-                     for ax in output_axes]
+                    [scaled_patch_sizes[ax] for ax in output_axes]
                 )
 
                 self.image_groups_manager.mask_generator.generate_mask_layer()
@@ -884,7 +890,7 @@ class AcquisitionFunction:
         success = self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
             model_axes=self.tunable_segmentation_method.model_axes,
-            patch_sizes=self._patch_sizes
+            patch_sizes=scaled_patch_sizes
         )
 
         self.compute_acquisition_layers(

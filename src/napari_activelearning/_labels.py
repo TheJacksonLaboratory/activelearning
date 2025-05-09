@@ -286,6 +286,8 @@ class LabelsManager:
         if self._active_label is None and self._active_label_group is None:
             return
 
+        # TODO: Open an edit layer and set the content to 0
+
         self._active_label_group.removeChild(self._active_label)
         if not self._active_label_group.childCount():
             self.remove_labels_group()
@@ -408,6 +410,7 @@ class LabelsManager:
         viewer.camera.center = current_center
         viewer.dims.current_step = tuple(map(int, current_center))
 
+        # TODO: Only make the labels visible, keeping all the labels that are visible as they are
         for layer in viewer.layers:
             layer.visible = False
 

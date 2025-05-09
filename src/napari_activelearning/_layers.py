@@ -1674,6 +1674,8 @@ class ImageGroupsManager:
 
         viewer = napari.current_viewer()
         viewer.layers.selection.clear()
+
+        # TODO: Do not make other layers invisible because the user could have set these as ther are for a reason.
         for layer in viewer.layers:
             layer.visible = False
 
