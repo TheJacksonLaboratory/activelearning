@@ -6,7 +6,9 @@ import zarr
 import zarrdataset as zds
 
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
+from qtpy.QtWidgets import (QWidget, QGridLayout, QScrollArea, QCheckBox,
+                            QSpinBox,
+                            QLabel)
 
 try:
     import torch
@@ -66,9 +68,12 @@ class MyZarrDataset(zds.ZarrDataset):
         super().__init__(*args, **kwargs)
 
         self.max_samples_per_image = 0
+        self.repetitions_per_sample = 1
 
     def __len__(self):
-        return self.max_samples_per_image * len(self._collections["images"])
+        return (self.repetitions_per_sample
+                * self.max_samples_per_image
+                * len(self._collections["images"]))
 
     def __getstate__(self):
         # Custom behavior for pickling the ZarrDataset object.
@@ -84,10 +89,21 @@ class MyZarrDataset(zds.ZarrDataset):
         # Custom behavior for unpickling the ZarrDataset object.
         self.__dict__.update(state)
 
+    def _initialize(self, force=False):
+        super()._initialize(force=force)
+
+        if self.repetitions_per_sample > 1:
+            self._arr_lists = np.tile(self._arr_lists,
+                                      (self.repetitions_per_sample, ))
+
+            self._toplefts = np.tile(self._toplefts,
+                                     (self.repetitions_per_sample, 1))
+
 
 class TunableMethod(SegmentationMethod):
     def __init__(self):
         self._num_workers = 0
+        self._repetitions_per_sample = 1
         super().__init__()
 
     def get_train_transform(self, *args, **kwargs) -> dict:
@@ -175,7 +191,7 @@ class TunableMethod(SegmentationMethod):
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
                 spatial_axes=dataset_metadata_list[0]["labels"]["axes"],
-                min_area=0.01
+                min_area=1
             )
 
             dataset_metadata_list[0]["masks"]["filenames"] = train_mask
@@ -188,6 +204,8 @@ class TunableMethod(SegmentationMethod):
                 shuffle=True,
             )
             train_datasets.max_samples_per_image = trn_samples
+            train_datasets.repetitions_per_sample =\
+                self._repetitions_per_sample
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
 
@@ -200,6 +218,8 @@ class TunableMethod(SegmentationMethod):
             )
 
             val_datasets.max_samples_per_image = val_samples
+            val_datasets.repetitions_per_sample = self._repetitions_per_sample
+
             for input_mode, transform_mode in mode_transforms.items():
                 train_datasets.add_transform(input_mode, transform_mode)
 
@@ -233,6 +253,8 @@ class TunableMethod(SegmentationMethod):
                 )
 
                 dataset.max_samples_per_image = self.max_samples_per_image
+                dataset.repetitions_per_sample = self._repetitions_per_sample
+
                 for input_mode, transform_mode in mode_transforms.items():
                     dataset.add_transform(input_mode, transform_mode)
 
@@ -248,12 +270,12 @@ class TunableMethod(SegmentationMethod):
         if USING_PYTORCH:
             train_dataloader = DataLoader(
                 train_datasets,
-                num_workers=1,
+                num_workers=self._num_workers,
                 worker_init_fn=worker_init_fn
             )
             val_dataloader = DataLoader(
                 val_datasets,
-                num_workers=1,
+                num_workers=self._num_workers,
                 worker_init_fn=worker_init_fn
             )
         else:
@@ -327,6 +349,20 @@ class TunableWidget(QWidget):
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
+        self.repetitions_per_sample_spn = QSpinBox(
+            minimum=1,
+            maximum=100,
+            value=1,
+            singleStep=1
+        )
+
+        self.num_workers_spn = QSpinBox(
+            minimum=0,
+            maximum=100,
+            value=0,
+            singleStep=1
+        )
+
         self.parameters_lyt = QGridLayout()
         self.parameters_lyt.addWidget(
             self.advanced_segmentation_options_chk, 0, 0
@@ -340,7 +376,22 @@ class TunableWidget(QWidget):
         self.parameters_lyt.addWidget(
             self._finetuning_parameters_scr, 3, 0, 1, 2
         )
+
+        self.parameters_lyt.addWidget(QLabel("Repetitions per sample "
+                                             "(fine tuning only):"), 4, 0)
+        self.parameters_lyt.addWidget(self.repetitions_per_sample_spn, 4, 1)
+
+        self.parameters_lyt.addWidget(QLabel("Number of workers:"), 4, 2)
+        self.parameters_lyt.addWidget(self.num_workers_spn, 4, 3)
+
         self.setLayout(self.parameters_lyt)
+
+        self.repetitions_per_sample_spn.valueChanged.connect(
+            self._set_repetitions_per_sample
+        )
+        self.num_workers_spn.valueChanged.connect(
+            self._set_num_workers
+        )
 
         self._segmentation_parameters_scr.hide()
         self._finetuning_parameters_scr.hide()
@@ -363,6 +414,14 @@ class TunableWidget(QWidget):
            or getattr(self, parameter_key) != parameter_val):
             self.refresh_model = True
             setattr(self, parameter_key, parameter_val)
+
+    def _set_repetitions_per_sample(self, repetitions_per_sample: int):
+        if repetitions_per_sample != self._repetitions_per_sample:
+            self._repetitions_per_sample = repetitions_per_sample
+
+    def _set_num_workers(self, num_workers: int):
+        if num_workers != self._num_workers:
+            self._num_workers = num_workers
 
     def _show_segmentation_parameters(self, show: bool):
         self._segmentation_parameters_scr.setVisible(show)

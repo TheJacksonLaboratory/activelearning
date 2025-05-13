@@ -195,8 +195,6 @@ class TunableMicroSAM(al.TunableMethod):
         return segmentation_mask
 
     def _fine_tune(self, train_dataloader, val_dataloader) -> bool:
-        # self._model_init()
-
         train_dataloader.shuffle = True
         val_dataloader.shuffle = True
 

@@ -6,7 +6,6 @@ from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
 import tensorstore as ts
-import random
 import zarr
 
 import napari
@@ -211,7 +210,7 @@ class LabelsManager:
 
         return label_data
 
-    def _write_label_data(self, label_data: np.ndarray):
+    def _write_label_data(self, label_data: Optional[np.ndarray]):
         if isinstance(self._transaction, ts.Transaction):
             self._transaction.commit_async()
         elif (self._active_label.position is not None
@@ -245,7 +244,7 @@ class LabelsManager:
 
                 update_labels(
                     segmentation_channel_group[f"{data_group_base}"],
-                    label_data
+                    label_data if label_data is not None else set()
                 )
 
             elif isinstance(input_filename, MultiScaleData):
@@ -263,8 +262,11 @@ class LabelsManager:
                              pos_sel.stop // 2**s_scl)
                        for pos_sel in self._active_label.position[-2:]]
                 )
-                seg_data[curr_position] =\
-                    label_data[..., ::2**s_scl, ::2**s_scl]
+                if label_data is not None:
+                    seg_data[curr_position] =\
+                        label_data[..., ::2**s_scl, ::2**s_scl]
+                else:
+                    seg_data[curr_position] = 0
 
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
@@ -286,17 +288,18 @@ class LabelsManager:
         if self._active_label is None and self._active_label_group is None:
             return
 
-        # TODO: Open an edit layer and set the content to 0
+        # Set the content of the current label to 0
+        self._write_label_data(None)
 
         self._active_label_group.removeChild(self._active_label)
+
         if not self._active_label_group.childCount():
-            self.remove_labels_group()
+            self.labels_group_root.removeChild(self._active_label_group)
+            self.labels_group_root.setSelected(True)
+            self._active_label_group = None
+
         else:
             self._active_label_group.setSelected(True)
-
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
 
         self._active_label = None
         self._requires_commit = False
@@ -306,11 +309,11 @@ class LabelsManager:
         if self._active_label_group is None:
             return
 
-        self.labels_group_root.removeChild(self._active_label_group)
-
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
+        self._active_layers_group = self._active_label_group.layer_channel
+        while (self._active_label_group is not None
+               and self._active_label_group.childCount()):
+            self._active_label = self._active_label_group.child(0)
+            self.remove_labels()
 
         self.labels_group_root.setSelected(True)
         self._active_label_group = None
@@ -411,10 +414,10 @@ class LabelsManager:
         viewer.dims.current_step = tuple(map(int, current_center))
 
         # TODO: Only make the labels visible, keeping all the labels that are visible as they are
-        for layer in viewer.layers:
-            layer.visible = False
+        # for layer in viewer.layers:
+        #     layer.visible = False
 
-        self._active_image_group.visible = True
+        # self._active_image_group.visible = True
 
         if edit_focused_label:
             self.edit_labels()

@@ -108,7 +108,7 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
 
     def _fine_tune(self, train_dataloader, val_dataloader):
         super()._fine_tune(train_dataloader, val_dataloader)
-        self._segmentation_parameters.checkpoint_path.val =\
+        self._segmentation_parameters.checkpoint_path.value =\
             self._checkpoint_path
 
 

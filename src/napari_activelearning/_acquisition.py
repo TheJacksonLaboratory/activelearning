@@ -782,7 +782,7 @@ class AcquisitionFunction:
                 reference_source_axes=displayed_source_axes,
                 reference_scale=displayed_reference_scale,
                 output_filename=output_filename,
-                use_as_input_labels=True,
+                use_as_input_labels=False,
                 add_func=viewer.add_labels
             )
 
