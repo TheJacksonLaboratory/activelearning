@@ -437,7 +437,8 @@ def test_image_group_manager_focus(simple_image_group,
     assert image_group.selected
 
     manager.focus_active_item(manager.groups_root)
-    assert not layer_channel.layer.visible
+    # Focusing to any label should not change the visibility of other layers
+    assert layer_channel.layer.visible
 
 
 def test_image_group_manager_add_group(single_scale_memory_layer,
