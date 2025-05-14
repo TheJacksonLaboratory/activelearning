@@ -4,7 +4,7 @@ import skimage
 import zarrdataset as zds
 
 from ._acquisition import add_dropout, USING_PYTORCH
-from ._models import TunableMethod
+from ._models import TunableMethod, InvalidSample
 
 try:
     import cellpose
@@ -31,6 +31,42 @@ try:
             img_t = transforms.normalize_img(img_t, invert=False,
                                              axis=self._channel_axis)
             return img_t
+
+    class EnsureInputs:
+        def __init__(self, min_labels_per_sample=1, min_labels_size=1):
+            self._min_labels_per_sample = min_labels_per_sample
+            self._min_labels_size = min_labels_size
+
+        def __call__(self, inputs, labels):
+            if isinstance(labels, np.ndarray):
+                labels_flat = labels.flatten()
+            elif isinstance(labels, torch.Tensor):
+                labels_flat = labels.flatten().cpu().numpy()
+
+            unique_samples = set(np.unique(labels_flat)) - {0}
+            if len(unique_samples) < self._min_labels_per_sample:
+                raise InvalidSample(
+                    f"Sample has {len(unique_samples)} labels, which is less "
+                    f"than the required {self._min_labels_per_sample} labels")
+
+            min_label = labels_flat[labels_flat > 0].min()
+            labels_flat = np.where(labels_flat > 0,
+                                   labels_flat - min_label + 1,
+                                   0)
+
+            labels_flat_count = np.bincount(labels_flat)
+            if labels_flat.min() == 0:
+                labels_size = labels_flat_count[1:].min()
+            else:
+                labels_size = labels_flat_count.min()
+
+            if labels_size.min() < self._min_labels_size:
+                raise InvalidSample(
+                    f"Sample's smaller label has size of {labels_size.min()} "
+                    f"pixels/elements, which is less than the required minimum"
+                    f" of {self._min_labels_size} pixels/elements")
+
+            return inputs, labels
 
     class CellposeTunable(TunableMethod):
         model_axes = "YXC"
@@ -152,7 +188,10 @@ try:
             return seg
 
         def get_train_transform(self, *args, **kwargs):
-            return None
+            mode_transforms = {
+                ("images", "labels"): EnsureInputs()
+            }
+            return mode_transforms
 
         def get_inference_transform(self, *args, **kwargs):
             return None

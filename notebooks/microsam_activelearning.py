@@ -5,6 +5,7 @@ import torch
 from torch_em.transform.label import PerObjectDistanceTransform
 from torch_em.transform.augmentation import get_augmentations
 from torch_em.util.util import ensure_tensor_with_channels
+from torch_em.data import MinInstanceSampler
 
 from micro_sam import util
 from micro_sam import automatic_segmentation as msas
@@ -28,9 +29,16 @@ class AugmentEnsureInputs:
 
         self.augmentations = get_augmentations(ndim=2)
 
+        self.labels_ckecker = MinInstanceSampler(25)
+
     def __call__(self, inputs, labels):
         inputs_tr = inputs.copy()
         labels_tr = labels.copy()
+
+        if not self.labels_ckecker(inputs, labels):
+            raise al.InvalidSampleError("Sample has not the minimum number of "
+                                        "instances or the instances do not "
+                                        "have the minimum required size.")
 
         if inputs_tr.ndim == 3 and inputs_tr.shape[-1] == 1:
             inputs_tr = inputs_tr.squeeze()
@@ -57,6 +65,19 @@ class AugmentEnsureInputs:
         return (inputs_tr, labels_tr)
 
 
+class MicroSAMInputsChecker(al.InputsChecker):
+    def __init__(self, min_labels_per_sample=1):
+        super().__init__(min_labels_per_sample)
+
+    def __call__(self, inputs, labels):
+        if labels.ndim == 4:
+            labels_ = labels[0, 0]
+        else:
+            labels_ = labels[0]
+
+        return super().__call__(inputs, labels)
+
+
 class TunableMicroSAM(al.TunableMethod):
     model_axes = "YXC"
 
@@ -77,6 +98,11 @@ class TunableMicroSAM(al.TunableMethod):
         self._box_nms_thresh = 0.7
 
         self.refresh_model = True
+
+        self._labels_checker = MicroSAMInputsChecker(
+            min_labels_per_sample=1,
+            min_labels_size=25
+        )
 
     def _model_init(self):
         if not self.refresh_model:

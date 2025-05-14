@@ -63,16 +63,26 @@ class AxesCorrector:
         return img_corr
 
 
+class InvalidSample(Exception):
+    """Exception raised when a sample is invalid due to lack of enugh labels or
+    not big-enough label objects."""
+    def __init__(self, message):
+        super().__init__(message)
+
+    def __str__(self):
+        return f"InvalidSample: {self.args[0]}"
+
+
 class MyZarrDataset(zds.ZarrDataset):
     def __init__(self, *args, max_samples_per_image=1,
                  repetitions_per_sample=1,
-                 min_labels_per_sample=1,
+                 labels_checker=None,
                  **kwargs):
         super().__init__(*args, **kwargs)
 
         self.max_samples_per_image = max_samples_per_image
         self.repetitions_per_sample = repetitions_per_sample
-        self.min_labels_per_sample = min_labels_per_sample
+        self.labels_checker = labels_checker
 
     def __len__(self):
         return (self.repetitions_per_sample
@@ -124,22 +134,27 @@ class MyZarrDataset(zds.ZarrDataset):
 
         max_samples = min(max_samples, np.prod(self._toplefts.shape))
 
+        inputs_index = self._output_order.index("images")
+        labels_index = self._output_order.index("labels")
+        if self._return_positions:
+            inputs_index += 1
+            labels_index += 1
+
+        if self._return_worker_id:
+            inputs_index += 1
+            labels_index += 1
+
         while n_samples < max_samples:
             iter = super().__iter__()
             while n_samples < max_samples:
                 try:
                     batch = next(iter)
-                    if isinstance(batch[1], np.ndarray):
-                        unique_labels = set(np.unique(batch[1]))
-                    elif isinstance(batch[1], torch.Tensor):
-                        unique_labels = set(torch.unique(batch[1]).numpy())
-
-                    unique_labels -= {0}
-                    if len(unique_labels) < self.min_labels_per_sample:
-                        continue
 
                     yield batch
                     n_samples += 1
+
+                except InvalidSample:
+                    continue
 
                 except StopIteration:
                     break
@@ -153,7 +168,7 @@ class MyZarrDataset(zds.ZarrDataset):
 class TunableMethod(SegmentationMethod):
     def __init__(self):
         self.repetitions_per_sample = 1
-        self.min_labels_per_sample = 1
+        self._labels_checker = None
         super().__init__()
 
     def get_train_transform(self, *args, **kwargs) -> dict:
@@ -253,7 +268,7 @@ class TunableMethod(SegmentationMethod):
                 shuffle=True,
                 max_samples_per_image=self.max_samples_per_image,
                 repetitions_per_sample=self.repetitions_per_sample,
-                min_labels_per_sample=self.min_labels_per_sample
+                labels_checker=self._labels_checker
             )
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
@@ -266,7 +281,7 @@ class TunableMethod(SegmentationMethod):
                 shuffle=True,
                 max_samples_per_image=self.max_samples_per_image,
                 repetitions_per_sample=self.repetitions_per_sample,
-                min_labels_per_sample=self.min_labels_per_sample
+                labels_checker=self._labels_checker
             )
 
             for input_mode, transform_mode in mode_transforms.items():
@@ -301,7 +316,7 @@ class TunableMethod(SegmentationMethod):
                     shuffle=True,
                     max_samples_per_image=self.max_samples_per_image,
                     repetitions_per_sample=self.repetitions_per_sample,
-                    min_labels_per_sample=self.min_labels_per_sample
+                    labels_checker=self._labels_checker
                 )
 
                 for input_mode, transform_mode in mode_transforms.items():
