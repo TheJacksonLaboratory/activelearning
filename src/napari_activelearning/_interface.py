@@ -929,7 +929,9 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100,
                                            value=self._MC_repetitions,
                                            singleStep=10)
-
+        self.num_workers_spn = QSpinBox(minimum=0, maximum=100,
+                                        value=self._num_workers,
+                                        singleStep=1)
         self.add_padding_chk = QCheckBox("Add padding")
         self.add_padding_chk.setChecked(self._add_padding)
 
@@ -962,6 +964,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         acquisition_lyt.addWidget(self.methods_cmb, 5, 1, 1, 3)
         acquisition_lyt.addWidget(self.execute_selected_btn, 7, 0)
         acquisition_lyt.addWidget(self.execute_all_btn, 7, 1)
+        acquisition_lyt.addWidget(QLabel("Number of workers"), 7, 2)
+        acquisition_lyt.addWidget(self.num_workers_spn, 8, 2)
         acquisition_lyt.addWidget(self.finetuning_btn, 8, 1)
         acquisition_lyt.addWidget(QLabel("Image queue:"), 9, 0, 1, 1)
         acquisition_lyt.addWidget(self.image_pb, 9, 1, 1, 3)
@@ -976,6 +980,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.add_padding_chk.toggled.connect(self._set_add_padding)
         self.max_samples_spn.valueChanged.connect(self._set_max_samples)
         self.MC_repetitions_spn.valueChanged.connect(self._set_MC_repetitions)
+        self.num_workers_spn.valueChanged.connect(self._set_num_workers)
+
         self.methods_cmb.currentIndexChanged.connect(self._set_model)
         self.execute_selected_btn.clicked.connect(
             partial(self.compute_acquisition_layers, run_all=False)
@@ -1017,6 +1023,13 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_max_samples(self):
         self._max_samples = self.max_samples_spn.value()
+
+        if self.tunable_segmentation_method is not None:
+            self.tunable_segmentation_method.max_samples_per_image =\
+                self._max_samples
+
+    def _set_num_workers(self):
+        self._num_workers = self.num_workers_spn.value()
 
     def update_reference_info(self):
         super().update_reference_info()

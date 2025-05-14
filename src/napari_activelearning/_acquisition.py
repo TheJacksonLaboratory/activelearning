@@ -249,6 +249,7 @@ class AcquisitionFunction:
         self._MC_repetitions = 3
         self._add_padding = False
         self._padding_factor = 4
+        self._num_workers = 0
 
         self.image_groups_manager = image_groups_manager
         self.image_groups_manager.register_listener(self)
@@ -457,6 +458,7 @@ class AcquisitionFunction:
             padding=padding,
             model_input_axes=self.tunable_segmentation_method.model_axes,
             shuffle=True,
+            num_workers=self._num_workers,
             tunable_segmentation_method=self.tunable_segmentation_method
         )
 
@@ -890,7 +892,8 @@ class AcquisitionFunction:
         success = self.tunable_segmentation_method.fine_tune(
             dataset_metadata_list,
             model_axes=self.tunable_segmentation_method.model_axes,
-            patch_sizes=scaled_patch_sizes
+            patch_sizes=scaled_patch_sizes,
+            num_workers=self._num_workers
         )
 
         self.compute_acquisition_layers(

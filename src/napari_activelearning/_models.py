@@ -64,11 +64,15 @@ class AxesCorrector:
 
 
 class MyZarrDataset(zds.ZarrDataset):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, max_samples_per_image=1,
+                 repetitions_per_sample=1,
+                 min_labels_per_sample=1,
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.max_samples_per_image = 0
-        self.repetitions_per_sample = 1
+        self.max_samples_per_image = max_samples_per_image
+        self.repetitions_per_sample = repetitions_per_sample
+        self.min_labels_per_sample = min_labels_per_sample
 
     def __len__(self):
         return (self.repetitions_per_sample
@@ -90,6 +94,9 @@ class MyZarrDataset(zds.ZarrDataset):
         self.__dict__.update(state)
 
     def _initialize(self, force=False):
+        if self._initialized and not force:
+            return
+
         super()._initialize(force=force)
 
         if self.repetitions_per_sample > 1:
@@ -99,11 +106,54 @@ class MyZarrDataset(zds.ZarrDataset):
             self._toplefts = np.tile(self._toplefts,
                                      (self.repetitions_per_sample, 1))
 
+    def __iter__(self):
+        self._initialize()
+
+        n_samples = 0
+
+        max_samples = self.repetitions_per_sample\
+            * self.max_samples_per_image\
+            * len(self._collections["images"])
+
+        if self._num_workers > 1:
+            remaining_samples = max_samples % self._num_workers
+
+            max_samples //= self._num_workers
+            if self._worker_id < remaining_samples:
+                max_samples += 1
+
+        max_samples = min(max_samples, np.prod(self._toplefts.shape))
+
+        while n_samples < max_samples:
+            iter = super().__iter__()
+            while n_samples < max_samples:
+                try:
+                    batch = next(iter)
+                    if isinstance(batch[1], np.ndarray):
+                        unique_labels = set(np.unique(batch[1]))
+                    elif isinstance(batch[1], torch.Tensor):
+                        unique_labels = set(torch.unique(batch[1]).numpy())
+
+                    unique_labels -= {0}
+                    if len(unique_labels) < self.min_labels_per_sample:
+                        continue
+
+                    yield batch
+                    n_samples += 1
+
+                except StopIteration:
+                    break
+
+            if n_samples == 0:
+                # If there are no valid samples in this shard of the dataset,
+                # terminate the loop
+                break
+
 
 class TunableMethod(SegmentationMethod):
     def __init__(self):
-        self._num_workers = 0
-        self._repetitions_per_sample = 1
+        self.repetitions_per_sample = 1
+        self.min_labels_per_sample = 1
         super().__init__()
 
     def get_train_transform(self, *args, **kwargs) -> dict:
@@ -121,7 +171,8 @@ class TunableMethod(SegmentationMethod):
     def fine_tune(self, dataset_metadata_list: Iterable[dict],
                   model_axes: str,
                   train_data_proportion: float = 0.8,
-                  patch_sizes: Union[dict, int] = 256) -> bool:
+                  patch_sizes: Union[dict, int] = 256,
+                  num_workers: int = 0) -> bool:
 
         base_mode_transforms = self.get_train_transform()
 
@@ -173,9 +224,7 @@ class TunableMethod(SegmentationMethod):
             sampling_locations = np.ravel_multi_index(sampling_locations,
                                                       sampling_mask.shape)
 
-            trn_samples = int(train_data_proportion * len(sampling_locations))
-            val_samples = len(sampling_locations) - trn_samples
-
+            trn_samples = int(len(sampling_locations) * train_data_proportion)
             sampling_locations = np.random.choice(
                 sampling_locations,
                 size=trn_samples,
@@ -202,10 +251,10 @@ class TunableMethod(SegmentationMethod):
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
                 shuffle=True,
+                max_samples_per_image=self.max_samples_per_image,
+                repetitions_per_sample=self.repetitions_per_sample,
+                min_labels_per_sample=self.min_labels_per_sample
             )
-            train_datasets.max_samples_per_image = trn_samples
-            train_datasets.repetitions_per_sample =\
-                self._repetitions_per_sample
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
 
@@ -215,10 +264,10 @@ class TunableMethod(SegmentationMethod):
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
                 shuffle=True,
+                max_samples_per_image=self.max_samples_per_image,
+                repetitions_per_sample=self.repetitions_per_sample,
+                min_labels_per_sample=self.min_labels_per_sample
             )
-
-            val_datasets.max_samples_per_image = val_samples
-            val_datasets.repetitions_per_sample = self._repetitions_per_sample
 
             for input_mode, transform_mode in mode_transforms.items():
                 train_datasets.add_transform(input_mode, transform_mode)
@@ -250,10 +299,10 @@ class TunableMethod(SegmentationMethod):
                     draw_same_chunk=False,
                     patch_sampler=patch_sampler,
                     shuffle=True,
+                    max_samples_per_image=self.max_samples_per_image,
+                    repetitions_per_sample=self.repetitions_per_sample,
+                    min_labels_per_sample=self.min_labels_per_sample
                 )
-
-                dataset.max_samples_per_image = self.max_samples_per_image
-                dataset.repetitions_per_sample = self._repetitions_per_sample
 
                 for input_mode, transform_mode in mode_transforms.items():
                     dataset.add_transform(input_mode, transform_mode)
@@ -270,12 +319,12 @@ class TunableMethod(SegmentationMethod):
         if USING_PYTORCH:
             train_dataloader = DataLoader(
                 train_datasets,
-                num_workers=self._num_workers,
+                num_workers=num_workers,
                 worker_init_fn=worker_init_fn
             )
             val_dataloader = DataLoader(
                 val_datasets,
-                num_workers=self._num_workers,
+                num_workers=num_workers,
                 worker_init_fn=worker_init_fn
             )
         else:
@@ -356,13 +405,6 @@ class TunableWidget(QWidget):
             singleStep=1
         )
 
-        self.num_workers_spn = QSpinBox(
-            minimum=0,
-            maximum=100,
-            value=0,
-            singleStep=1
-        )
-
         self.parameters_lyt = QGridLayout()
         self.parameters_lyt.addWidget(
             self.advanced_segmentation_options_chk, 0, 0
@@ -381,16 +423,10 @@ class TunableWidget(QWidget):
                                              "(fine tuning only):"), 4, 0)
         self.parameters_lyt.addWidget(self.repetitions_per_sample_spn, 4, 1)
 
-        self.parameters_lyt.addWidget(QLabel("Number of workers:"), 4, 2)
-        self.parameters_lyt.addWidget(self.num_workers_spn, 4, 3)
-
         self.setLayout(self.parameters_lyt)
 
         self.repetitions_per_sample_spn.valueChanged.connect(
             self._set_repetitions_per_sample
-        )
-        self.num_workers_spn.valueChanged.connect(
-            self._set_num_workers
         )
 
         self._segmentation_parameters_scr.hide()
@@ -416,12 +452,8 @@ class TunableWidget(QWidget):
             setattr(self, parameter_key, parameter_val)
 
     def _set_repetitions_per_sample(self, repetitions_per_sample: int):
-        if repetitions_per_sample != self._repetitions_per_sample:
-            self._repetitions_per_sample = repetitions_per_sample
-
-    def _set_num_workers(self, num_workers: int):
-        if num_workers != self._num_workers:
-            self._num_workers = num_workers
+        if repetitions_per_sample != self.repetitions_per_sample:
+            self.repetitions_per_sample = repetitions_per_sample
 
     def _show_segmentation_parameters(self, show: bool):
         self._segmentation_parameters_scr.setVisible(show)
