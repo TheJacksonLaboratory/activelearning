@@ -321,7 +321,7 @@ class AcquisitionFunction:
                             and (ax in self.tunable_segmentation_method
                                            .model_axes
                                  or ax_s > scaled_patch_sizes.get(ax, 1)))
-                        else slice(0, 1, None)
+                        else slice(None)
                         for ax, ax_s in layers_group_shape.items()
                     )]
                 except TypeError as err:

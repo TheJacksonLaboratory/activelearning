@@ -29,23 +29,25 @@ class AugmentEnsureInputs:
 
         self.augmentations = get_augmentations(ndim=2)
 
-        self.labels_ckecker = MinInstanceSampler(25)
+        self.labels_ckecker = MinInstanceSampler(min_size=25)
 
     def __call__(self, inputs, labels):
-        inputs_tr = inputs.copy()
-        labels_tr = labels.copy()
+        inputs_tr = inputs
+        labels_tr = labels
 
-        if not self.labels_ckecker(inputs, labels):
-            raise al.InvalidSampleError("Sample has not the minimum number of "
-                                        "instances or the instances do not "
-                                        "have the minimum required size.")
-
-        if inputs_tr.ndim == 3 and inputs_tr.shape[-1] == 1:
-            inputs_tr = inputs_tr.squeeze()
+        h, w = inputs_tr.shape[:2]
+        labels_tr = labels_tr[:h, :w]
 
         labels_tr = self.label_transform(labels_tr)
 
-        inputs_tr, labels_tr = self.augmentations(inputs_tr, labels_tr)
+        if inputs_tr.ndim == 2:
+            inputs_tr = inputs_tr[..., None]
+
+        input_channels = inputs_tr.shape[-1]
+        inputs_tr, labels_tr = self.augmentations(np.moveaxis(inputs_tr, -1, 0), labels_tr)
+
+        if inputs_tr.ndim == 3 and inputs_tr.shape[-1] == 1:
+            inputs_tr = inputs_tr.squeeze()
 
         inputs_tr = ensure_tensor_with_channels(inputs_tr, ndim=2,
                                                 dtype=torch.float32)
@@ -53,29 +55,23 @@ class AugmentEnsureInputs:
                                                 dtype=torch.float32)
 
         if (inputs_tr.ndim == 3
-           and (inputs_tr.shape[-1] == 1
-                or inputs_tr.shape[-1] == 3)):
+           and inputs_tr.shape[-1] in (1, 3)):
             if isinstance(inputs_tr, np.ndarray):
                 inputs_tr = np.moveaxis(inputs_tr, -1, 0)
             elif isinstance(inputs_tr, torch.Tensor):
-                inputs_tr = torch.transpose(inputs_tr, -1, 0)
+                inputs_tr = torch.permute(inputs_tr, (2, 0, 1))
 
         inputs_tr = inputs_tr.contiguous()
         labels_tr = labels_tr.contiguous()
+
+        if inputs_tr.max() < 1:
+            raise al.InvalidSample("Sample does not have minimum intensity")
+        if not self.labels_ckecker(inputs, labels_tr[0].numpy().astype(np.uint16)):
+            raise al.InvalidSample("Sample has not the minimum number of "
+                                   "instances or the instances do not "
+                                   "have the minimum required size.")
+
         return (inputs_tr, labels_tr)
-
-
-class MicroSAMInputsChecker(al.InputsChecker):
-    def __init__(self, min_labels_per_sample=1):
-        super().__init__(min_labels_per_sample)
-
-    def __call__(self, inputs, labels):
-        if labels.ndim == 4:
-            labels_ = labels[0, 0]
-        else:
-            labels_ = labels[0]
-
-        return super().__call__(inputs, labels)
 
 
 class TunableMicroSAM(al.TunableMethod):
@@ -98,11 +94,6 @@ class TunableMicroSAM(al.TunableMethod):
         self._box_nms_thresh = 0.7
 
         self.refresh_model = True
-
-        self._labels_checker = MicroSAMInputsChecker(
-            min_labels_per_sample=1,
-            min_labels_size=25
-        )
 
     def _model_init(self):
         if not self.refresh_model:

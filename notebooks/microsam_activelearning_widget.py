@@ -78,7 +78,7 @@ class TunableMicroSAMWidget(TunableMicroSAM, al.TunableWidget):
                                            "step": 1e-5}] = 0.005,
           n_epochs: Annotated[int, {"widget_type": "SpinBox",
                                     "min": 1,
-                                    "max": 10000}] = 20):
+                                    "max": 10000}] = 5):
             return dict(
                 learning_rate=learning_rate,
                 n_epochs=n_epochs,

@@ -201,7 +201,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
             "data_group": layers_group.data_group,
             "source_axes": "TCZYX",
             "axes": "TZYXC",
-            "roi": [(slice(0, 1), slice(0, 3), slice(0, 10), slice(0, 10),
+            "roi": [(slice(None), slice(0, 3), slice(0, 10), slice(0, 10),
                      slice(0, 10))],
             "modality": "images",
             'add_to_output': True
