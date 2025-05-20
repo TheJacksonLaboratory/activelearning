@@ -1484,7 +1484,7 @@ class MaskGenerator(PropertiesEditor):
                 dtype=np.uint8,
                 is_label=True,
                 is_multiscale=True,
-                overwrite=False
+                overwrite=True
              )
             mask_grp = mask_root[f"{mask_grp_name}/0"]
 
