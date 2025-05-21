@@ -666,6 +666,8 @@ def get_source_data(layer: Layer, data_group_init: Optional[str] = None):
                         available_data_groups.append(
                             str(Path(parent_group) / str(group_name))
                         )
+                    except AttributeError:
+                        break
                     except KeyError:
                         break
 
