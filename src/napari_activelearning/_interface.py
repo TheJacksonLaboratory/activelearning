@@ -589,12 +589,13 @@ class ImageGroupsManagerWidget(ImageGroupsManager, QWidget):
         self.register_listener(self.mask_generator)
 
         self.image_groups_tw = QTreeWidget()
-        self.image_groups_tw.setColumnCount(5)
+        self.image_groups_tw.setColumnCount(6)
         self.image_groups_tw.setHeaderLabels([
             "Group name",
             "Use",
             "Channels",
             "Axes order",
+            "Data group/Level",
             "Output directory",
         ])
         self.image_groups_tw.setSelectionMode(

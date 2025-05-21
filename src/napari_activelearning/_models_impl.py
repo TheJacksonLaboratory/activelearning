@@ -300,7 +300,7 @@ class SimpleTunable(TunableMethod):
         pass
 
     def _run_pred(self, img, *args, **kwargs):
-        img = img + 1e-3 * np.random.randn(*img.shape)
+        img = img.astype(np.float32) + 1e-3 * np.random.randn(*img.shape)
         img = (img - img.min()) / (img.max() - img.min() + 1e-12)
         return img
 

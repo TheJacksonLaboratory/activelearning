@@ -157,6 +157,9 @@ class LayerChannel(QTreeWidgetItem):
         self._update_available_shapes()
         self._update_available_scales()
 
+        if self._data_group is None:
+            self.setText(6, str(self._data_group))
+
         if self.parent() is not None:
             self.parent().updated = True
 
@@ -764,7 +767,7 @@ class ImageGroup(QTreeWidgetItem):
             group_dir = Path(group_dir)
 
         self._group_dir = group_dir
-        self.setText(4, str(self._group_dir))
+        self.setText(5, str(self._group_dir))
 
     @property
     def metadata(self):

@@ -659,10 +659,15 @@ def get_source_data(layer: Layer, data_group_init: Optional[str] = None):
                     parent_group = data_group
                     data_group = str(Path(data_group) / "0")
 
-                available_data_groups = [
-                    str(Path(parent_group) / group_name)
-                    for group_name in list(z_grp[parent_group].keys())
-                ]
+                available_data_groups = []
+                for group_name in range(10):
+                    try:
+                        z_grp[parent_group][group_name].shape
+                        available_data_groups.append(
+                            str(Path(parent_group) / str(group_name))
+                        )
+                    except KeyError:
+                        break
 
     else:
         return layer.data, None, []

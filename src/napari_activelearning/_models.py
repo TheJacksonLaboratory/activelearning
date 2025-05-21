@@ -85,13 +85,15 @@ class MyZarrDataset(zds.ZarrDataset):
         if self.max_samples is not None:
             return
 
-        sample_chunk_tlbr = self._toplefts[0]
+        sample_chunk_tlbr = self._toplefts[0][0]
 
         self.max_samples = np.prod(list(
             ((slice_ax.stop - slice_ax.start)
              // self._patch_sampler._patch_size.get(ax, 1))
             for ax, slice_ax in sample_chunk_tlbr.items()
         ))
+
+        self.max_samples *= self._toplefts.size
 
     def __len__(self):
         self._estimate_dataset_size()
@@ -267,7 +269,7 @@ class TunableMethod(SegmentationMethod):
                 patch_sampler=patch_sampler,
                 shuffle=True,
                 repetitions_per_sample=self.repetitions_per_sample,
-                max_samples=self.max_samples
+                max_samples=self.max_samples if self.max_samples > 0 else None
             )
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
@@ -279,7 +281,7 @@ class TunableMethod(SegmentationMethod):
                 patch_sampler=patch_sampler,
                 shuffle=True,
                 repetitions_per_sample=self.repetitions_per_sample,
-                max_samples=self.max_samples
+                max_samples=self.max_samples if self.max_samples > 0 else None
             )
 
             for input_mode, transform_mode in mode_transforms.items():
@@ -313,7 +315,9 @@ class TunableMethod(SegmentationMethod):
                     patch_sampler=patch_sampler,
                     shuffle=True,
                     repetitions_per_sample=self.repetitions_per_sample,
-                    max_samples=self.max_samples
+                    max_samples=(
+                        self.max_samples if self.max_samples > 0 else None
+                    )
                 )
 
                 for input_mode, transform_mode in mode_transforms.items():
