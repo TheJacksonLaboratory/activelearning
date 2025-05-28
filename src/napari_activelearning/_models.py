@@ -1,13 +1,14 @@
-from typing import Iterable, Union, Optional
-from pathlib import Path
+from typing import Iterable, Union
 from functools import partial
 
 import numpy as np
+import zarr
 import zarrdataset as zds
 
-from magicgui import magicgui
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QWidget, QGridLayout, QScrollArea, QCheckBox
+from qtpy.QtWidgets import (QWidget, QGridLayout, QScrollArea, QCheckBox,
+                            QSpinBox,
+                            QLabel)
 
 try:
     import torch
@@ -18,6 +19,8 @@ except ModuleNotFoundError:
 
 
 class SegmentationMethod:
+    model_axes = ""
+
     def __init__(self):
         super().__init__()
 
@@ -42,14 +45,59 @@ class SegmentationMethod:
         return out
 
 
+class AxesCorrector:
+    def __init__(self, out_axes: str, target_axes: str):
+        self.out_axes = list(out_axes)
+        self.target_axes = list(target_axes)
+        self._drop_axes = list(set(out_axes) - set(target_axes))
+        self.permute_order = zds.map_axes_order(out_axes, target_axes)
+
+    def __call__(self, img):
+        img_corr = img.transpose(self.permute_order)
+
+        # Drop axes with length 1 that are not in `axes`.
+        out_shape = [s
+                     for s, p_a in zip(img_corr.shape, self.permute_order)
+                     if self.out_axes[p_a] not in self._drop_axes]
+        img_corr = img_corr.reshape(out_shape)
+        return img_corr
+
+
+class InvalidSample(Exception):
+    """Exception raised when a sample is invalid due to lack of enugh labels or
+    not big-enough label objects."""
+    def __init__(self, message):
+        super().__init__(message)
+
+    def __str__(self):
+        return f"InvalidSample: {self.args[0]}"
+
+
 class MyZarrDataset(zds.ZarrDataset):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, max_samples=None, repetitions_per_sample=1,
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.max_samples_per_image = 0
+        self.repetitions_per_sample = repetitions_per_sample
+        self.max_samples = max_samples
+
+    def _estimate_dataset_size(self):
+        if self.max_samples is not None:
+            return
+
+        sample_chunk_tlbr = self._toplefts[0][0]
+
+        self.max_samples = np.prod(list(
+            ((slice_ax.stop - slice_ax.start)
+             // self._patch_sampler._patch_size.get(ax, 1))
+            for ax, slice_ax in sample_chunk_tlbr.items()
+        ))
+
+        self.max_samples *= self._toplefts.size
 
     def __len__(self):
-        return self.max_samples_per_image * len(self._collections["images"])
+        self._estimate_dataset_size()
+        return self.max_samples
 
     def __getstate__(self):
         # Custom behavior for pickling the ZarrDataset object.
@@ -65,10 +113,64 @@ class MyZarrDataset(zds.ZarrDataset):
         # Custom behavior for unpickling the ZarrDataset object.
         self.__dict__.update(state)
 
+    def _initialize(self, force=False):
+        if self._initialized and not force:
+            return
+
+        super()._initialize(force=force)
+
+        if self.repetitions_per_sample > 1:
+            self._arr_lists = np.tile(self._arr_lists,
+                                      (self.repetitions_per_sample, ))
+
+            self._toplefts = np.tile(self._toplefts,
+                                     (self.repetitions_per_sample, 1))
+
+    def __iter__(self):
+        self._initialize()
+
+        n_samples = 0
+
+        self._estimate_dataset_size()
+
+        max_samples = self.max_samples // self._num_workers
+        remaining_samples = self.max_samples % self._num_workers
+        if self._worker_id < remaining_samples:
+            max_samples += 1
+
+        while n_samples < max_samples:
+            iter = super().__iter__()
+
+            while n_samples < max_samples:
+                try:
+                    batch = next(iter)
+
+                    yield batch
+                    n_samples += 1
+
+                except InvalidSample:
+                    continue
+
+                except StopIteration:
+                    # If there are no more valid samples in this shard of the
+                    # dataset, terminate the loop
+                    break
+            else:
+                # This means we have extracted the maximum amount of samples
+                # requested
+                break
+
+            if n_samples == 0:
+                # If we have not extracted any samples, we need to break the
+                # loop to avoid an infinite loop
+                break
+
 
 class TunableMethod(SegmentationMethod):
     def __init__(self):
-        self._num_workers = 0
+        self.max_samples = 0
+        self.repetitions_per_sample = 1
+
         super().__init__()
 
     def get_train_transform(self, *args, **kwargs) -> dict:
@@ -84,25 +186,62 @@ class TunableMethod(SegmentationMethod):
                                   "derived class.")
 
     def fine_tune(self, dataset_metadata_list: Iterable[dict],
+                  model_axes: str,
                   train_data_proportion: float = 0.8,
-                  patch_sizes: Union[dict, int] = 256) -> bool:
+                  patch_sizes: Union[dict, int] = 256,
+                  num_workers: int = 0) -> bool:
 
-        mode_transforms = self.get_train_transform()
+        base_mode_transforms = self.get_train_transform()
+
+        if base_mode_transforms is None:
+            base_mode_transforms = {}
+
+        base_mode_transforms = {
+            input_mode: [mode_transforms]
+            for input_mode, mode_transforms in
+            base_mode_transforms.items()
+        }
+
+        # Complete the transforms for individial input modes
+        mode_transforms = {
+            (input_mode, ): []
+            for input_mode in dataset_metadata_list[0].keys()
+            if (input_mode, ) not in base_mode_transforms
+        }
+        mode_transforms.update(base_mode_transforms)
+
+        for input_mode in dataset_metadata_list[0].keys():
+            mode_transforms[(input_mode, )].insert(0, AxesCorrector(
+                dataset_metadata_list[0][input_mode]["axes"],
+                model_axes
+            ))
 
         worker_init_fn = None
 
         if len(dataset_metadata_list) == 1:
-            sampling_mask = np.copy(
-                dataset_metadata_list[0]["masks"]["filenames"]
-            )
+            if isinstance(dataset_metadata_list[0]["masks"]["filenames"], str):
+                z_grp = zarr.open(
+                    dataset_metadata_list[0]["masks"]["filenames"],
+                    mode="r"
+                )
+
+                sampling_mask = np.copy(
+                    z_grp[dataset_metadata_list[0]["masks"]["data_group"]][:]
+                )
+            elif isinstance(dataset_metadata_list[0]["masks"]["filenames"],
+                            np.ndarray):
+                sampling_mask = np.copy(
+                    dataset_metadata_list[0]["masks"]["filenames"]
+                )
+            else:
+                raise ValueError("The mask filenames must be a numpy array or "
+                                 "a Zarr file.")
 
             sampling_locations = np.nonzero(sampling_mask)
             sampling_locations = np.ravel_multi_index(sampling_locations,
                                                       sampling_mask.shape)
 
-            trn_samples = int(train_data_proportion * len(sampling_locations))
-            val_samples = len(sampling_locations) - trn_samples
-
+            trn_samples = int(len(sampling_locations) * train_data_proportion)
             sampling_locations = np.random.choice(
                 sampling_locations,
                 size=trn_samples,
@@ -118,7 +257,7 @@ class TunableMethod(SegmentationMethod):
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
                 spatial_axes=dataset_metadata_list[0]["labels"]["axes"],
-                min_area=0.01
+                min_area=1
             )
 
             dataset_metadata_list[0]["masks"]["filenames"] = train_mask
@@ -129,8 +268,9 @@ class TunableMethod(SegmentationMethod):
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
                 shuffle=True,
+                repetitions_per_sample=self.repetitions_per_sample,
+                max_samples=self.max_samples if self.max_samples > 0 else None
             )
-            train_datasets.max_samples_per_image = trn_samples
 
             dataset_metadata_list[0]["masks"]["filenames"] = val_mask
 
@@ -140,15 +280,15 @@ class TunableMethod(SegmentationMethod):
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
                 shuffle=True,
+                repetitions_per_sample=self.repetitions_per_sample,
+                max_samples=self.max_samples if self.max_samples > 0 else None
             )
 
-            val_datasets.max_samples_per_image = val_samples
-            if mode_transforms is not None:
-                for input_mode, transform_mode in mode_transforms.items():
-                    train_datasets.add_transform(input_mode, transform_mode)
+            for input_mode, transform_mode in mode_transforms.items():
+                train_datasets.add_transform(input_mode, transform_mode)
 
-                for input_mode, transform_mode in mode_transforms.items():
-                    val_datasets.add_transform(input_mode, transform_mode)
+            for input_mode, transform_mode in mode_transforms.items():
+                val_datasets.add_transform(input_mode, transform_mode)
 
             worker_init_fn = zds.zarrdataset_worker_init_fn
 
@@ -174,12 +314,14 @@ class TunableMethod(SegmentationMethod):
                     draw_same_chunk=False,
                     patch_sampler=patch_sampler,
                     shuffle=True,
+                    repetitions_per_sample=self.repetitions_per_sample,
+                    max_samples=(
+                        self.max_samples if self.max_samples > 0 else None
+                    )
                 )
 
-                dataset.max_samples_per_image = self.max_samples_per_image
-                if mode_transforms is not None:
-                    for input_mode, transform_mode in mode_transforms.items():
-                        dataset.add_transform(input_mode, transform_mode)
+                for input_mode, transform_mode in mode_transforms.items():
+                    dataset.add_transform(input_mode, transform_mode)
 
                 if idx in training_indices:
                     train_datasets.append(dataset)
@@ -193,12 +335,12 @@ class TunableMethod(SegmentationMethod):
         if USING_PYTORCH:
             train_dataloader = DataLoader(
                 train_datasets,
-                num_workers=1,
+                num_workers=num_workers,
                 worker_init_fn=worker_init_fn
             )
             val_dataloader = DataLoader(
                 val_datasets,
-                num_workers=1,
+                num_workers=num_workers,
                 worker_init_fn=worker_init_fn
             )
         else:
@@ -272,6 +414,19 @@ class TunableWidget(QWidget):
                     partial(self._set_parameter, parameter_key="_" + par_name)
                 )
 
+        self.max_samples_spn = QSpinBox(
+            minimum=0,
+            maximum=10000,
+            value=0,
+            singleStep=1
+        )
+        self.repetitions_per_sample_spn = QSpinBox(
+            minimum=1,
+            maximum=100,
+            value=1,
+            singleStep=1
+        )
+
         self.parameters_lyt = QGridLayout()
         self.parameters_lyt.addWidget(
             self.advanced_segmentation_options_chk, 0, 0
@@ -285,7 +440,23 @@ class TunableWidget(QWidget):
         self.parameters_lyt.addWidget(
             self._finetuning_parameters_scr, 3, 0, 1, 2
         )
+
+        self.parameters_lyt.addWidget(QLabel("Number of samples per epoch "
+                                             "(fine tuning only):"), 4, 0)
+        self.parameters_lyt.addWidget(self.max_samples_spn, 4, 1)
+        self.parameters_lyt.addWidget(QLabel("Repetitions per sample "
+                                             "(fine tuning only):"), 5, 0)
+        self.parameters_lyt.addWidget(self.repetitions_per_sample_spn, 5, 1)
+
         self.setLayout(self.parameters_lyt)
+
+        self.max_samples_spn.valueChanged.connect(
+            self._set_max_samples
+        )
+
+        self.repetitions_per_sample_spn.valueChanged.connect(
+            self._set_repetitions_per_sample
+        )
 
         self._segmentation_parameters_scr.hide()
         self._finetuning_parameters_scr.hide()
@@ -308,6 +479,14 @@ class TunableWidget(QWidget):
            or getattr(self, parameter_key) != parameter_val):
             self.refresh_model = True
             setattr(self, parameter_key, parameter_val)
+
+    def _set_max_samples(self, max_samples: int):
+        if max_samples > 0 and max_samples != self.max_samples:
+            self.max_samples = max_samples
+
+    def _set_repetitions_per_sample(self, repetitions_per_sample: int):
+        if repetitions_per_sample != self.repetitions_per_sample:
+            self.repetitions_per_sample = repetitions_per_sample
 
     def _show_segmentation_parameters(self, show: bool):
         self._segmentation_parameters_scr.setVisible(show)

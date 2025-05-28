@@ -1,0 +1,24 @@
+name: napari-activelearning
+display_name: Active Learning
+# use 'hidden' to remove plugin from napari hub search results
+visibility: hidden
+# see https://napari.org/stable/plugins/manifest.html for valid categories
+categories: ["Annotation", "Segmentation", "Acquisition"]
+contributions:
+  commands:
+    - id: napari-activelearning.make_image_groups_manager_widget
+      python_name: napari_activelearning:get_image_groups_manager_widget
+      title: Image groups manager
+    - id: napari-activelearning.make_acquisition_fun_widget
+      python_name: napari_activelearning:get_acquisition_function_widget
+      title: Acquisition function manager
+    - id: napari-activelearning.make_label_groups_manager_widget
+      python_name: napari_activelearning:get_label_groups_manager_widget
+      title: Label groups manager
+  widgets:
+    - command: napari-activelearning.make_image_groups_manager_widget
+      display_name: Image groups manager
+    - command: napari-activelearning.make_acquisition_fun_widget
+      display_name: Acquisition function manager
+    - command: napari-activelearning.make_label_groups_manager_widget
+      display_name: Label groups manager

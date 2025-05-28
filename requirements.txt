@@ -1,0 +1,8 @@
+tensorstore==0.1.59
+ome-zarr==0.9.0
+magicgui==0.8.3
+qtpy==2.4.1
+scikit-image==0.24.0
+tifffile
+zarr>=2.12.0,<3.0.0
+zarrdataset>=0.2.1
