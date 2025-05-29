@@ -16,9 +16,6 @@ if USING_CELLPOSE:
         def _segmentation_parameters_widget():
             @magicgui(auto_call=True)
             def cellpose_segmentation_parameters(
-              channel_axis: Annotated[int, {"widget_type": "SpinBox",
-                                            "min": 0,
-                                            "max": 2**16}] = 2,
               channels: tuple[int, int] = (0, 0),
               pretrained_model: Annotated[Path, {"widget_type": "FileEdit",
                                                  "visible": False,
@@ -47,7 +44,6 @@ if USING_CELLPOSE:
                                   "LC"] = "cyto3",
               gpu: bool = True):
                 return dict(
-                    channel_axis=channel_axis,
                     channels=channels,
                     pretrained_model=pretrained_model,
                     model_type=model_type,
@@ -55,7 +51,6 @@ if USING_CELLPOSE:
                 )
 
             segmentation_parameter_names = [
-                    "channel_axis",
                     "channels",
                     "pretrained_model",
                     "model_type",
@@ -191,17 +186,14 @@ class SimpleTunableWidget(SimpleTunable, TunableWidget):
     def _segmentation_parameters_widget(self):
         @magicgui(auto_call=True)
         def simple_segmentation_parameters(
-            channel_axis: Annotated[int, {"widget_type": "SpinBox", "min": 0,
-                                          "max": 2**16}] = 2,
             threshold: Annotated[float, {"widget_type": "FloatSpinBox",
                                          "min": 0.0,
                                          "max": 1.0,
                                          "step": 1e-5}] = 0.5,
         ):
-            return dict(channel_axis=channel_axis, threshold=threshold)
+            return dict(threshold=threshold)
 
         segmentation_parameter_names = [
-                "channel_axis",
                 "threshold"
             ]
 

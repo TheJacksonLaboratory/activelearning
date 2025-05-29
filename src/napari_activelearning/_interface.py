@@ -1015,6 +1015,8 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
     def _set_patch_size(self, patch_sizes: dict):
         self._patch_sizes = patch_sizes
+        if len(patch_sizes):
+            self._previous_patch_sizes = patch_sizes
 
     def _set_add_padding(self):
         self._add_padding = self.add_padding_chk.isChecked()
