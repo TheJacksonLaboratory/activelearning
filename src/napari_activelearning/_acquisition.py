@@ -242,6 +242,7 @@ class AcquisitionFunction:
                  labels_manager: LabelsManager,
                  tunable_segmentation_methods: dict):
         self._patch_sizes = {}
+        self._previous_patch_sizes = None
         self.input_axes = ""
 
         self._max_samples = 1
@@ -378,7 +379,7 @@ class AcquisitionFunction:
 
     def update_reference_info(self):
         self.input_axes = []
-        self._patch_sizes = {}
+        patch_sizes = {}
 
         for idx in range(self.image_groups_manager.groups_root.childCount()):
             child = self.image_groups_manager.groups_root.child(idx)
@@ -401,15 +402,22 @@ class AcquisitionFunction:
                 if ax not in self.input_axes
             ]
 
-            self._patch_sizes.update({
+            patch_sizes.update({
                 ax: min(128, ax_ps) if ax_ps else 128
                 for ax, ax_ps in zip(input_layers_source_axes,
                                      input_layers_shapes)
             })
 
-        if "C" in self._patch_sizes:
-            del self._patch_sizes["C"]
+        if "C" in patch_sizes:
+            del patch_sizes["C"]
 
+        if self._previous_patch_sizes is not None:
+            patch_sizes = {
+                ax: self._previous_patch_sizes.get(ax, ps)
+                for ax, ps in patch_sizes.items()
+            }
+
+        self._patch_sizes = patch_sizes
         self.input_axes = "".join([
             ax
             for ax in self.input_axes

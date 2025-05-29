@@ -49,10 +49,10 @@ try:
                     f"Sample has {len(unique_samples)} labels, which is less "
                     f"than the required {self._min_labels_per_sample} labels")
 
-            min_label = labels_flat[labels_flat > 0].min()
-            labels_flat = np.where(labels_flat > 0,
-                                   labels_flat - min_label + 1,
-                                   0)
+            for new_label, label in enumerate(unique_samples, 1):
+                labels_flat = np.where(labels_flat == label,
+                                       new_label,
+                                       labels_flat)
 
             labels_flat_count = np.bincount(labels_flat)
             if labels_flat.min() == 0:
@@ -60,7 +60,7 @@ try:
             else:
                 labels_size = labels_flat_count.min()
 
-            if labels_size.min() < self._min_labels_size:
+            if labels_size < self._min_labels_size:
                 raise InvalidSample(
                     f"Sample's smaller label has size of {labels_size.min()} "
                     f"pixels/elements, which is less than the required minimum"
@@ -70,6 +70,7 @@ try:
 
     class CellposeTunable(TunableMethod):
         model_axes = "YXC"
+        _channel_axis = 2
 
         def __init__(self):
             super().__init__()
@@ -84,7 +85,6 @@ try:
             self._pretrained_model = None
             self._model_type = "cyto"
             self._gpu = True
-            self._channel_axis = 2
             self._channels = [0, 0]
 
             self._batch_size = 8

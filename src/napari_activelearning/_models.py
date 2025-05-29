@@ -10,6 +10,8 @@ from qtpy.QtWidgets import (QWidget, QGridLayout, QScrollArea, QCheckBox,
                             QSpinBox,
                             QLabel)
 
+from time import perf_counter
+
 try:
     import torch
     from torch.utils.data import DataLoader, ChainDataset
@@ -85,15 +87,15 @@ class MyZarrDataset(zds.ZarrDataset):
         if self.max_samples is not None:
             return
 
-        sample_chunk_tlbr = self._toplefts[0][0]
+        self.max_samples = 0
+        for im_coll, tl_chks in zip(self._arr_lists, self._toplefts):
+            for chunk_tlbr in tl_chks:
+                patches_tls = self._patch_sampler.compute_patches(
+                    im_coll,
+                    chunk_tlbr
+                )
 
-        self.max_samples = np.prod(list(
-            ((slice_ax.stop - slice_ax.start)
-             // self._patch_sampler._patch_size.get(ax, 1))
-            for ax, slice_ax in sample_chunk_tlbr.items()
-        ))
-
-        self.max_samples *= self._toplefts.size
+                self.max_samples += len(patches_tls)
 
     def __len__(self):
         self._estimate_dataset_size()
