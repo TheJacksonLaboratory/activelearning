@@ -11,7 +11,7 @@ website:
   navbar:
     left:
       - tutorials.qmd
-      - href: reference/
+      - href: reference/index.qmd
         text: API Reference
 
 format:
@@ -70,8 +70,8 @@ quartodoc:
         - SegmentationMethod.probs
         - SegmentationMethod.segment
         - TunableMethod
-        - TunableMethod._get_transform
-        - TunableMethod._fine_tune
+        - TunableMethod.get_train_transform
+        - TunableMethod.get_inference_transform
         - TunableMethod.fine_tune
         - AcquisitionFunction
         - AcquisitionFunction.compute_acquisition

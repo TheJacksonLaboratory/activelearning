@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>tunablemethod._get_transform</title>
+<title>tunablemethod.get_inference_transform</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -64,8 +64,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../">
-<link href="../reference/TunableMethod._fine_tune.html" rel="next">
-<link href="../reference/TunableMethod.html" rel="prev">
+<link href="../reference/TunableMethod.fine_tune.html" rel="next">
+<link href="../reference/TunableMethod.get_train_transform.html" rel="prev">
 <script src="../site_libs/quarto-html/quarto.js"></script>
 <script src="../site_libs/quarto-html/popper.min.js"></script>
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
@@ -74,7 +74,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-549806ee2085284f45b00abea8c6df48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-e212f1f3c46809d555a1335ea96b499f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-ddd961a2510921635943dfbbd19534c4.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -123,7 +123,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Tutorials</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../reference/"> 
+    <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">API Reference</span></a>
   </li>  
 </ul>
@@ -137,7 +137,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../reference/AcquisitionFunction.html">Acquisition Function Configuration</a></li><li class="breadcrumb-item"><a href="../reference/TunableMethod._get_transform.html">TunableMethod._get_transform</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../reference/AcquisitionFunction.html">Acquisition Function Configuration</a></li><li class="breadcrumb-item"><a href="../reference/TunableMethod.get_inference_transform.html">TunableMethod.get_inference_transform</a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -375,14 +375,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/TunableMethod._get_transform.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text">TunableMethod._get_transform</span></a>
+  <a href="../reference/TunableMethod.get_train_transform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">TunableMethod.get_train_transform</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/TunableMethod._fine_tune.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">TunableMethod._fine_tune</span></a>
+  <a href="../reference/TunableMethod.get_inference_transform.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">TunableMethod.get_inference_transform</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -510,19 +510,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#napari_activelearning.TunableMethod._get_transform" id="toc-napari_activelearning.TunableMethod._get_transform" class="nav-link active" data-scroll-target="#napari_activelearning.TunableMethod._get_transform">TunableMethod._get_transform</a></li>
+  <li><a href="#napari_activelearning.TunableMethod.get_inference_transform" id="toc-napari_activelearning.TunableMethod.get_inference_transform" class="nav-link active" data-scroll-target="#napari_activelearning.TunableMethod.get_inference_transform">TunableMethod.get_inference_transform</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../reference/AcquisitionFunction.html">Acquisition Function Configuration</a></li><li class="breadcrumb-item"><a href="../reference/TunableMethod._get_transform.html">TunableMethod._get_transform</a></li></ol></nav></header>
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../reference/AcquisitionFunction.html">Acquisition Function Configuration</a></li><li class="breadcrumb-item"><a href="../reference/TunableMethod.get_inference_transform.html">TunableMethod.get_inference_transform</a></li></ol></nav></header>
 
 
 
 
-<section id="napari_activelearning.TunableMethod._get_transform" class="level1">
-<h1>TunableMethod._get_transform</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>TunableMethod._get_transform()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<section id="napari_activelearning.TunableMethod.get_inference_transform" class="level1">
+<h1>TunableMethod.get_inference_transform</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>TunableMethod.get_inference_transform(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 
 
 </section>
@@ -947,13 +947,13 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="../reference/TunableMethod.html" class="pagination-link" aria-label="TunableMethod">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">TunableMethod</span>
+      <a href="../reference/TunableMethod.get_train_transform.html" class="pagination-link" aria-label="TunableMethod.get_train_transform">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">TunableMethod.get_train_transform</span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="../reference/TunableMethod._fine_tune.html" class="pagination-link" aria-label="TunableMethod._fine_tune">
-        <span class="nav-page-text">TunableMethod._fine_tune</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../reference/TunableMethod.fine_tune.html" class="pagination-link" aria-label="TunableMethod.fine_tune">
+        <span class="nav-page-text">TunableMethod.fine_tune</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

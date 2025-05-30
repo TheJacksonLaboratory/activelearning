@@ -1,9 +1,10 @@
 from typing import Optional, Union, Iterable
 from pathlib import PureWindowsPath, Path
 from urllib.parse import urlparse
+import random
 import math
-import tensorstore as ts
 import zarr
+import tifffile
 import zarrdataset as zds
 from ome_zarr.writer import write_multiscales_metadata, write_label_metadata
 from ome_zarr.format import FormatV04
@@ -22,6 +23,8 @@ except ModuleNotFoundError:
 from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
+from ._models import TunableMethod, AxesCorrector
+
 
 class SuperPixelGenerator(zds.MaskGenerator):
     """Gerates a labeled mask based on the super pixels computed from the input
@@ -31,7 +34,8 @@ class SuperPixelGenerator(zds.MaskGenerator):
     no channels.
     """
     def __init__(self, num_superpixels: int = 512, axes: str = "YXC",
-                 model_axes: str = "YXC"):
+                 model_axes: str = "YXC",
+                 **kwargs):
 
         super(SuperPixelGenerator, self).__init__(axes=axes)
 
@@ -213,12 +217,15 @@ class StaticPatchSampler(zds.PatchSampler):
 
 
 def get_dataloader(
-        dataset_metadata, patch_size: dict,
+        dataset_metadata: dict,
+        patch_size: dict,
         shuffle: bool = True,
         num_workers: int = 0,
         batch_size: int = 1,
         spatial_axes: str = "YX",
+        padding: dict = None,
         model_input_axes: str = "YXC",
+        tunable_segmentation_method: Optional[TunableMethod] = None,
         **superpixel_kwargs
 ):
 
@@ -239,7 +246,8 @@ def get_dataloader(
 
     patch_sampler = zds.PatchSampler(patch_size=patch_size,
                                      spatial_axes=spatial_axes,
-                                     min_area=0.05)
+                                     pad=padding,
+                                     min_area=1)
 
     train_dataset = zds.ZarrDataset(
         list(dataset_metadata.values()),
@@ -249,7 +257,35 @@ def get_dataloader(
         shuffle=shuffle
     )
 
-    train_dataset.add_transform("images", zds.ToDtype(np.float32))
+    if tunable_segmentation_method is not None:
+        base_mode_transforms =\
+            tunable_segmentation_method.get_inference_transform()
+
+        if base_mode_transforms is None:
+            base_mode_transforms = {}
+
+        base_mode_transforms = {
+            input_mode: [mode_transforms]
+            for input_mode, mode_transforms in
+            base_mode_transforms.items()
+        }
+
+        # Complete the transforms for individial input modes
+        mode_transforms = {
+            (input_mode, ): []
+            for input_mode in dataset_metadata.keys()
+            if (input_mode, ) not in base_mode_transforms
+        }
+        mode_transforms.update(base_mode_transforms)
+
+        for input_mode in dataset_metadata.keys():
+            mode_transforms[(input_mode, )].insert(0, AxesCorrector(
+                dataset_metadata[input_mode]["axes"],
+                model_input_axes
+            ))
+
+        for input_mode, transform_mode in mode_transforms.items():
+            train_dataset.add_transform(input_mode, transform_mode)
 
     if USING_PYTORCH:
         train_dataloader = DataLoader(
@@ -304,7 +340,8 @@ def validate_name(group_names, previous_child_name, new_child_name):
 def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
               is_multiscale: bool = False,
               metadata: Optional[dict] = None,
-              is_label: bool = False):
+              is_label: bool = False,
+              overwrite: bool = True):
     if not metadata:
         metadata = {}
 
@@ -326,7 +363,10 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
     else:
         chunks_size_axes = chunk_size
 
-    group_name = name
+    if overwrite:
+        group_name = name
+    else:
+        group_name = get_next_name(name, list(out_grp.keys()))
 
     if isinstance(data, MultiScaleData):
         data_ms = data
@@ -355,6 +395,7 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
             chunks=chunks_size_axes,
             compressor=zarr.Blosc(clevel=9),
             write_empty_chunks=False,
+            dimension_separator="/",  # To make it compatible with ome-zarr
             dtype=dtype if data_ms_s is None else data_ms_s.dtype,
             overwrite=True
         )
@@ -363,121 +404,194 @@ def save_zarr(output_filename, data, shape, chunk_size, name, dtype,
                                                 zarr.DirectoryStore))):
         write_label_metadata(out_grp, group_name, fmt=FormatV04(), **metadata)
 
-    return out_grp
+    return out_grp, group_name
 
 
-def downsample_image(z_root, source_axes, data_group, scale=4, num_scales=5,
+def update_labels(labels_group: zarr.Group,
+                  new_labels: Union[np.ndarray, set]):
+    label_colors = labels_group.attrs["image-label"].get("colors", [])
+
+    prev_unique_labels = set(
+        lbl["label-value"]
+        for lbl in label_colors
+    )
+
+    # Remove existing label values from the new labels list and
+    # the background label as well.
+    if isinstance(new_labels, np.ndarray):
+        new_labels = set(np.unique(new_labels))
+
+    unique_labels = new_labels - prev_unique_labels - {0}
+
+    if len(unique_labels):
+        label_colors += [
+            {
+                "label-value": label_value,
+                "rgba": [
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    255
+                ],
+            }
+            for label_value in unique_labels
+        ]
+
+        label_version = labels_group.attrs["image-label"]["version"]
+        labels_group.attrs["image-label"] = {
+            "version": label_version,
+            "colors": label_colors
+        }
+
+
+def downsample_image(z_root, axes, scale, data_group,
+                     downsample_scale=4,
+                     num_scales=5,
                      reference_source_axes=None,
                      reference_scale=None,
                      reference_units=None):
-    if isinstance(z_root, (Path, str)):
-        source_arr = da.from_zarr(z_root, component=data_group)
-        z_ms = [source_arr]
-
-    elif isinstance(z_root, np.ndarray):
-        source_arr = da.from_array(z_root)
-        z_ms = [source_arr]
-
-    else:
-        source_arr = da.from_zarr(z_root[data_group])
-        z_ms = [source_arr]
-
-    if data_group is None:
-        data_group = ""
-    else:
-        data_group = "/".join(data_group.split("/")[:-1])
-
-    groups_root = data_group + "/%i"
-
-    source_arr_shape = {ax: source_arr.shape[source_axes.index(ax)]
-                        for ax in source_axes}
-
-    min_spatial_shape = min(source_arr_shape[ax]
-                            for ax in "YX" if ax in source_axes)
-
-    num_scales = min(num_scales, int(np.log(min_spatial_shape)
-                                     / np.log(scale)))
-
-    downscale_selection = tuple(
-        slice(None, None, scale) if ax in "YX" and ax_s > 1 else slice(None)
-        for ax, ax_s in zip(source_axes, source_arr.shape)
-    )
-
     if reference_source_axes is None or reference_scale is None:
-        reference_source_axes = source_axes
-        reference_scale = [1.0] * len(source_axes)
-
-    if not reference_units:
-        reference_units = {
-            ax: None
-            for ax in reference_source_axes
+        reference_source_axes = axes
+        reference_scale = {
+            ax: 1.0
+            for ax in axes
         }
 
     datasets = [{
         "coordinateTransformations": [{
             "type": "scale",
-            "scale": [reference_scale.get(ax, 1.0) for ax in source_axes],
+            "scale": [scale.get(ax, 1) * reference_scale.get(ax, 1.0)
+                      for ax in axes],
             "translation": [
-                0.5 * (1 + reference_scale[ax])
-                if ax in "YX" and reference_scale.get(ax, 1) > 1 else 0.0
-                for ax in source_axes
+                0.5 * (scale.get(ax, 1) * reference_scale.get(ax) - 1)
+                if (ax in "YX"
+                    and (scale.get(ax, 1) * reference_scale.get(ax)) > 1)
+                else 0.0
+                for ax in axes
             ]
         }],
         "path": "0"
     }]
 
-    for s in range(1, num_scales):
-        target_arr = source_arr[downscale_selection]
-        target_arr = target_arr.rechunk(
-            tuple(
-                max(1, chk // reference_scale[ax]) if ax in "XY" else chk
-                for chk, ax in zip(source_arr.chunksize, source_axes)
-            )
-        )
+    z_ms = None
 
+    if num_scales > 1:
         if isinstance(z_root, (Path, str)):
-            z_ms.append(target_arr)
+            source_arr = da.from_zarr(z_root, component=data_group)
+            z_ms = [source_arr]
 
-            target_arr.to_zarr(z_root,
-                               component=groups_root % s,
-                               compressor=zarr.Blosc(clevel=9),
-                               write_empty_chunks=False,
-                               overwrite=True)
-
-            source_arr = da.from_zarr(z_root, component=groups_root % s)
-            datasets.append({
-                "coordinateTransformations": [
-                    {"type": "scale",
-                     "scale": [4.0 ** s * reference_scale.get(ax, 1.0)
-                               if ax in "YX" else 1.0
-                               for ax in source_axes],
-                     "translation": [
-                         0.5 * (1 + 4.0 ** s * reference_scale[ax])
-                         if ax in "YX" and reference_scale.get(ax, 1) > 1
-                         else 0
-                         for ax in source_axes
-                         ]
-                     }],
-                "path": str(s)
-            })
+        elif isinstance(z_root, np.ndarray):
+            source_arr = da.from_array(z_root)
+            z_ms = [source_arr]
 
         else:
-            z_ms.append(target_arr)
-            source_arr = target_arr
+            source_arr = da.from_zarr(z_root[data_group])
+            z_ms = [source_arr]
+
+        if data_group is None:
+            data_group = ""
+        else:
+            data_group_parts = Path(data_group).parts
+            if len(data_group_parts) > 1:
+                data_group = str(Path(*data_group_parts[:-1]))
+
+        groups_root = data_group + "/%i"
+
+        source_arr_shape = {ax: source_arr.shape[axes.index(ax)]
+                            for ax in axes}
+
+        min_spatial_shape = min(source_arr_shape[ax]
+                                for ax in "YX" if ax in axes)
+
+        num_scales = min(num_scales, int(np.log(min_spatial_shape)
+                                         / np.log(downsample_scale)))
+
+        downscale_selection = tuple(
+            slice(None, None, downsample_scale)
+            if ax in "YX" and ax_s > 1
+            else slice(None)
+            for ax, ax_s in zip(axes, source_arr.shape)
+        )
+
+        if not reference_units:
+            reference_units = {
+                ax: None
+                for ax in reference_source_axes
+            }
+
+        for s in range(1, num_scales):
+            target_arr = source_arr[downscale_selection]
+            # Don't generate chunks smaller than 256 per side or the current
+            # size of the source array.
+            target_arr = target_arr.rechunk(
+                tuple(
+                    max(min(256, chk),
+                        chk // (scale.get(ax, 1) * reference_scale.get(ax, 1)))
+                    if ax in "XY" else chk
+                    for chk, ax in zip(source_arr.chunksize, axes)
+                )
+            )
+
+            if isinstance(z_root, (Path, str)):
+                z_ms.append(target_arr)
+
+                target_arr.to_zarr(
+                    z_root,
+                    component=groups_root % s,
+                    compressor=zarr.Blosc(clevel=9),
+                    write_empty_chunks=False,
+                    dimension_separator="/",
+                    overwrite=True
+                )
+
+                source_arr = da.from_zarr(z_root, component=groups_root % s)
+                datasets.append({
+                    "coordinateTransformations": [
+                        {
+                            "type": "scale",
+                            "scale": [
+                                (float(downsample_scale) ** s
+                                 * scale.get(ax, 1.0)
+                                 * reference_scale.get(ax, 1.0))
+                                if ax in "YX" else 1.0
+                                for ax in axes
+                            ],
+                            "translation": [
+                                0.5 * (float(downsample_scale) ** s
+                                       * scale.get(ax, 1.0)
+                                       * reference_scale.get(ax, 1.0) - 1)
+                                if (ax in "YX"
+                                    and (scale.get(ax, 1)
+                                         * reference_scale.get(ax, 1)) > 1)
+                                else 0
+                                for ax in axes
+                            ]
+                        }
+                    ],
+                    "path": str(s)
+                })
+
+            else:
+                z_ms.append(target_arr)
+                source_arr = target_arr
 
     if isinstance(z_root, Path):
         z_grp = zarr.open(z_root / data_group, mode="a")
         write_multiscales_metadata(z_grp, datasets,
                                    fmt=FormatV04(),
                                    name=data_group,
-                                   axes=list(source_axes.lower()))
+                                   axes=list(axes.lower()))
 
     return z_ms
 
 
-def get_source_data(layer: Layer):
+def get_source_data(layer: Layer, data_group_init: Optional[str] = None):
+    if data_group_init is None:
+        data_group_init = ""
+
     input_filename = layer._source.path
-    data_group = ""
+    data_group = data_group_init
+    available_data_groups = []
 
     if input_filename:
         input_url = urlparse(input_filename)
@@ -492,11 +606,13 @@ def get_source_data(layer: Layer):
                                     range(len(input_filename_parts))))
         if extension_idx:
             extension_idx = extension_idx[0]
-            data_group = input_filename_parts[extension_idx + 1:]
-            if len(data_group):
-                data_group = Path(*data_group)
+            data_group_filename = input_filename_parts[extension_idx + 1:]
+            if len(data_group_filename):
+                data_group_filename = Path(*data_group_filename)
             else:
-                data_group = ""
+                data_group_filename = ""
+
+            data_group = data_group_filename if not data_group else data_group
 
             input_path = Path(
                 *input_filename_parts[:extension_idx + 1]
@@ -519,13 +635,44 @@ def get_source_data(layer: Layer):
 
         input_filename = input_scheme + input_netloc + input_path
 
+        zarr_like = False
         if ".zarr" in input_filename:
-            z_grp = zarr.open(input_filename, mode="r")
-            while not isinstance(z_grp[data_group], zarr.Array):
-                data_group = str(Path(data_group) / "0")
+            zarr_like = True
+            z_fp = input_filename
+        else:
+            # Try to read as a TIFF file if not a Zarr
+            try:
+                z_fp = tifffile.imread(input_filename, aszarr=True)
+                zarr_like = True
+            except tifffile.TiffFileError:
+                zarr_like = False
+
+        if zarr_like:
+            # Set up the Zarr group
+            z_grp = zarr.open(z_fp, mode="r")
+            if not isinstance(z_grp, zarr.Array):
+                parent_group = ""
+                while True:
+                    if (data_group not in z_grp
+                       or isinstance(z_grp[data_group], zarr.Array)):
+                        break
+                    parent_group = data_group
+                    data_group = str(Path(data_group) / "0")
+
+                available_data_groups = []
+                for group_name in range(10):
+                    try:
+                        z_grp[parent_group][group_name].shape
+                        available_data_groups.append(
+                            str(Path(parent_group) / str(group_name))
+                        )
+                    except AttributeError:
+                        break
+                    except KeyError:
+                        break
 
     else:
-        return layer.data, None
+        return layer.data, None, []
 
     if not input_filename:
         input_filename = None
@@ -533,4 +680,4 @@ def get_source_data(layer: Layer):
     if not data_group:
         data_group = None
 
-    return input_filename, data_group
+    return input_filename, data_group, available_data_groups

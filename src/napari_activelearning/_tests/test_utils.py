@@ -25,7 +25,7 @@ except ModuleNotFoundError:
 
 def test_get_source_data(sample_layer):
     layer, org_source_data, org_input_filename, org_data_group = sample_layer
-    input_filename, data_group = get_source_data(layer)
+    input_filename, data_group, available_data_groups = get_source_data(layer)
 
     assert (not isinstance(input_filename, (Path, str))
             or (Path(input_filename.lower())
@@ -38,6 +38,8 @@ def test_get_source_data(sample_layer):
             or (Path(str(data_group).lower())
                 == Path(str(org_data_group).lower())))
 
+    assert isinstance(available_data_groups, list)
+
 
 def test_downsample_image(single_scale_type_variant_array):
     (source_data,
@@ -45,10 +47,14 @@ def test_downsample_image(single_scale_type_variant_array):
      data_group,
      array_shape) = single_scale_type_variant_array
 
-    scale = 2
+    downsample_scale = 2
     num_scales = 10
     if data_group and "/" in data_group:
-        data_group_root = data_group.split("/")[0]
+        data_group_parts = Path(data_group).parts[0]
+        if len(data_group_parts) == 1:
+            data_group_root = data_group_parts[0]
+        else:
+            data_group_root = str(Path(*data_group_parts[:-1]))
     else:
         data_group_root = ""
 
@@ -57,9 +63,10 @@ def test_downsample_image(single_scale_type_variant_array):
 
     downsampled_zarr = downsample_image(
         source_data,
-        "TCZYX",
-        data_group,
-        scale=scale,
+        axes="TCZYX",
+        scale={ax: 1 for ax in "TCZYX"},
+        data_group=data_group,
+        downsample_scale=downsample_scale,
         num_scales=num_scales,
         reference_source_axes="TCZYX",
         reference_scale={"T": 1, "C": 1, "Z": 1, "Y": 1, "X": 1},
@@ -72,10 +79,11 @@ def test_downsample_image(single_scale_type_variant_array):
     min_spatial_shape = min(array_shape["TCZYX".index(ax)] for ax in "ZYX")
 
     expected_scales = min(num_scales,
-                          int(np.log(min_spatial_shape) / np.log(scale)))
+                          int(np.log(min_spatial_shape)
+                              / np.log(downsample_scale)))
 
     expected_shapes = [
-        [int(np.ceil(ax_s / (scale ** s))) if ax in "YX" else ax_s
+        [int(np.ceil(ax_s / (downsample_scale ** s))) if ax in "YX" else ax_s
          for ax, ax_s in zip("TCZYX", array_shape)
          ]
         for s in range(expected_scales)
@@ -104,16 +112,22 @@ def test_save_zarr(sample_layer, output_group):
 
     is_multiscale = isinstance(layer.data, (MultiScaleData, list))
 
-    out_grp = save_zarr(output_group, layer.data, layer.data.shape,
-                        True, name,
-                        layer.data.dtype,
-                        is_multiscale=is_multiscale,
-                        metadata=None,
-                        is_label=True)
+    out_grp, out_grp_data = save_zarr(
+        output_group,
+        layer.data,
+        layer.data.shape,
+        True,
+        name,
+        layer.data.dtype,
+        is_multiscale=is_multiscale,
+        metadata=None,
+        is_label=True,
+        overwrite=True
+    )
 
     assert group_name in out_grp
     assert (not is_multiscale
-            or len(out_grp[group_name]) == len(layer.data))
+            or len(out_grp[name]) == len(layer.data))
     assert (isinstance(out_grp.store, zarr.MemoryStore)
             or layer.data.dtype in (np.float32, np.float64)
             or (isinstance(out_grp.store, (zarr.MemoryStore,
@@ -185,7 +199,8 @@ def test_get_dataloader(dataset_metadata):
         num_workers=num_workers,
         batch_size=batch_size,
         spatial_axes=spatial_axes,
-        model_input_axes=model_input_axes
+        model_input_axes=model_input_axes,
+        tunable_method=None
     )
 
     if USING_PYTORCH:

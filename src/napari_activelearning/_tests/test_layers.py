@@ -42,7 +42,7 @@ def test_data_group(single_scale_layer):
     layer_channel = LayerChannel(layer, 1, "TZYX")
 
     layer_channel.data_group = "test_group"
-    assert layer_channel.data_group == "test_group"
+    assert layer_channel.data_group == "test_group", "Available groups are the following: {layer_channel.available_data_groups}"
 
 
 def test_channel(single_scale_layer):
@@ -437,7 +437,8 @@ def test_image_group_manager_focus(simple_image_group,
     assert image_group.selected
 
     manager.focus_active_item(manager.groups_root)
-    assert not layer_channel.layer.visible
+    # Focusing to any label should not change the visibility of other layers
+    assert layer_channel.layer.visible
 
 
 def test_image_group_manager_add_group(single_scale_memory_layer,
@@ -558,7 +559,7 @@ def test_update_reference_info(simple_image_group):
 
     mask_generator.active_image_group = image_group
     assert mask_generator.active_image_group == image_group
-    assert mask_generator._update_reference_info() is True
+    assert mask_generator.update_reference_info() is True
     assert all(map(operator.eq, mask_generator._im_shape, expected_im_shape))
     assert all(map(operator.eq, mask_generator._im_scale, expected_im_scale))
     assert all(map(operator.eq, mask_generator._im_translate,
@@ -587,16 +588,16 @@ def test_set_patch_size(simple_image_group):
     mask_generator = MaskGenerator()
 
     mask_generator.set_patch_size([3, 16, 32])
-    assert mask_generator._patch_sizes is None
+    assert len(mask_generator._patch_sizes) == 0
 
     mask_generator.active_image_group = image_group
 
     mask_generator.set_patch_size([3, 16, 32])
-    assert mask_generator._patch_sizes == [3, 16, 32]
+    assert mask_generator._patch_sizes == dict(Z=3, Y=16, X=32)
 
     mask_generator.set_patch_size(64)
     assert mask_generator._mask_axes is not None
-    assert mask_generator._patch_sizes == [64, 64, 64]
+    assert mask_generator._patch_sizes == dict(Z=64, Y=64, X=64)
 
 
 def test_image_group_editor_update_group_name():

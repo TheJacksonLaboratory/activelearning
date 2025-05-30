@@ -13,6 +13,7 @@ from napari.layers import Layer
 from napari.layers._multiscale_data import MultiScaleData
 
 from ._layers import ImageGroup, LayersGroup, LayerChannel
+from ._utils import update_labels
 
 
 class LabelItem(QTreeWidgetItem):
@@ -209,22 +210,63 @@ class LabelsManager:
 
         return label_data
 
-    def _write_label_data(self, label_data: np.ndarray):
-        if self._active_layers_group:
-            segmentation_channel = self._active_layers_group.child(0)
-            segmentation_channel_layer = segmentation_channel.layer
-            if isinstance(segmentation_channel.layer.data, MultiScaleData):
-                segmentation_channel_data =\
-                    segmentation_channel_layer.data[0]
-            else:
-                segmentation_channel_data = segmentation_channel_layer.data
-
+    def _write_label_data(self, label_data: Optional[np.ndarray]):
         if isinstance(self._transaction, ts.Transaction):
             self._transaction.commit_async()
         elif (self._active_label.position is not None
-                and segmentation_channel_data is not None):
-            segmentation_channel_data[self._active_label.position] =\
-                label_data
+                and self._active_layers_group is not None):
+            input_filename = self._active_layers_group.source_data
+            data_group = self._active_layers_group.data_group
+
+            if isinstance(input_filename, (Path, str)):
+                if ".zarr" in str(input_filename):
+                    segmentation_channel_group = input_filename
+                else:
+                    raise ValueError("File format not supported for "
+                                     "writing labels.")
+
+                segmentation_channel_group = zarr.open(
+                    segmentation_channel_group,
+                    mode="r+"
+                )
+
+                if data_group is not None:
+                    data_group_base = str(Path(*Path(data_group).parts[:-1]))
+
+                down_scales = len(
+                    segmentation_channel_group[data_group_base].keys()
+                )
+
+                segmentation_channel_data = [
+                    segmentation_channel_group[f"{data_group_base}/{grp}"]
+                    for grp in range(down_scales)
+                ]
+
+                update_labels(
+                    segmentation_channel_group[f"{data_group_base}"],
+                    label_data if label_data is not None else set()
+                )
+
+            elif isinstance(input_filename, MultiScaleData):
+                segmentation_channel_data =\
+                    self._active_layers_group.source_data
+            else:
+                segmentation_channel_data = [
+                    self._active_layers_group.source_data
+                ]
+
+            for s_scl, seg_data in enumerate(segmentation_channel_data):
+                curr_position = tuple(
+                    list(self._active_label.position[:-2])
+                    + [slice(pos_sel.start // 2**s_scl,
+                             pos_sel.stop // 2**s_scl)
+                       for pos_sel in self._active_label.position[-2:]]
+                )
+                if label_data is not None:
+                    seg_data[curr_position] =\
+                        label_data[..., ::2**s_scl, ::2**s_scl]
+                else:
+                    seg_data[curr_position] = 0
 
     def add_labels(self, layer_channel: LayerChannel,
                    labels: Iterable[LabelItem]):
@@ -246,15 +288,18 @@ class LabelsManager:
         if self._active_label is None and self._active_label_group is None:
             return
 
+        # Set the content of the current label to 0
+        self._write_label_data(None)
+
         self._active_label_group.removeChild(self._active_label)
+
         if not self._active_label_group.childCount():
-            self.remove_labels_group()
+            self.labels_group_root.removeChild(self._active_label_group)
+            self.labels_group_root.setSelected(True)
+            self._active_label_group = None
+
         else:
             self._active_label_group.setSelected(True)
-
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
 
         self._active_label = None
         self._requires_commit = False
@@ -264,11 +309,11 @@ class LabelsManager:
         if self._active_label_group is None:
             return
 
-        self.labels_group_root.removeChild(self._active_label_group)
-
-        for child in map(lambda idx: self.labels_group_root.child(idx),
-                         range(self.labels_group_root.childCount())):
-            child.setSelected(False)
+        self._active_layers_group = self._active_label_group.layer_channel
+        while (self._active_label_group is not None
+               and self._active_label_group.childCount()):
+            self._active_label = self._active_label_group.child(0)
+            self.remove_labels()
 
         self.labels_group_root.setSelected(True)
         self._active_label_group = None
@@ -368,10 +413,11 @@ class LabelsManager:
         viewer.camera.center = current_center
         viewer.dims.current_step = tuple(map(int, current_center))
 
-        for layer in viewer.layers:
-            layer.visible = False
+        # TODO: Only make the labels visible, keeping all the labels that are visible as they are
+        # for layer in viewer.layers:
+        #     layer.visible = False
 
-        self._active_image_group.visible = True
+        # self._active_image_group.visible = True
 
         if edit_focused_label:
             self.edit_labels()
@@ -384,6 +430,9 @@ class LabelsManager:
                                                                      []):
             for label in map(lambda idx: label_group.child(idx),
                              range(label_group.childCount())):
+                if not isinstance(label, LabelItem):
+                    continue
+
                 if all(ax_pos.start <= ax_coord < ax_pos.stop
                        for ax_pos, ax_coord in zip(label.position, curr_pos)):
                     clicked_label = label
@@ -422,13 +471,21 @@ class LabelsManager:
             blending="translucent_no_depth",
             opacity=0.7,
             translate=[
-                ax_roi.start * ax_scl
-                for ax_roi, ax_scl in zip(
+                ax_roi.start * ax_scl * ax_sl_scl
+                for ax_roi, ax_sl_scl, ax_scl in zip(
                     self._active_label.position,
+                    self._active_layer_channel.selected_level_scale,
                     self._active_layer_channel.layer.scale
                 )
             ],
-            scale=self._active_layer_channel.layer.scale
+            # scale=self._active_layer_channel.layer.scale
+            scale=[
+                ax_scl * ax_sl_scl
+                for ax_sl_scl, ax_scl in zip(
+                    self._active_layer_channel.selected_level_scale,
+                    self._active_layer_channel.layer.scale
+                )
+            ]
         )
         viewer.layers["Labels edit"].bounding_box.visible = True
         self._active_layer_channel.layer.visible = False
