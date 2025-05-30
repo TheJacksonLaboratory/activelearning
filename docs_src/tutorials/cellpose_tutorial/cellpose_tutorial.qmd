@@ -728,7 +728,7 @@ org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
 draw = ImageDraw.Draw(image)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 13, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
 
 image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -1287,7 +1287,7 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 3, item_annotation=1, item_annotation_position="S", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 2, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=2, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
