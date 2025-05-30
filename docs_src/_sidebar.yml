@@ -38,8 +38,8 @@ website:
       - reference/SegmentationMethod.probs.qmd
       - reference/SegmentationMethod.segment.qmd
       - reference/TunableMethod.qmd
-      - reference/TunableMethod._get_transform.qmd
-      - reference/TunableMethod._fine_tune.qmd
+      - reference/TunableMethod.get_train_transform.qmd
+      - reference/TunableMethod.get_inference_transform.qmd
       - reference/TunableMethod.fine_tune.qmd
       - reference/AcquisitionFunction.qmd
       - reference/AcquisitionFunction.compute_acquisition.qmd

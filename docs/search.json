@@ -7,6 +7,662 @@
     "text": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari\n\n\n\n\n\n\nCellpose\n\n\nTransfer learning\n\n\n\nTutorial for fine-tuning the “nuclei” model from cellpose to new data.\n\n\n\n\n\nFernando Cervantes\n\n\n\n\n\n\nNo matching items"
   },
   {
+    "objectID": "reference/TunableMethod.html",
+    "href": "reference/TunableMethod.html",
+    "title": "TunableMethod",
+    "section": "",
+    "text": "TunableMethod\nTunableMethod()",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "TunableMethod"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod.get_inference_transform.html",
+    "href": "reference/TunableMethod.get_inference_transform.html",
+    "title": "TunableMethod.get_inference_transform",
+    "section": "",
+    "text": "TunableMethod.get_inference_transform\nTunableMethod.get_inference_transform(*args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "TunableMethod.get_inference_transform"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod._run_pred.html",
+    "href": "reference/SegmentationMethod._run_pred.html",
+    "title": "SegmentationMethod._run_pred",
+    "section": "",
+    "text": "SegmentationMethod._run_pred\nSegmentationMethod._run_pred(img, *args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "SegmentationMethod._run_pred"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.segment.html",
+    "href": "reference/SegmentationMethod.segment.html",
+    "title": "SegmentationMethod.segment",
+    "section": "",
+    "text": "SegmentationMethod.segment\nSegmentationMethod.segment(img, *args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "SegmentationMethod.segment"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.probs.html",
+    "href": "reference/SegmentationMethod.probs.html",
+    "title": "SegmentationMethod.probs",
+    "section": "",
+    "text": "SegmentationMethod.probs\nSegmentationMethod.probs(img, *args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "SegmentationMethod.probs"
+    ]
+  },
+  {
+    "objectID": "reference/LayersGroup.html",
+    "href": "reference/LayersGroup.html",
+    "title": "LayersGroup",
+    "section": "",
+    "text": "LayersGroup\nLayersGroup()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "LayersGroup"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.remove_labels_group.html",
+    "href": "reference/LabelsManager.remove_labels_group.html",
+    "title": "LabelsManager.remove_labels_group",
+    "section": "",
+    "text": "LabelsManager.remove_labels_group\nLabelsManager.remove_labels_group()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.remove_labels_group"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.html",
+    "href": "reference/LabelsManager.html",
+    "title": "LabelsManager",
+    "section": "",
+    "text": "LabelsManager\nLabelsManager()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.focus_region.html",
+    "href": "reference/LabelsManager.focus_region.html",
+    "title": "LabelsManager.focus_region",
+    "section": "",
+    "text": "LabelsManager.focus_region\nLabelsManager.focus_region(label=None, edit_focused_label=False)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.focus_region"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.edit_labels.html",
+    "href": "reference/LabelsManager.edit_labels.html",
+    "title": "LabelsManager.edit_labels",
+    "section": "",
+    "text": "LabelsManager.edit_labels\nLabelsManager.edit_labels()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.edit_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.add_labels.html",
+    "href": "reference/LabelsManager.add_labels.html",
+    "title": "LabelsManager.add_labels",
+    "section": "",
+    "text": "LabelsManager.add_labels\nLabelsManager.add_labels(layer_channel, labels)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.add_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LabelGroupRoot.html",
+    "href": "reference/LabelGroupRoot.html",
+    "title": "LabelGroupRoot",
+    "section": "",
+    "text": "LabelGroupRoot\nLabelGroupRoot()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelGroupRoot"
+    ]
+  },
+  {
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage image groups used for segmentation and fine tune models.\n\n\n\nLayerChannel\n\n\n\nLayersGroup\n\n\n\nImageGroup\n\n\n\nImageGroupRoot\n\n\n\nImageGroupEditor\n\n\n\nMaskGenerator\n\n\n\nImageGroupsManager\n\n\n\nImageGroupsManager.set_active_item\n\n\n\nImageGroupsManager.get_active_item\n\n\n\nImageGroupsManager.focus_active_item\n\n\n\nImageGroupsManager.update_group\n\n\n\nImageGroupsManager.create_group\n\n\n\nImageGroupsManager.create_layers_group\n\n\n\nImageGroupsManager.add_layers_to_group\n\n\n\nImageGroupsManager.remove_layer\n\n\n\nImageGroupsManager.remove_layers_group\n\n\n\nImageGroupsManager.remove_group\n\n\n\nImageGroupsManager.save_layers_group\n\n\n\nImageGroupsManager.dump_dataset_specs\n\n\n\n\n\n\n\nClass to handle model inference on image managed by the Image Groups Manager widget.\n\n\n\nAcquisitionFunction\n\n\n\ncompute_BALD\n\n\n\ncompute_acquisition_superpixel\n\n\n\ncompute_acquisition_fun\n\n\n\ncompute_segmentation\n\n\n\nadd_multiscale_output_layer\n\n\n\nDropoutEvalOverrider\n\n\n\nadd_dropout\n\n\n\nSegmentationMethod\n\n\n\nSegmentationMethod._run_pred\n\n\n\nSegmentationMethod._run_eval\n\n\n\nSegmentationMethod.probs\n\n\n\nSegmentationMethod.segment\n\n\n\nTunableMethod\n\n\n\nTunableMethod.get_train_transform\n\n\n\nTunableMethod.get_inference_transform\n\n\n\nTunableMethod.fine_tune\n\n\n\nAcquisitionFunction\n\n\n\nAcquisitionFunction.compute_acquisition\n\n\n\nAcquisitionFunction.compute_acquisition_layers\n\n\n\nAcquisitionFunction.fine_tune\n\n\n\n\n\n\n\nClass to manage segmentation label groups resulted from executing segmentation with the Acquisition Function Configuration widget.\n\n\n\nLabelItem\n\n\n\nLabelGroup\n\n\n\nLabelGroupRoot\n\n\n\nLabelsManager\n\n\n\nLabelsManager.add_labels\n\n\n\nLabelsManager.remove_labels\n\n\n\nLabelsManager.remove_labels_group\n\n\n\nLabelsManager.navigate\n\n\n\nLabelsManager.focus_region\n\n\n\nLabelsManager.focus_and_edit_region\n\n\n\nLabelsManager.edit_labels\n\n\n\nLabelsManager.commit",
+    "crumbs": [
+      "API Reference",
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#image-groups-manger",
+    "href": "reference/index.html#image-groups-manger",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage image groups used for segmentation and fine tune models.\n\n\n\nLayerChannel\n\n\n\nLayersGroup\n\n\n\nImageGroup\n\n\n\nImageGroupRoot\n\n\n\nImageGroupEditor\n\n\n\nMaskGenerator\n\n\n\nImageGroupsManager\n\n\n\nImageGroupsManager.set_active_item\n\n\n\nImageGroupsManager.get_active_item\n\n\n\nImageGroupsManager.focus_active_item\n\n\n\nImageGroupsManager.update_group\n\n\n\nImageGroupsManager.create_group\n\n\n\nImageGroupsManager.create_layers_group\n\n\n\nImageGroupsManager.add_layers_to_group\n\n\n\nImageGroupsManager.remove_layer\n\n\n\nImageGroupsManager.remove_layers_group\n\n\n\nImageGroupsManager.remove_group\n\n\n\nImageGroupsManager.save_layers_group\n\n\n\nImageGroupsManager.dump_dataset_specs",
+    "crumbs": [
+      "API Reference",
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#acquisition-function-configuration",
+    "href": "reference/index.html#acquisition-function-configuration",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to handle model inference on image managed by the Image Groups Manager widget.\n\n\n\nAcquisitionFunction\n\n\n\ncompute_BALD\n\n\n\ncompute_acquisition_superpixel\n\n\n\ncompute_acquisition_fun\n\n\n\ncompute_segmentation\n\n\n\nadd_multiscale_output_layer\n\n\n\nDropoutEvalOverrider\n\n\n\nadd_dropout\n\n\n\nSegmentationMethod\n\n\n\nSegmentationMethod._run_pred\n\n\n\nSegmentationMethod._run_eval\n\n\n\nSegmentationMethod.probs\n\n\n\nSegmentationMethod.segment\n\n\n\nTunableMethod\n\n\n\nTunableMethod.get_train_transform\n\n\n\nTunableMethod.get_inference_transform\n\n\n\nTunableMethod.fine_tune\n\n\n\nAcquisitionFunction\n\n\n\nAcquisitionFunction.compute_acquisition\n\n\n\nAcquisitionFunction.compute_acquisition_layers\n\n\n\nAcquisitionFunction.fine_tune",
+    "crumbs": [
+      "API Reference",
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/index.html#label-groups-manger",
+    "href": "reference/index.html#label-groups-manger",
+    "title": "Function reference",
+    "section": "",
+    "text": "Class to manage segmentation label groups resulted from executing segmentation with the Acquisition Function Configuration widget.\n\n\n\nLabelItem\n\n\n\nLabelGroup\n\n\n\nLabelGroupRoot\n\n\n\nLabelsManager\n\n\n\nLabelsManager.add_labels\n\n\n\nLabelsManager.remove_labels\n\n\n\nLabelsManager.remove_labels_group\n\n\n\nLabelsManager.navigate\n\n\n\nLabelsManager.focus_region\n\n\n\nLabelsManager.focus_and_edit_region\n\n\n\nLabelsManager.edit_labels\n\n\n\nLabelsManager.commit",
+    "crumbs": [
+      "API Reference",
+      "Function reference"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.set_active_item.html",
+    "href": "reference/ImageGroupsManager.set_active_item.html",
+    "title": "ImageGroupsManager.set_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.set_active_item\nImageGroupsManager.set_active_item(item=None)",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.set_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_layers_group.html",
+    "href": "reference/ImageGroupsManager.remove_layers_group.html",
+    "title": "ImageGroupsManager.remove_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.remove_layers_group\nImageGroupsManager.remove_layers_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_group.html",
+    "href": "reference/ImageGroupsManager.remove_group.html",
+    "title": "ImageGroupsManager.remove_group",
+    "section": "",
+    "text": "ImageGroupsManager.remove_group\nImageGroupsManager.remove_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.get_active_item.html",
+    "href": "reference/ImageGroupsManager.get_active_item.html",
+    "title": "ImageGroupsManager.get_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.get_active_item\nImageGroupsManager.get_active_item()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.get_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.dump_dataset_specs.html",
+    "href": "reference/ImageGroupsManager.dump_dataset_specs.html",
+    "title": "ImageGroupsManager.dump_dataset_specs",
+    "section": "",
+    "text": "ImageGroupsManager.dump_dataset_specs\nImageGroupsManager.dump_dataset_specs()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.dump_dataset_specs"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.create_group.html",
+    "href": "reference/ImageGroupsManager.create_group.html",
+    "title": "ImageGroupsManager.create_group",
+    "section": "",
+    "text": "ImageGroupsManager.create_group\nImageGroupsManager.create_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.create_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupRoot.html",
+    "href": "reference/ImageGroupRoot.html",
+    "title": "ImageGroupRoot",
+    "section": "",
+    "text": "ImageGroupRoot\nImageGroupRoot()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupRoot"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroup.html",
+    "href": "reference/ImageGroup.html",
+    "title": "ImageGroup",
+    "section": "",
+    "text": "ImageGroup\nImageGroup(group_name=None, group_dir=None)",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroup"
+    ]
+  },
+  {
+    "objectID": "reference/compute_segmentation.html",
+    "href": "reference/compute_segmentation.html",
+    "title": "compute_segmentation",
+    "section": "",
+    "text": "compute_segmentation\ncompute_segmentation(tunable_segmentation_method, img, labels_offset=0)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "compute_segmentation"
+    ]
+  },
+  {
+    "objectID": "reference/compute_acquisition_superpixel.html",
+    "href": "reference/compute_acquisition_superpixel.html",
+    "title": "compute_acquisition_superpixel",
+    "section": "",
+    "text": "compute_acquisition_superpixel\ncompute_acquisition_superpixel(mutual_info, super_pixel_labels)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "compute_acquisition_superpixel"
+    ]
+  },
+  {
+    "objectID": "reference/add_multiscale_output_layer.html",
+    "href": "reference/add_multiscale_output_layer.html",
+    "title": "add_multiscale_output_layer",
+    "section": "",
+    "text": "add_multiscale_output_layer\nadd_multiscale_output_layer(\n    root,\n    axes,\n    scale,\n    data_group,\n    group_name,\n    layers_group_name,\n    image_group,\n    reference_source_axes,\n    reference_scale,\n    output_filename=None,\n    colormap=None,\n    use_as_input_labels=False,\n    use_as_sampling_mask=False,\n    add_func=napari.Viewer.add_image,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "add_multiscale_output_layer"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.html",
+    "href": "reference/AcquisitionFunction.html",
+    "title": "AcquisitionFunction",
+    "section": "",
+    "text": "AcquisitionFunction\nAcquisitionFunction(\n    image_groups_manager,\n    labels_manager,\n    tunable_segmentation_methods,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "AcquisitionFunction"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.compute_acquisition_layers.html",
+    "href": "reference/AcquisitionFunction.compute_acquisition_layers.html",
+    "title": "AcquisitionFunction.compute_acquisition_layers",
+    "section": "",
+    "text": "AcquisitionFunction.compute_acquisition_layers\nAcquisitionFunction.compute_acquisition_layers(\n    run_all=False,\n    segmentation_group_name='segmentation',\n    segmentation_only=False,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.compute_acquisition_layers"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.compute_acquisition.html",
+    "href": "reference/AcquisitionFunction.compute_acquisition.html",
+    "title": "AcquisitionFunction.compute_acquisition",
+    "section": "",
+    "text": "AcquisitionFunction.compute_acquisition\nAcquisitionFunction.compute_acquisition(\n    dataset_metadata,\n    output_axes,\n    mask_axes,\n    reference_scale,\n    acquisition_fun,\n    segmentation_out,\n    sampled_mask=None,\n    segmentation_only=False,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.compute_acquisition"
+    ]
+  },
+  {
+    "objectID": "reference/AcquisitionFunction.fine_tune.html",
+    "href": "reference/AcquisitionFunction.fine_tune.html",
+    "title": "AcquisitionFunction.fine_tune",
+    "section": "",
+    "text": "AcquisitionFunction.fine_tune\nAcquisitionFunction.fine_tune()",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "AcquisitionFunction.fine_tune"
+    ]
+  },
+  {
+    "objectID": "reference/add_dropout.html",
+    "href": "reference/add_dropout.html",
+    "title": "add_dropout",
+    "section": "",
+    "text": "add_dropout\nadd_dropout(net, p=0.05)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "add_dropout"
+    ]
+  },
+  {
+    "objectID": "reference/compute_acquisition_fun.html",
+    "href": "reference/compute_acquisition_fun.html",
+    "title": "compute_acquisition_fun",
+    "section": "",
+    "text": "compute_acquisition_fun\ncompute_acquisition_fun(\n    tunable_segmentation_method,\n    img,\n    MC_repetitions,\n    img_superpixel=None,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "compute_acquisition_fun"
+    ]
+  },
+  {
+    "objectID": "reference/compute_BALD.html",
+    "href": "reference/compute_BALD.html",
+    "title": "compute_BALD",
+    "section": "",
+    "text": "compute_BALD\ncompute_BALD(probs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "compute_BALD"
+    ]
+  },
+  {
+    "objectID": "reference/DropoutEvalOverrider.html",
+    "href": "reference/DropoutEvalOverrider.html",
+    "title": "DropoutEvalOverrider",
+    "section": "",
+    "text": "DropoutEvalOverrider\nDropoutEvalOverrider(dropout_module)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "DropoutEvalOverrider"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupEditor.html",
+    "href": "reference/ImageGroupEditor.html",
+    "title": "ImageGroupEditor",
+    "section": "",
+    "text": "ImageGroupEditor\nImageGroupEditor()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupEditor"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.add_layers_to_group.html",
+    "href": "reference/ImageGroupsManager.add_layers_to_group.html",
+    "title": "ImageGroupsManager.add_layers_to_group",
+    "section": "",
+    "text": "ImageGroupsManager.add_layers_to_group\nImageGroupsManager.add_layers_to_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.add_layers_to_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.create_layers_group.html",
+    "href": "reference/ImageGroupsManager.create_layers_group.html",
+    "title": "ImageGroupsManager.create_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.create_layers_group\nImageGroupsManager.create_layers_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.create_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.focus_active_item.html",
+    "href": "reference/ImageGroupsManager.focus_active_item.html",
+    "title": "ImageGroupsManager.focus_active_item",
+    "section": "",
+    "text": "ImageGroupsManager.focus_active_item\nImageGroupsManager.focus_active_item(item)",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.focus_active_item"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.html",
+    "href": "reference/ImageGroupsManager.html",
+    "title": "ImageGroupsManager",
+    "section": "",
+    "text": "ImageGroupsManager\nImageGroupsManager(default_axis_labels='TZYX')",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.remove_layer.html",
+    "href": "reference/ImageGroupsManager.remove_layer.html",
+    "title": "ImageGroupsManager.remove_layer",
+    "section": "",
+    "text": "ImageGroupsManager.remove_layer\nImageGroupsManager.remove_layer()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.remove_layer"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.save_layers_group.html",
+    "href": "reference/ImageGroupsManager.save_layers_group.html",
+    "title": "ImageGroupsManager.save_layers_group",
+    "section": "",
+    "text": "ImageGroupsManager.save_layers_group\nImageGroupsManager.save_layers_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.save_layers_group"
+    ]
+  },
+  {
+    "objectID": "reference/ImageGroupsManager.update_group.html",
+    "href": "reference/ImageGroupsManager.update_group.html",
+    "title": "ImageGroupsManager.update_group",
+    "section": "",
+    "text": "ImageGroupsManager.update_group\nImageGroupsManager.update_group()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "ImageGroupsManager.update_group"
+    ]
+  },
+  {
+    "objectID": "reference/LabelGroup.html",
+    "href": "reference/LabelGroup.html",
+    "title": "LabelGroup",
+    "section": "",
+    "text": "LabelGroup\nLabelGroup(layer_channel=None)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelGroup"
+    ]
+  },
+  {
+    "objectID": "reference/LabelItem.html",
+    "href": "reference/LabelItem.html",
+    "title": "LabelItem",
+    "section": "",
+    "text": "LabelItem\nLabelItem(acquisition_val, position)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelItem"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.commit.html",
+    "href": "reference/LabelsManager.commit.html",
+    "title": "LabelsManager.commit",
+    "section": "",
+    "text": "LabelsManager.commit\nLabelsManager.commit()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.commit"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.focus_and_edit_region.html",
+    "href": "reference/LabelsManager.focus_and_edit_region.html",
+    "title": "LabelsManager.focus_and_edit_region",
+    "section": "",
+    "text": "LabelsManager.focus_and_edit_region\nLabelsManager.focus_and_edit_region(layer, event)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.focus_and_edit_region"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.navigate.html",
+    "href": "reference/LabelsManager.navigate.html",
+    "title": "LabelsManager.navigate",
+    "section": "",
+    "text": "LabelsManager.navigate\nLabelsManager.navigate(delta_patch_index=0, delta_image_index=0)",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.navigate"
+    ]
+  },
+  {
+    "objectID": "reference/LabelsManager.remove_labels.html",
+    "href": "reference/LabelsManager.remove_labels.html",
+    "title": "LabelsManager.remove_labels",
+    "section": "",
+    "text": "LabelsManager.remove_labels\nLabelsManager.remove_labels()",
+    "crumbs": [
+      "API Reference",
+      "Label Groups Manger",
+      "LabelsManager.remove_labels"
+    ]
+  },
+  {
+    "objectID": "reference/LayerChannel.html",
+    "href": "reference/LayerChannel.html",
+    "title": "LayerChannel",
+    "section": "",
+    "text": "LayerChannel\nLayerChannel(layer, channel=0, source_axes='TZYX')",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "LayerChannel"
+    ]
+  },
+  {
+    "objectID": "reference/MaskGenerator.html",
+    "href": "reference/MaskGenerator.html",
+    "title": "MaskGenerator",
+    "section": "",
+    "text": "MaskGenerator\nMaskGenerator()",
+    "crumbs": [
+      "API Reference",
+      "Image Groups Manger",
+      "MaskGenerator"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod.html",
+    "href": "reference/SegmentationMethod.html",
+    "title": "SegmentationMethod",
+    "section": "",
+    "text": "SegmentationMethod\nSegmentationMethod()",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "SegmentationMethod"
+    ]
+  },
+  {
+    "objectID": "reference/SegmentationMethod._run_eval.html",
+    "href": "reference/SegmentationMethod._run_eval.html",
+    "title": "SegmentationMethod._run_eval",
+    "section": "",
+    "text": "SegmentationMethod._run_eval\nSegmentationMethod._run_eval(img, *args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "SegmentationMethod._run_eval"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod.fine_tune.html",
+    "href": "reference/TunableMethod.fine_tune.html",
+    "title": "TunableMethod.fine_tune",
+    "section": "",
+    "text": "TunableMethod.fine_tune\nTunableMethod.fine_tune(\n    dataset_metadata_list,\n    model_axes,\n    train_data_proportion=0.8,\n    patch_sizes=256,\n    num_workers=0,\n)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "TunableMethod.fine_tune"
+    ]
+  },
+  {
+    "objectID": "reference/TunableMethod.get_train_transform.html",
+    "href": "reference/TunableMethod.get_train_transform.html",
+    "title": "TunableMethod.get_train_transform",
+    "section": "",
+    "text": "TunableMethod.get_train_transform\nTunableMethod.get_train_transform(*args, **kwargs)",
+    "crumbs": [
+      "API Reference",
+      "Acquisition Function Configuration",
+      "TunableMethod.get_train_transform"
+    ]
+  },
+  {
     "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#load-a-sample-image",
     "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#load-a-sample-image",
     "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
