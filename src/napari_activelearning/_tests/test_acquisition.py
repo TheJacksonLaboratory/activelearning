@@ -16,6 +16,8 @@ except ModuleNotFoundError:
 
 
 class TestTunableMethod(TunableMethod):
+    model_axes = "YXC"
+
     def __init__(self):
         super(TestTunableMethod, self).__init__()
 
@@ -85,16 +87,14 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
 
     dataset_metadata = {
         "images": {"source_axes": "TCZYX", "axes": "TZYXC"},
-        "masks": {"source_axes": "TCZYX", "axes": "TCZYX"}
+        "masks": {"source_axes": "TZYX", "axes": "TZYX"}
     }
-    acquisition_fun = np.zeros((1, 1, 1, 10, 10))
-    segmentation_out = np.zeros((1, 1, 1, 10, 10))
+    acquisition_fun = np.zeros((1, 1, 10, 10))
+    segmentation_out = np.zeros((1, 1, 10, 10))
     segmentation_only = False
 
     acquisition_function.set_model("test")
-    acquisition_function.input_axes = "TZYX"
-    acquisition_function.model_axes = "YXC"
-    acquisition_function.patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
+    acquisition_function._patch_sizes = {"T": 1, "Z": 1, "Y": 10, "X": 10}
 
     with (patch('napari_activelearning._acquisition.get_dataloader')
           as mock_dataloader):
@@ -102,24 +102,28 @@ def test_compute_acquisition(image_groups_manager, labels_manager,
             mock_dataloader.return_value = [
                 (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10],
                                     [0, -1]]]),
-                 torch.zeros((1, 1, 1, 10, 10, 3)),
-                 torch.zeros((1, 1, 1, 10, 10, 1)))
+                 torch.zeros((1, 10, 10, 3)),
+                 torch.zeros((1, 10, 10, 1)))
             ]
         else:
             mock_dataloader.return_value = [
                 (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
-                 np.zeros((1, 1, 10, 10, 3)),
-                 np.zeros((1, 1, 10, 10, 1)))
+                 np.zeros((10, 10, 3)),
+                 np.zeros((10, 10, 1)))
             ]
 
-        result = acquisition_function.compute_acquisition(
+        result, unique_labels = acquisition_function.compute_acquisition(
             dataset_metadata,
+            output_axes="TZYX",
+            mask_axes="TZYX",
+            reference_scale={"T": 1, "Z": 1, "Y": 1, "X": 1},
             acquisition_fun=acquisition_fun,
             segmentation_out=segmentation_out,
             segmentation_only=segmentation_only
         )
 
         assert len(result) == 1
+        assert unique_labels == set({0, 1})
 
 
 def test_add_multiscale_output_layer(single_scale_type_variant_array,
@@ -177,11 +181,10 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
 
     acquisition_function.set_model("test")
     acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
-    acquisition_function.input_axes = "TZYX"
-    acquisition_function.model_axes = "YXC"
 
     # Define the input parameters for the method
     displayed_shape = {"T": 1, "C": 3, "Z": 10, "Y": 10, "X": 10}
+    displayed_scale = {"T": 1, "Z": 1, "Y": 1, "X": 1}
 
     layers_group = image_group.child(0)
     layer_types = [(layers_group, "images")]
@@ -189,6 +192,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
     # Call the method
     dataset_metadata = acquisition_function._prepare_datasets_metadata(
          displayed_shape,
+         displayed_scale,
          layer_types)
 
     expected_dataset_metadata = {
@@ -197,7 +201,7 @@ def test_prepare_datasets_metadata(image_groups_manager, labels_manager,
             "data_group": layers_group.data_group,
             "source_axes": "TCZYX",
             "axes": "TZYXC",
-            "roi": [(slice(0, 1), slice(0, 3), slice(0, 10), slice(0, 10),
+            "roi": [(slice(None), slice(0, 3), slice(0, 10), slice(0, 10),
                      slice(0, 10))],
             "modality": "images",
             'add_to_output': True
@@ -245,14 +249,14 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
             mock_dataloader.return_value = [
                 (torch.LongTensor([[[0, 1], [0, 1], [0, 10], [0, 10],
                                     [0, -1]]]),
-                 torch.zeros((1, 1, 1, 10, 10, 3)),
-                 torch.zeros((1, 1, 1, 10, 10, 1)))
+                 torch.zeros((1, 10, 10, 3)),
+                 torch.zeros((1, 10, 10, 1)))
             ]
         else:
             mock_dataloader.return_value = [
                 (np.array([[0, 1], [0, 1], [0, 10], [0, 10], [0, -1]]),
-                 np.zeros((1, 1, 10, 10, 3)),
-                 np.zeros((1, 1, 10, 10, 1)))
+                 np.zeros((10, 10, 3)),
+                 np.zeros((10, 10, 1)))
             ]
 
         mock_add_ms_layer.return_value = multiscale_layer_channel
@@ -264,8 +268,6 @@ def test_compute_acquisition_layers(image_groups_manager, labels_manager,
 
         acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 5, "Y": 5, "Z": 1}
-        acquisition_function.input_axes = "TZYX"
-        acquisition_function.model_axes = "YXC"
 
         image_groups_manager.set_active_item(image_group)
 
@@ -330,8 +332,6 @@ def test_fine_tune(image_groups_manager, simple_image_group,
 
         acquisition_function.set_model("test")
         acquisition_function._patch_sizes = {"T": 1, "X": 10, "Y": 10, "Z": 1}
-        acquisition_function.input_axes = "TZYX"
-        acquisition_function.model_axes = "YXC"
 
         assert acquisition_function.fine_tune()
 

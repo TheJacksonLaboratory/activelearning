@@ -1,8 +1,7 @@
 from typing import Iterable, Union, Optional
 import operator
-from functools import partial
-from pathlib import Path
-from qtpy.QtCore import Qt, QObject, Signal, Slot
+from pathlib import Path, PureWindowsPath
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
@@ -15,7 +14,9 @@ from napari.layers import Image, Labels, Layer
 from napari.layers._multiscale_data import MultiScaleData
 
 from ._utils import (get_source_data, validate_name, get_basename, save_zarr,
-                     get_next_name)
+                     get_next_name,
+                     update_labels,
+                     downsample_image)
 
 
 class LayerChannel(QTreeWidgetItem):
@@ -27,6 +28,12 @@ class LayerChannel(QTreeWidgetItem):
         self._source_data = None
         self._data_group = None
 
+        self._available_data_groups = None
+        self._available_shapes = [None]
+        self._available_scales = [None]
+        self._selected_level_shape = [None]
+        self._selected_level_scale = [None]
+
         super().__init__([layer.name])
         layer.events.name.connect(self._update_name)
 
@@ -35,13 +42,71 @@ class LayerChannel(QTreeWidgetItem):
         source_axes = source_axes[-self.layer.data.ndim:]
         self.source_axes = "".join(source_axes)
 
+        self._update_source_data()
+
     def _update_name(self, event):
         self.setText(0, self.layer.name)
 
+    def _update_available_shapes(self):
+        self._available_shapes = [None]
+        self._selected_level_shape = [None]
+
+        if self._source_axes is None:
+            return
+
+        if (isinstance(self.layer.data, MultiScaleData)
+           and self._available_data_groups):
+            self._available_shapes = [
+                level.shape for level in self.layer.data
+            ]
+
+        else:
+            self._available_shapes = [self.layer.data.shape]
+
+        level = 0
+        if (self._data_group is not None
+           and self._data_group in self._available_data_groups):
+            level = self._available_data_groups.index(self._data_group)
+
+        self._selected_level_shape = self._available_shapes[level]
+
+    def _update_available_scales(self):
+        self._available_scales = [None]
+
+        if self._source_axes is None:
+            return
+
+        if self._available_shapes is None:
+            return
+
+        self._available_scales = [
+            [int(ref_s_ax / s_ax)
+             for ax, s_ax, ref_s_ax in zip(
+                 self._source_axes,
+                 level_shape,
+                 self._available_shapes[0])
+             if ax != "C"]
+            if level_shape is not None else None
+            for level_shape in self._available_shapes
+        ]
+
+        level = 0
+        if (self._data_group is not None
+           and self._data_group in self._available_data_groups):
+            level = self._available_data_groups.index(self._data_group)
+
+        self._selected_level_scale = self._available_scales[level]
+
     def _update_source_data(self):
-        self._source_data, self._data_group = get_source_data(self.layer)
+        (self._source_data,
+         self._data_group,
+         self._available_data_groups) = get_source_data(self.layer)
+
         if self._source_data is None:
             self._source_data = self.layer.data
+
+        self._update_available_shapes()
+        self._update_available_scales()
 
     @property
     def source_data(self):
@@ -59,6 +124,9 @@ class LayerChannel(QTreeWidgetItem):
             )
 
         self._source_data = source_data
+        self._reference_scale = None
+        self._reference_translate = None
+
         if self.parent() is not None:
             self.parent().updated = True
 
@@ -72,6 +140,40 @@ class LayerChannel(QTreeWidgetItem):
     @data_group.setter
     def data_group(self, data_group):
         self._data_group = data_group
+
+        data_group_parts = Path(data_group).parts
+        if len(data_group_parts) == 1:
+            data_group_init = data_group_parts[0]
+        elif len(data_group_parts) > 1:
+            data_group_init = str(Path(*data_group_parts[:-1]))
+        else:
+            data_group_init = ""
+
+        (_,
+         _,
+         self._available_data_groups) = get_source_data(self.layer,
+                                                        data_group_init)
+
+        self._update_available_shapes()
+        self._update_available_scales()
+
+        if self._data_group is None:
+            self.setText(6, str(self._data_group))
+
+        if self.parent() is not None:
+            self.parent().updated = True
+
+    @property
+    def available_data_groups(self):
+        if self._available_data_groups is None:
+            self._update_source_data()
+
+        return self._available_data_groups
+
+    @available_data_groups.setter
+    def available_data_groups(self, available_data_groups):
+        self._available_data_groups = available_data_groups
+
         if self.parent() is not None:
             self.parent().updated = True
 
@@ -111,6 +213,10 @@ class LayerChannel(QTreeWidgetItem):
         return self.layer.data.shape
 
     @property
+    def selected_level_shape(self):
+        return self._selected_level_shape
+
+    @property
     def ndim(self):
         return self.layer.data.ndim
 
@@ -121,6 +227,10 @@ class LayerChannel(QTreeWidgetItem):
     @scale.setter
     def scale(self, new_scale: Iterable[float]):
         self.layer.scale = new_scale
+
+    @property
+    def selected_level_scale(self):
+        return self._selected_level_scale
 
     @property
     def translate(self):
@@ -213,7 +323,7 @@ class LayersGroup(QTreeWidgetItem):
 
                 self._source_data = merge_fun(
                     [layer_channel.source_data
-                        for _, layer_channel in sorted(layers_channels)],
+                     for _, layer_channel in sorted(layers_channels)],
                     axis=self._source_axes.index("C")
                 )
 
@@ -329,6 +439,64 @@ class LayersGroup(QTreeWidgetItem):
 
         else:
             translate = list(self.child(0).translate)
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if len(self._source_axes) != self.child(0).ndim:
+                    translate.insert(channel_axis, 0)
+
+            translate = tuple(translate)
+
+        return translate
+
+    @property
+    def selected_level_shape(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            shape = [0] * n_channels
+
+        else:
+            shape = list(self.child(0).selected_level_shape)
+
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if self._source_axes == self.child(0).source_axes:
+                    shape[channel_axis] = (shape[channel_axis]
+                                           * self.childCount())
+                else:
+                    shape.insert(channel_axis, self.childCount())
+
+        return shape
+
+    @property
+    def selected_level_scale(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            scale = [1] * n_channels
+
+        else:
+            scale = list(self.child(0).selected_level_scale)
+
+            if "C" in self._source_axes:
+                channel_axis = self._source_axes.index("C")
+                if len(self._source_axes) != self.child(0).ndim:
+                    scale.insert(channel_axis, 1)
+
+            scale = tuple(scale)
+
+        return scale
+
+    @property
+    def selected_level_translate(self):
+        if not self.childCount():
+            n_channels = len(self.source_axes) if self.source_axes else 0
+            translate = [0] * n_channels
+
+        else:
+            translate = [
+                [ax_trns * ax_scl for ax_trns, ax_scl in zip(ch_trns, ch_scl)]
+                for ch_trns, ch_scl in zip(self.child(0).translate,
+                                           self.child(0).selected_level_shape)
+            ]
             if "C" in self._source_axes:
                 channel_axis = self._source_axes.index("C")
                 if len(self._source_axes) != self.child(0).ndim:
@@ -593,11 +761,13 @@ class ImageGroup(QTreeWidgetItem):
 
     @group_dir.setter
     def group_dir(self, group_dir: Union[Path, str]):
+        # TODO: When changing the group dir, either the existing directory
+        # should be renamed, or its contents be copied to the new path.
         if isinstance(group_dir, str):
             group_dir = Path(group_dir)
 
         self._group_dir = group_dir
-        self.setText(4, str(self._group_dir))
+        self.setText(5, str(self._group_dir))
 
     @property
     def metadata(self):
@@ -979,6 +1149,7 @@ class ImageGroupEditor(PropertiesEditor):
 
         self._group_name = None
         self._layers_group_name = None
+        self._data_group = None
         self._edit_axes = None
         self._edit_scale = None
         self._edit_translate = None
@@ -987,6 +1158,15 @@ class ImageGroupEditor(PropertiesEditor):
         self._use_as_sampling = None
         self._edit_channel = None
         self._output_dir = None
+
+        self._listeners = []
+
+    def register_listener(self, listener):
+        self._listeners.append(listener)
+
+    def post_update(self):
+        for listener in self._listeners:
+            listener.editor_updated()
 
     def update_output_dir(self, output_dir: Optional[Union[Path, str]] = None):
         if output_dir:
@@ -1003,6 +1183,8 @@ class ImageGroupEditor(PropertiesEditor):
         if self._active_image_group.group_dir != self._output_dir:
             self._active_image_group.group_dir = self._output_dir
 
+        self.post_update()
+
     def update_group_name(self, group_name: Optional[str] = None):
         if not self._active_image_group:
             return
@@ -1012,6 +1194,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         if self._active_image_group.group_name != self._group_name:
             self._active_image_group.group_name = self._group_name
+
+        self.post_update()
 
     def update_channels(self, channel: Optional[int] = None):
         if not self._active_layer_channel or not self._active_layers_group:
@@ -1024,6 +1208,8 @@ class ImageGroupEditor(PropertiesEditor):
         if prev_channel != self._edit_channel:
             self._active_layers_group.move_channel(prev_channel,
                                                    self._edit_channel)
+
+        self.post_update()
 
     def update_source_axes(self, source_axes: str):
         if not self._active_layers_group and not self._active_layer_channel:
@@ -1050,6 +1236,20 @@ class ImageGroupEditor(PropertiesEditor):
                 display_source_axes = "".join(display_source_axes)
 
             viewer.dims.axis_labels = tuple(display_source_axes)
+
+        self.post_update()
+
+    def update_layers_data_groups(self, data_group: str):
+        if not self._active_layers_group and not self._active_layer_channel:
+            return
+
+        if data_group is not None:
+            self._data_group = data_group
+
+        if self._active_layer_channel.data_group != self._data_group:
+            self._active_layer_channel.data_group = self._data_group
+
+        self.post_update()
 
     def update_layers_group_name(self,
                                  layers_group_name: Optional[str] = None):
@@ -1080,6 +1280,8 @@ class ImageGroupEditor(PropertiesEditor):
 
             return True
 
+        self.post_update()
+
         return False
 
     def update_use_as_input(self, use_it: bool):
@@ -1098,6 +1300,8 @@ class ImageGroupEditor(PropertiesEditor):
         elif self._active_image_group.input_layers_group == layers_group_idx:
             self._active_image_group.input_layers_group = None
 
+        self.post_update()
+
     def update_use_as_labels(self, use_it: bool):
         if not self._active_layers_group:
             return
@@ -1113,6 +1317,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         elif self._active_image_group.labels_layers_group == layers_group_idx:
             self._active_image_group.labels_layers_group = None
+
+        self.post_update()
 
     def update_use_as_sampling(self, use_it: bool):
         if not self._active_layers_group:
@@ -1132,6 +1338,8 @@ class ImageGroupEditor(PropertiesEditor):
               == layers_group_idx):
             self._active_image_group.sampling_mask_layers_group = None
 
+        self.post_update()
+
     def update_scale(self, scale: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
@@ -1140,6 +1348,8 @@ class ImageGroupEditor(PropertiesEditor):
         self._edit_scale = scale
         self._active_layer_channel.scale = self._edit_scale
 
+        self.post_update()
+
     def update_translate(self, translate: Iterable[float]):
         if (not self._active_layers_group or not self._active_layers_group
            or not self._active_layer_channel):
@@ -1147,6 +1357,8 @@ class ImageGroupEditor(PropertiesEditor):
 
         self._edit_translate = translate
         self._active_layer_channel.translate = self._edit_translate
+
+        self.post_update()
 
 
 class LayerScaleEditor(PropertiesEditor):
@@ -1170,14 +1382,14 @@ class LayerScaleEditor(PropertiesEditor):
 class MaskGenerator(PropertiesEditor):
     def __init__(self):
         super().__init__()
-        self._patch_sizes = None
+        self._patch_sizes = {}
         self._mask_axes = None
         self._im_shape = None
         self._im_scale = None
         self._im_translate = None
         self._im_source_axes = None
 
-    def _update_reference_info(self):
+    def update_reference_info(self):
         if (self._active_image_group is None
            or self._active_image_group.input_layers_group is None
            or not self._active_image_group.child(
@@ -1214,10 +1426,11 @@ class MaskGenerator(PropertiesEditor):
              zip(im_source_axes, im_shape, im_scale, im_translate)
              )))
 
-        self._patch_sizes = [
-                min(128, ax_s)
-                for ax_s in self._im_shape
-            ]
+        self._patch_sizes = {
+            ax: min(128, ax_s)
+            for ax, ax_s in zip(self._mask_axes, self._im_shape)
+        }
+
         return True
 
     def generate_mask_layer(self):
@@ -1249,36 +1462,23 @@ class MaskGenerator(PropertiesEditor):
             ax: ax_trans
             for ax, ax_trans in zip(self._im_source_axes, self._im_translate)
         }
-        reference_patch_sizes = {
-            ax: ax_ps
-            for ax, ax_ps in zip(self._im_source_axes, self._patch_sizes)
-        }
 
         mask_shape = [
             max(1, reference_shape.get(ax, 1)
-                // reference_patch_sizes.get(ax, 1))
-            for ax in "TCZYX"
+                // self._patch_sizes.get(ax, 1))
+            for ax in self._mask_axes
         ]
 
-        mask_translate = tuple([
-            (reference_translate.get(ax, 0)
-             + (reference_scale.get(ax, 1)
-                * (reference_patch_sizes.get(ax, 1) - 1) / 2.0))
-            if ax in self._im_source_axes else 0
-            for ax in "TCZYX"
-        ])
-
-        mask_scale = tuple([
-            (reference_scale.get(ax, 1) * reference_patch_sizes.get(ax, 1))
-            if ax in self._mask_axes else 1
-            for ax in "TCZYX"
-        ])
+        mask_scale_dict = {
+            ax: (reference_scale.get(ax, 1) * self._patch_sizes.get(ax, 1))
+            for ax in self._mask_axes
+        }
 
         if self._active_image_group.group_dir:
             mask_output_filename = (self._active_image_group.group_dir
                                     / (self._active_image_group.group_name
                                        + ".zarr"))
-            _, mask_grp = save_zarr(
+            mask_root, mask_grp_name = save_zarr(
                 mask_output_filename,
                 data=None,
                 shape=mask_shape,
@@ -1287,8 +1487,27 @@ class MaskGenerator(PropertiesEditor):
                 dtype=np.uint8,
                 is_label=True,
                 is_multiscale=True,
-                overwrite=False
+                overwrite=True
+             )
+            mask_grp = mask_root[f"{mask_grp_name}/0"]
+
+            downsample_image(
+                mask_output_filename,
+                axes=self._mask_axes,
+                scale={ax: 1 for ax in self._mask_axes},
+                data_group=f"{mask_grp_name}/0",
+                downsample_scale=1,
+                num_scales=0,
+                reference_source_axes=self._mask_axes,
+                reference_scale=mask_scale_dict,
+                reference_units=None
             )
+
+            update_labels(
+                mask_root[f"{mask_grp_name}"],
+                set({1})
+            )
+
         else:
             mask_grp = np.zeros(mask_shape, dtype=np.uint8)
             mask_output_filename = None
@@ -1296,8 +1515,6 @@ class MaskGenerator(PropertiesEditor):
         viewer = napari.current_viewer()
         new_mask_layer = viewer.add_labels(
             data=mask_grp,
-            scale=mask_scale,
-            translate=mask_translate,
             name=(self._active_layers_group.layers_group_name
                   + " " + masks_group_name)
         )
@@ -1308,15 +1525,25 @@ class MaskGenerator(PropertiesEditor):
         if masks_layers_group is None:
             masks_layers_group = self._active_image_group.add_layers_group(
                 masks_group_name,
-                source_axes="TCZYX",
+                source_axes=self._mask_axes,
                 use_as_sampling_mask=True
             )
 
         masks_layer_channel = masks_layers_group.add_layer(new_mask_layer)
 
+        masks_layer_channel.scale = tuple(
+            mask_scale_dict[ax] for ax in self._mask_axes
+        )
+        masks_layer_channel.translate = tuple([
+            (reference_translate.get(ax, 0)
+             + (reference_scale.get(ax, 1)
+                * (self._patch_sizes.get(ax, 1) - 1) / 2.0))
+            for ax in self._mask_axes
+        ])
+
         if mask_output_filename:
             masks_layer_channel.source_data = str(mask_output_filename)
-            masks_layer_channel.data_group = f"{masks_group_name}/0"
+            masks_layer_channel.data_group = str(Path(masks_group_name) / "0")
 
         return new_mask_layer
 
@@ -1327,7 +1554,10 @@ class MaskGenerator(PropertiesEditor):
         if isinstance(patch_sizes, int):
             patch_sizes = [patch_sizes] * len(self._mask_axes)
 
-        self._patch_sizes = patch_sizes
+        self._patch_sizes = {
+            ax: ax_ps
+            for ax, ax_ps in zip(self._mask_axes, patch_sizes)
+        }
 
     @property
     def active_image_group(self):
@@ -1336,7 +1566,7 @@ class MaskGenerator(PropertiesEditor):
     @active_image_group.setter
     def active_image_group(self, active_image_group: Union[ImageGroup, None]):
         if (active_image_group != self._active_image_group):
-            self._patch_sizes = None
+            self._patch_sizes = {}
             self._mask_axes = None
             self._im_shape = None
             self._im_scale = None
@@ -1346,8 +1576,8 @@ class MaskGenerator(PropertiesEditor):
         super(MaskGenerator, type(self)).active_image_group\
                                         .fset(self, active_image_group)
 
-        if self._patch_sizes is None:
-            self._update_reference_info()
+        if not len(self._patch_sizes):
+            self.update_reference_info()
 
 
 class ImageGroupsManager:
@@ -1371,10 +1601,13 @@ class ImageGroupsManager:
                            + default_axis_labels)
 
         viewer.dims.axis_labels = list(axis_labels)
+        self._listeners = []
 
         self.image_groups_editor = ImageGroupEditor()
+        self.image_groups_editor.register_listener(self)
         self.layer_scale_editor = LayerScaleEditor()
         self.mask_generator = MaskGenerator()
+        self.register_listener(self.mask_generator)
 
         super().__init__()
 
@@ -1444,8 +1677,11 @@ class ImageGroupsManager:
 
         viewer = napari.current_viewer()
         viewer.layers.selection.clear()
-        for layer in viewer.layers:
-            layer.visible = False
+
+        # Do not make other layers invisible because the user could have set
+        # these as they are for a reason.
+        # for layer in viewer.layers:
+        #     layer.visible = False
 
         if isinstance(item, (LayerChannel, LayersGroup, ImageGroup)):
             item.visible = True
@@ -1588,3 +1824,10 @@ class ImageGroupsManager:
                     raise ValueError("Some images in this group are arrays, "
                                      "save them as zarr files to generate the"
                                      "metadata file.")
+
+    def editor_updated(self):
+        for listener in self._listeners:
+            listener.update_reference_info()
+
+    def register_listener(self, listener):
+        self._listeners.append(listener)
