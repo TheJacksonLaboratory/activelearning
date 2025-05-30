@@ -862,7 +862,7 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 ## 5.3. Use napari's layer controls to make changes on the objects of the current patch
 
-1. Select the _label_ associated to the patch extracted at slice $27$. That label can be found by looking for the coordinate $(0, 0, 27, 0, 0)$ in the "Sampling top-left" column of the _label groups manager_ table.
+1. Select the _label_ associated to the patch extracted at slice $27$. That label can be found by looking for the coordinate $(27, 0, 0)$ in the "Sampling top-left" column of the _label groups manager_ table.
 
 ::: {.callout-note}
 This creates a new editable "Labels edit" layer with a copy of the selected patch.
@@ -1178,7 +1178,7 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 
 1. Follow the steps from @sec-mask to create a mask, now covering slices $31$ to $34$.
 
-2. Scroll down the _Image groups manager_ table to show the newest mask layer grup ("mask (1)").
+2. Scroll down the _Image groups manager_ table to show the newest mask layer group ("mask (1)").
 
 3. Select the "mask (1)" layer group
 
