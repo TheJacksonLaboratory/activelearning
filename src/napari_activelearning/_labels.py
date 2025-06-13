@@ -6,6 +6,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 
 import numpy as np
 import tensorstore as ts
+import zarrdataset as zds
 import zarr
 
 import napari
@@ -188,25 +189,41 @@ class LabelsManager:
 
         self._transaction = None
         self._active_edit_layer: Union[None, Layer] = None
+        self._active_input_layers = []
 
         self._requires_commit = False
 
         viewer = napari.current_viewer()
+
         viewer.layers.events.removed.connect(
-            self.commit
+            self._remove_edit_layer
         )
 
-    def _load_label_data(self, input_filename, data_group=None):
-        if isinstance(input_filename, (Path, str)):
-            label_data_grp = zarr.open(Path(input_filename) / data_group)
-            label_data = label_data_grp[self._active_label.position]
-
-        elif isinstance(input_filename, MultiScaleData):
-            label_data = np.array(
-                input_filename[0][self._active_label.position]
-            )
+    def _load_label_data(self, input_filename, data_group=None,
+                         source_axes=None,
+                         labels_source_axes=None,
+                         channel_index=None):
+        if source_axes is None:
+            selected_region = self._active_label.position
         else:
-            label_data = np.array(input_filename[self._active_label.position])
+            position_dir = {
+                ax: pos
+                for ax, pos in zip(labels_source_axes,
+                                   self._active_label.position)
+            }
+
+            if "C" in source_axes:
+                position_dir["C"] = slice(None)
+                if channel_index is not None:
+                    position_dir["C"] = slice(channel_index, channel_index + 1)
+
+            selected_region = tuple(
+                position_dir.get(ax, slice(None))
+                for ax in source_axes
+            )
+
+        arr, _ = zds.image2array(input_filename, data_group)
+        label_data = arr[selected_region]
 
         return label_data
 
@@ -459,12 +476,77 @@ class LabelsManager:
            or not self._active_label):
             return False
 
+        viewer = napari.current_viewer()
+
         input_filename = self._active_layers_group.source_data
         data_group = self._active_layers_group.data_group
+        labels_source_axes = self._active_layers_group.source_axes
+
+        input_layers_group_idx = self._active_image_group.input_layers_group
+        input_layers_group = self._active_image_group.child(
+            input_layers_group_idx
+        )
 
         label_data = self._load_label_data(input_filename, data_group)
 
-        viewer = napari.current_viewer()
+        self._active_input_layers = []
+        for input_layer_channel in map(
+           lambda idx: input_layers_group.child(idx),
+           range(input_layers_group.childCount())):
+
+            if input_layers_group.childCount() > 1:
+                curr_layer_channel = input_layer_channel.channel
+            else:
+                curr_layer_channel = None
+
+            original_image_region = self._load_label_data(
+                input_layer_channel.source_data,
+                input_layer_channel.data_group,
+                input_layers_group.source_axes,
+                labels_source_axes,
+                curr_layer_channel
+            )
+            label_spatial_shape = [
+                ax_s
+                for ax, ax_s in zip(input_layers_group.source_axes,
+                                    original_image_region.shape)
+                if ax != "C"
+            ]
+            current_layer_name = (f"Current input region - channel "
+                                  f"{input_layer_channel.channel}")
+            original_image_translate = [
+                ax_roi.start * ax_scl * ax_sl_scl
+                for ax_s, ax_roi, ax_sl_scl, ax_scl in zip(
+                    label_spatial_shape,
+                    self._active_label.position,
+                    self._active_layer_channel.selected_level_scale,
+                    self._active_layer_channel.layer.scale
+                )
+                if ax_s > 1
+            ]
+
+            original_image_scale = [
+                ax_scl * ax_sl_scl
+                for ax_s, ax_sl_scl, ax_scl in zip(
+                    label_spatial_shape,
+                    self._active_layer_channel.selected_level_scale,
+                    self._active_layer_channel.layer.scale
+                )
+                if ax_s > 1
+            ]
+
+            self._active_input_layers.append(viewer.add_image(
+                original_image_region.squeeze(),
+                name=current_layer_name,
+                blending=input_layer_channel.layer.blending,
+                translate=original_image_translate,
+                scale=original_image_scale,
+                colormap=input_layer_channel.layer.colormap,
+                contrast_limits=input_layer_channel.layer.contrast_limits
+            ))
+
+            viewer.layers[current_layer_name].bounding_box.visible = True
+
         self._active_edit_layer = viewer.add_labels(
             label_data,
             name="Labels edit",
@@ -507,6 +589,10 @@ class LabelsManager:
            and self._active_edit_layer in viewer.layers):
             viewer.layers.remove(self._active_edit_layer)
 
+        for active_input_layer in self._active_input_layers:
+            if active_input_layer in viewer.layers:
+                viewer.layers.remove(active_input_layer)
+
         if self._active_layer_channel:
             self._active_layer_channel.layer.refresh()
             self._active_layer_channel.visible = True
@@ -514,4 +600,12 @@ class LabelsManager:
 
         self._transaction = None
         self._active_edit_layer = None
+        self._active_input_layers = []
         self._requires_commit = False
+
+    def _remove_edit_layer(self, event):
+        removed_layer = event.value
+
+        if (removed_layer
+           in self._active_input_layers + [self._active_edit_layer]):
+            self.commit()

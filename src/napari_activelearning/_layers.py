@@ -157,7 +157,7 @@ class LayerChannel(QTreeWidgetItem):
         self._update_available_shapes()
         self._update_available_scales()
 
-        if self._data_group is None:
+        if self._data_group is not None:
             self.setText(6, str(self._data_group))
 
         if self.parent() is not None:
@@ -274,6 +274,8 @@ class LayersGroup(QTreeWidgetItem):
         self._source_axes_no_channels = None
         self._source_axes = None
         self._source_data = None
+
+        self._available_data_groups = None
         self._data_group = None
 
         super().__init__()
@@ -308,6 +310,7 @@ class LayersGroup(QTreeWidgetItem):
         if self.childCount():
             self._source_data = self.child(0).source_data
             self._data_group = self.child(0).data_group
+            self._available_data_groups = self.child(0).available_data_groups
 
             if (not isinstance(self._source_data, (str, Path))
                and self.childCount() > 1):
@@ -330,6 +333,7 @@ class LayersGroup(QTreeWidgetItem):
         else:
             self._source_data = None
             self._data_group = None
+            self._available_data_groups = None
 
         self.updated = False
 
@@ -346,6 +350,33 @@ class LayersGroup(QTreeWidgetItem):
             self._update_source_data()
 
         return self._data_group
+
+    @data_group.setter
+    def data_group(self, data_group):
+        self._data_group = data_group
+
+        for layer_channel in map(
+           lambda idx: self.child(idx),
+           range(self.childCount())):
+            layer_channel.data_group = self._data_group
+
+        if self._data_group is not None:
+            self.setText(6, str(self._data_group))
+
+        self.updated = True
+
+    @property
+    def available_data_groups(self):
+        if self._available_data_groups is None:
+            self._update_source_data()
+
+        return self._available_data_groups
+
+    @available_data_groups.setter
+    def available_data_groups(self, available_data_groups):
+        self._available_data_groups = available_data_groups
+
+        self.updated = True
 
     @property
     def metadata(self):
@@ -1246,8 +1277,13 @@ class ImageGroupEditor(PropertiesEditor):
         if data_group is not None:
             self._data_group = data_group
 
-        if self._active_layer_channel.data_group != self._data_group:
-            self._active_layer_channel.data_group = self._data_group
+        if self._active_layers_group:
+            if self._active_layers_group.data_group != self._data_group:
+                self._active_layers_group.data_group = self._data_group
+
+        if self._active_layer_channel:
+            if self._active_layer_channel.data_group != self._data_group:
+                self._active_layer_channel.data_group = self._data_group
 
         self.post_update()
 
