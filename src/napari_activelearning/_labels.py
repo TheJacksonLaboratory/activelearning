@@ -201,8 +201,15 @@ class LabelsManager:
 
     def _load_label_data(self, input_filename, data_group=None,
                          source_axes=None,
+                         group_source_axes=None,
                          labels_source_axes=None,
                          channel_index=None):
+
+        if isinstance(input_filename, MultiScaleData):
+            arr = input_filename[0]
+        else:
+            arr, _ = zds.image2array(input_filename, data_group)
+
         if source_axes is None:
             selected_region = self._active_label.position
         else:
@@ -212,17 +219,24 @@ class LabelsManager:
                                    self._active_label.position)
             }
 
-            if "C" in source_axes:
+            if arr.ndim > len(source_axes):
                 position_dir["C"] = slice(None)
                 if channel_index is not None:
                     position_dir["C"] = slice(channel_index, channel_index + 1)
 
+            if arr.ndim > len(source_axes):
+                # The source array could be stored as a multi-channel object,
+                # even if the napari loads it as separate layers.
+                # If this is the case, use the group source axes instead.
+                array_axes = group_source_axes
+            else:
+                array_axes = source_axes
+
             selected_region = tuple(
                 position_dir.get(ax, slice(None))
-                for ax in source_axes
+                for ax in array_axes
             )
 
-        arr, _ = zds.image2array(input_filename, data_group)
         label_data = arr[selected_region]
 
         return label_data
@@ -502,13 +516,21 @@ class LabelsManager:
             original_image_region = self._load_label_data(
                 input_layer_channel.source_data,
                 input_layer_channel.data_group,
+                input_layer_channel.source_axes,
                 input_layers_group.source_axes,
                 labels_source_axes,
                 curr_layer_channel
             )
+
+            if (original_image_region.ndim
+               < len(input_layers_group.source_axes)):
+                array_axes = input_layer_channel.source_axes
+            else:
+                array_axes = input_layers_group.source_axes
+
             label_spatial_shape = [
                 ax_s
-                for ax, ax_s in zip(input_layers_group.source_axes,
+                for ax, ax_s in zip(array_axes,
                                     original_image_region.shape)
                 if ax != "C"
             ]

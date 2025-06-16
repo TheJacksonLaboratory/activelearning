@@ -6,6 +6,9 @@ visibility: hidden
 categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:
   commands:
+    - id: napari-activelearning.make_activelearning_widget
+      python_name: napari_activelearning:get_active_learning_widget
+      title: Active learning widget
     - id: napari-activelearning.make_image_groups_manager_widget
       python_name: napari_activelearning:get_image_groups_manager_widget
       title: Image groups manager
@@ -16,9 +19,11 @@ contributions:
       python_name: napari_activelearning:get_label_groups_manager_widget
       title: Label groups manager
   widgets:
+    - command: napari-activelearning.make_activelearning_widget
+      display_name: Active learning widget
     - command: napari-activelearning.make_image_groups_manager_widget
-      display_name: Image groups manager
+      display_name: Dockable - Image groups manager
     - command: napari-activelearning.make_acquisition_fun_widget
-      display_name: Acquisition function manager
+      display_name: Dockable - Acquisition function manager
     - command: napari-activelearning.make_label_groups_manager_widget
-      display_name: Label groups manager
+      display_name: Dockable  - Label groups manager

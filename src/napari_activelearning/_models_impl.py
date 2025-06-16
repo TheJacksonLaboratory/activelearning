@@ -32,6 +32,30 @@ try:
                                              axis=self._channel_axis)
             return img_t
 
+    class Cellpose3DTransform(zds.MaskGenerator):
+        def __init__(self, channels=None, channel_axis=None):
+            self._channel_axis = channel_axis
+            self._channels = channels
+            axes = ["Z", "Y", "X"]
+
+            if self._channel_axis is not None:
+                axes.insert(self._channel_axis, "C")
+
+            axes = "".join(axes)
+
+            super(Cellpose3DTransform, self).__init__(axes=axes)
+
+        def _compute_transform(self, image: np.ndarray) -> np.ndarray:
+            img_t = transforms.convert_image(image,
+                                             channel_axis=self._channel_axis,
+                                             channels=self._channels,
+                                             z_axis=0,
+                                             do_3D=True)
+            img_t = transforms.normalize_img(img_t, invert=False,
+                                             axis=self._channel_axis,
+                                             norm3D=True)
+            return img_t
+
     class EnsureInputs:
         def __init__(self, min_labels_per_sample=1, min_labels_size=1):
             self._min_labels_per_sample = min_labels_per_sample
@@ -259,6 +283,69 @@ try:
             self.refresh_model = True
 
             return True
+
+    class Cellpose3DTunable(CellposeTunable):
+        model_axes = "ZYXC"
+        _channel_axis = 3
+        _z_axis = 0
+
+        def __init__(self):
+            super().__init__()
+            self._anisotropy = 1
+            self._flow3D_smooth = None
+
+        def _model_init(self):
+            super()._model_init()
+
+            self._custom_transform = Cellpose3DTransform(self._channels,
+                                                         self._channel_axis)
+
+        def _run_pred(self, img, *args, **kwargs):
+            self._model_init()
+
+            with torch.no_grad():
+                img_t = self._custom_transform(img)
+
+                if img_t.ndim < 3:
+                    img_t = img_t[..., None]
+
+                if img_t.shape[-1] == 1:
+                    img_t = np.repeat(img_t, 2, axis=-1)
+
+                _, y, _ = self._model_dropout._run_net(
+                    img_t,
+                    anisotropy=self._anisotropy,
+                    do_3D=True)
+
+                logits = torch.from_numpy(y)
+                probs = logits.sigmoid().numpy()
+
+            return probs
+
+        def _run_eval(self, img, *args, **kwargs):
+            self._model_init()
+
+            img_t = self._custom_transform(img)
+
+            img_t = img_t[None, ...]
+
+            if img_t.ndim < 4:
+                img_t = img_t[..., None]
+
+            if img_t.shape[-1] == 1:
+                img_t = np.repeat(img_t, 2, axis=-1)
+
+            seg, _, _ = self._model.eval(
+                img_t,
+                diameter=None,
+                flow_threshold=None,
+                channels=self._channels,
+                do_3D=True,
+                anisotropy=self._anisotropy,
+                dP_smooth=0,
+                stitch_threshold=0.0
+            )
+            return seg
 
     USING_CELLPOSE = True
 
