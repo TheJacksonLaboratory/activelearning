@@ -8,6 +8,7 @@ from ._models import TunableMethod, InvalidSample
 
 try:
     import cellpose
+    import cv2
     from cellpose import core, transforms, models, train
     import torch
 
@@ -288,6 +289,10 @@ try:
         model_axes = "ZYXC"
         _channel_axis = 3
         _z_axis = 0
+        _slices_per_volume = 10
+        _crop_size = 512
+        _tile_norm = 0
+        _sharpen_radius = 0.0
 
         def __init__(self):
             super().__init__()
@@ -346,6 +351,78 @@ try:
                 stitch_threshold=0.0
             )
             return seg
+
+        def _preload_data(self, dataloader):
+            # Extract XY, XZ, and YZ slices from the 3D volumes for training
+            raw_data = []
+            label_data = []
+            for img0, lab0 in dataloader:
+                if USING_PYTORCH:
+                    img0 = img0[0].numpy().squeeze()
+                    lab0 = lab0[0].numpy().squeeze()
+
+                pm = [(0, 1, 2, 3), (2, 0, 1, 3), (1, 0, 2, 3)]
+                lab_pm = [(0, 1, 2), (2, 0, 1), (1, 0, 2)]
+
+                for p in range(3):
+                    img = img0.transpose(pm[p]).copy()
+                    lab = lab0.transpose(lab_pm[p]).copy()
+
+                    Ly, Lx = img.shape[1:3]
+                    samples_idx = np.random.choice(
+                        img.shape[0],
+                        size=self._slices_per_volume
+                    )
+
+                    imgs = img[samples_idx]
+                    labs = lab[samples_idx]
+
+                    if self._anisotropy > 1.0 and p > 0:
+                        imgs = transforms.resize_image(
+                            imgs,
+                            Ly=int(self._anisotropy * Ly),
+                            Lx=Lx
+                        )
+                        labs = transforms.resize_image(
+                            labs,
+                            Ly=int(self._anisotropy * Ly),
+                            Lx=Lx,
+                            interpolation=cv2.INTER_NEAREST_EXACT
+                        )
+
+                    for k, (img, lab) in enumerate(zip(imgs, labs)):
+                        if self._tile_norm:
+                            img = transforms.normalize99_tile(
+                                img,
+                                blocksize=self._tile_norm
+                            )
+                        if self._sharpen_radius:
+                            img = transforms.smooth_sharpen_img(
+                                img,
+                                sharpen_radius=self._sharpen_radius
+                            )
+
+                        if Ly - self._crop_size <= 0:
+                            ly = 0
+                        else:
+                            ly = np.random.randint(0, Ly - self._crop_size)
+
+                        if Lx - self._crop_size <= 0:
+                            lx = 0
+                        else:
+                            np.random.randint(0, Lx - self._crop_size)
+
+                        raw_data.append(
+                            img[ly:ly + self._crop_size,
+                                lx:lx + self._crop_size]
+                        )
+
+                        label_data.append(
+                            lab[ly:ly + self._crop_size,
+                                lx:lx + self._crop_size]
+                        )
+
+            return raw_data, label_data
 
     USING_CELLPOSE = True
 

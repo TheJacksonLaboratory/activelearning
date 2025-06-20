@@ -20,10 +20,10 @@ contributions:
       title: Label groups manager
   widgets:
     - command: napari-activelearning.make_activelearning_widget
-      display_name: Active learning widget
+      display_name: Active learning widget (All in one)
     - command: napari-activelearning.make_image_groups_manager_widget
-      display_name: Dockable - Image groups manager
+      display_name: Image groups manager (Dockable)
     - command: napari-activelearning.make_acquisition_fun_widget
-      display_name: Dockable - Acquisition function manager
+      display_name: Acquisition function manager (Dockable)
     - command: napari-activelearning.make_label_groups_manager_widget
-      display_name: Dockable  - Label groups manager
+      display_name: Label groups manager (Dockable)
