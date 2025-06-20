@@ -575,7 +575,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         self.edit_mask_widget.setVisible(show)
 
     def _set_patch_size(self, patch_sizes):
-        super().set_patch_size(list(patch_sizes.values()))
+        super().set_patch_size(patch_sizes)
 
     def update_reference_info(self):
         if super().update_reference_info():
@@ -946,11 +946,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         self.max_samples_spn = QSpinBox(minimum=1, maximum=10000,
                                         value=self._max_samples,
-                                        singleStep=10)
+                                        singleStep=1)
 
         self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100,
                                            value=self._MC_repetitions,
-                                           singleStep=10)
+                                           singleStep=1)
         self.num_workers_spn = QSpinBox(minimum=0, maximum=100,
                                         value=self._num_workers,
                                         singleStep=1)

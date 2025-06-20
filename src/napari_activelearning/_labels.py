@@ -1,5 +1,6 @@
 from typing import List, Iterable, Union, Optional
 from pathlib import Path
+from functools import partial
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
@@ -108,7 +109,7 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
-            self.remove_managed_layer
+            partial(self.remove_managed_layer, layer=layer)
         )
 
     def remove_managed_label_group(self, label_group: LabelGroup):
@@ -123,12 +124,17 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         self.setSelected(True)
 
-    def remove_managed_layer(self, event):
+    def remove_managed_layer(self, event, layer):
         removed_layer = event.value
 
         label_group_list = self.managed_layers.get(removed_layer, [])
         for label_group in label_group_list:
             self.removeChild(label_group)
+        else:
+            viewer = napari.current_viewer()
+            viewer.layers.events.removed.disconnect(
+                partial(self.remove_managed_layer, layer)
+            )
 
         self.setSelected(True)
 
@@ -192,12 +198,6 @@ class LabelsManager:
         self._active_input_layers = []
 
         self._requires_commit = False
-
-        viewer = napari.current_viewer()
-
-        viewer.layers.events.removed.connect(
-            self._remove_edit_layer
-        )
 
     def _load_label_data(self, input_filename, data_group=None,
                          source_axes=None,
@@ -444,12 +444,6 @@ class LabelsManager:
         viewer.camera.center = current_center
         viewer.dims.current_step = tuple(map(int, current_center))
 
-        # TODO: Only make the labels visible, keeping all the labels that are visible as they are
-        # for layer in viewer.layers:
-        #     layer.visible = False
-
-        # self._active_image_group.visible = True
-
         if edit_focused_label:
             self.edit_labels()
 
@@ -595,6 +589,17 @@ class LabelsManager:
         self._active_layer_channel.layer.visible = False
 
         self._requires_commit = True
+
+        viewer = napari.current_viewer()
+
+        viewer.layers.events.removed.connect(
+            partial(self._remove_edit_layer, layer=self._active_edit_layer)
+        )
+        for layer in self._active_input_layers:
+            viewer.layers.events.removed.connect(
+                partial(self._remove_edit_layer, layer=layer)
+            )
+
         return True
 
     def commit(self):
@@ -625,9 +630,13 @@ class LabelsManager:
         self._active_input_layers = []
         self._requires_commit = False
 
-    def _remove_edit_layer(self, event):
+    def _remove_edit_layer(self, event, layer):
         removed_layer = event.value
 
-        if (removed_layer
-           in self._active_input_layers + [self._active_edit_layer]):
+        if removed_layer == layer:
+            viewer = napari.current_viewer()
+            viewer.layers.events.removed.disconnect(
+                partial(self._remove_edit_layer, layer=layer)
+            )
+
             self.commit()

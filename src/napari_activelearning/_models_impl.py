@@ -347,8 +347,6 @@ try:
                 channels=self._channels,
                 do_3D=True,
                 anisotropy=self._anisotropy,
-                dP_smooth=0,
-                stitch_threshold=0.0
             )
             return seg
 
