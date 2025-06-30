@@ -1,5 +1,6 @@
 from typing import Iterable, Union, Optional
 import operator
+from functools import partial
 from pathlib import Path, PureWindowsPath
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
@@ -157,7 +158,7 @@ class LayerChannel(QTreeWidgetItem):
         self._update_available_shapes()
         self._update_available_scales()
 
-        if self._data_group is None:
+        if self._data_group is not None:
             self.setText(6, str(self._data_group))
 
         if self.parent() is not None:
@@ -274,6 +275,8 @@ class LayersGroup(QTreeWidgetItem):
         self._source_axes_no_channels = None
         self._source_axes = None
         self._source_data = None
+
+        self._available_data_groups = None
         self._data_group = None
 
         super().__init__()
@@ -308,6 +311,7 @@ class LayersGroup(QTreeWidgetItem):
         if self.childCount():
             self._source_data = self.child(0).source_data
             self._data_group = self.child(0).data_group
+            self._available_data_groups = self.child(0).available_data_groups
 
             if (not isinstance(self._source_data, (str, Path))
                and self.childCount() > 1):
@@ -330,6 +334,7 @@ class LayersGroup(QTreeWidgetItem):
         else:
             self._source_data = None
             self._data_group = None
+            self._available_data_groups = None
 
         self.updated = False
 
@@ -346,6 +351,33 @@ class LayersGroup(QTreeWidgetItem):
             self._update_source_data()
 
         return self._data_group
+
+    @data_group.setter
+    def data_group(self, data_group):
+        self._data_group = data_group
+
+        for layer_channel in map(
+           lambda idx: self.child(idx),
+           range(self.childCount())):
+            layer_channel.data_group = self._data_group
+
+        if self._data_group is not None:
+            self.setText(6, str(self._data_group))
+
+        self.updated = True
+
+    @property
+    def available_data_groups(self):
+        if self._available_data_groups is None:
+            self._update_source_data()
+
+        return self._available_data_groups
+
+    @available_data_groups.setter
+    def available_data_groups(self, available_data_groups):
+        self._available_data_groups = available_data_groups
+
+        self.updated = True
 
     @property
     def metadata(self):
@@ -1058,7 +1090,7 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
-            self.remove_managed_layer
+            partial(self.remove_managed_layer, layer_channel=layer_channel)
         )
 
     def remove_managed_layer_channel(self,
@@ -1070,7 +1102,7 @@ class ImageGroupRoot(QTreeWidgetItem):
             removed_layer_channel
         )
 
-    def remove_managed_layer(self, event):
+    def remove_managed_layer(self, event, layer_channel: LayerChannel):
         removed_layer = event.value
         if removed_layer not in self.managed_layers:
             return
@@ -1094,6 +1126,11 @@ class ImageGroupRoot(QTreeWidgetItem):
             self.managed_layers.pop(removed_layer)
 
         self.setSelected(True)
+
+        viewer = napari.current_viewer()
+        viewer.layers.events.removed.disconnect(
+            partial(self.remove_managed_layer, layer_channel=layer_channel)
+        )
 
 
 class PropertiesEditor:
@@ -1246,8 +1283,13 @@ class ImageGroupEditor(PropertiesEditor):
         if data_group is not None:
             self._data_group = data_group
 
-        if self._active_layer_channel.data_group != self._data_group:
-            self._active_layer_channel.data_group = self._data_group
+        if self._active_layers_group:
+            if self._active_layers_group.data_group != self._data_group:
+                self._active_layers_group.data_group = self._data_group
+
+        if self._active_layer_channel:
+            if self._active_layer_channel.data_group != self._data_group:
+                self._active_layer_channel.data_group = self._data_group
 
         self.post_update()
 
@@ -1547,17 +1589,20 @@ class MaskGenerator(PropertiesEditor):
 
         return new_mask_layer
 
-    def set_patch_size(self, patch_sizes: Union[int, Iterable[int]]):
+    def set_patch_size(self, patch_sizes: Union[int, Iterable[int], dict]):
         if self._mask_axes is None:
             return
 
         if isinstance(patch_sizes, int):
             patch_sizes = [patch_sizes] * len(self._mask_axes)
 
-        self._patch_sizes = {
-            ax: ax_ps
-            for ax, ax_ps in zip(self._mask_axes, patch_sizes)
-        }
+        if isinstance(patch_sizes, dict):
+            self._patch_sizes = dict(patch_sizes)
+        else:
+            self._patch_sizes = {
+                ax: ax_ps
+                for ax, ax_ps in zip(self._mask_axes, patch_sizes)
+            }
 
     @property
     def active_image_group(self):

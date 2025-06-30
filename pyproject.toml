@@ -39,7 +39,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cellpose = [
-    "cellpose>=3.0.0"
+    "cellpose>=3.0.0,<4.0.0"
 ]
 testing = [
     "tox",
