@@ -150,7 +150,7 @@ class MyZarrDataset(zds.ZarrDataset):
                     yield batch
                     n_samples += 1
 
-                except InvalidSample:
+                except InvalidSample as e:
                     continue
 
                 except StopIteration:

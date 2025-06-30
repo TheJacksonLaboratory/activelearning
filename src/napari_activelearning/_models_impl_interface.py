@@ -6,7 +6,7 @@ from ._models_impl import USING_CELLPOSE, SimpleTunable
 from ._models import TunableWidget
 
 if USING_CELLPOSE:
-    from ._models_impl import CellposeTunable
+    from ._models_impl import CellposeTunable, Cellpose3DTunable
 
     class CellposeTunableWidget(CellposeTunable, TunableWidget):
         def __init__(self):
@@ -177,6 +177,64 @@ if USING_CELLPOSE:
             self._segmentation_parameters.model_type.value = "custom"
             self._segmentation_parameters.pretrained_model.value =\
                 self._pretrained_model
+
+    class Cellpose3DTunableWidget(Cellpose3DTunable, CellposeTunableWidget):
+        def __init__(self):
+            super().__init__()
+
+        @staticmethod
+        def _segmentation_parameters_widget():
+            @magicgui(auto_call=True)
+            def cellpose3D_segmentation_parameters(
+              channels: tuple[int, int] = (0, 0),
+              pretrained_model: Annotated[Path, {"widget_type": "FileEdit",
+                                                 "visible": False,
+                                                 "mode": "r"}] = Path(""),
+              model_type: Literal["custom",
+                                  "cyto",
+                                  "cyto2",
+                                  "cyto3",
+                                  "nuclei",
+                                  "tissuenet_cp3",
+                                  "livecell_cp3",
+                                  "yeast_PhC_cp3",
+                                  "yeast_BF_cp3",
+                                  "bact_phase_cp3",
+                                  "bact_fluor_cp3",
+                                  "deepbacs_cp3",
+                                  "cyto2_cp3",
+                                  "CP",
+                                  "CPx",
+                                  "TN1",
+                                  "TN2",
+                                  "TN3",
+                                  "LC1",
+                                  "LC2",
+                                  "LC3",
+                                  "LC"] = "cyto3",
+              anisotropy: Annotated[float, {"widget_type": "FloatSpinBox",
+                                            "min": 1e-3,
+                                            "max": 1024.0,
+                                            "step": 1e-3}] = 1.0,
+              gpu: bool = True):
+                return dict(
+                    channels=channels,
+                    pretrained_model=pretrained_model,
+                    model_type=model_type,
+                    anisotropy=anisotropy,
+                    gpu=gpu
+                )
+
+            segmentation_parameter_names = [
+                    "channels",
+                    "pretrained_model",
+                    "model_type",
+                    "anisotropy",
+                    "gpu"
+                ]
+
+            return (cellpose3D_segmentation_parameters,
+                    segmentation_parameter_names)
 
 
 class SimpleTunableWidget(SimpleTunable, TunableWidget):

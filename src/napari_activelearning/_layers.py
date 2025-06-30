@@ -1,5 +1,6 @@
 from typing import Iterable, Union, Optional
 import operator
+from functools import partial
 from pathlib import Path, PureWindowsPath
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
@@ -1089,7 +1090,7 @@ class ImageGroupRoot(QTreeWidgetItem):
 
         viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
-            self.remove_managed_layer
+            partial(self.remove_managed_layer, layer_channel=layer_channel)
         )
 
     def remove_managed_layer_channel(self,
@@ -1101,7 +1102,7 @@ class ImageGroupRoot(QTreeWidgetItem):
             removed_layer_channel
         )
 
-    def remove_managed_layer(self, event):
+    def remove_managed_layer(self, event, layer_channel: LayerChannel):
         removed_layer = event.value
         if removed_layer not in self.managed_layers:
             return
@@ -1125,6 +1126,11 @@ class ImageGroupRoot(QTreeWidgetItem):
             self.managed_layers.pop(removed_layer)
 
         self.setSelected(True)
+
+        viewer = napari.current_viewer()
+        viewer.layers.events.removed.disconnect(
+            partial(self.remove_managed_layer, layer_channel=layer_channel)
+        )
 
 
 class PropertiesEditor:
@@ -1583,17 +1589,20 @@ class MaskGenerator(PropertiesEditor):
 
         return new_mask_layer
 
-    def set_patch_size(self, patch_sizes: Union[int, Iterable[int]]):
+    def set_patch_size(self, patch_sizes: Union[int, Iterable[int], dict]):
         if self._mask_axes is None:
             return
 
         if isinstance(patch_sizes, int):
             patch_sizes = [patch_sizes] * len(self._mask_axes)
 
-        self._patch_sizes = {
-            ax: ax_ps
-            for ax, ax_ps in zip(self._mask_axes, patch_sizes)
-        }
+        if isinstance(patch_sizes, dict):
+            self._patch_sizes = dict(patch_sizes)
+        else:
+            self._patch_sizes = {
+                ax: ax_ps
+                for ax, ax_ps in zip(self._mask_axes, patch_sizes)
+            }
 
     @property
     def active_image_group(self):

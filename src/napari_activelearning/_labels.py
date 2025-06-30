@@ -1,5 +1,6 @@
 from typing import List, Iterable, Union, Optional
 from pathlib import Path
+from functools import partial
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QTreeWidgetItem
@@ -108,7 +109,7 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         viewer = napari.current_viewer()
         viewer.layers.events.removed.connect(
-            self.remove_managed_layer
+            partial(self.remove_managed_layer, layer=layer)
         )
 
     def remove_managed_label_group(self, label_group: LabelGroup):
@@ -123,12 +124,17 @@ class LabelGroupRoot(QTreeWidgetItem):
 
         self.setSelected(True)
 
-    def remove_managed_layer(self, event):
+    def remove_managed_layer(self, event, layer):
         removed_layer = event.value
 
         label_group_list = self.managed_layers.get(removed_layer, [])
         for label_group in label_group_list:
             self.removeChild(label_group)
+        else:
+            viewer = napari.current_viewer()
+            viewer.layers.events.removed.disconnect(
+                partial(self.remove_managed_layer, layer)
+            )
 
         self.setSelected(True)
 
@@ -193,16 +199,17 @@ class LabelsManager:
 
         self._requires_commit = False
 
-        viewer = napari.current_viewer()
-
-        viewer.layers.events.removed.connect(
-            self._remove_edit_layer
-        )
-
     def _load_label_data(self, input_filename, data_group=None,
                          source_axes=None,
+                         group_source_axes=None,
                          labels_source_axes=None,
                          channel_index=None):
+
+        if isinstance(input_filename, MultiScaleData):
+            arr = input_filename[0]
+        else:
+            arr, _ = zds.image2array(input_filename, data_group)
+
         if source_axes is None:
             selected_region = self._active_label.position
         else:
@@ -212,17 +219,24 @@ class LabelsManager:
                                    self._active_label.position)
             }
 
-            if "C" in source_axes:
+            if arr.ndim > len(source_axes):
                 position_dir["C"] = slice(None)
                 if channel_index is not None:
                     position_dir["C"] = slice(channel_index, channel_index + 1)
 
+            if arr.ndim > len(source_axes):
+                # The source array could be stored as a multi-channel object,
+                # even if the napari loads it as separate layers.
+                # If this is the case, use the group source axes instead.
+                array_axes = group_source_axes
+            else:
+                array_axes = source_axes
+
             selected_region = tuple(
                 position_dir.get(ax, slice(None))
-                for ax in source_axes
+                for ax in array_axes
             )
 
-        arr, _ = zds.image2array(input_filename, data_group)
         label_data = arr[selected_region]
 
         return label_data
@@ -430,12 +444,6 @@ class LabelsManager:
         viewer.camera.center = current_center
         viewer.dims.current_step = tuple(map(int, current_center))
 
-        # TODO: Only make the labels visible, keeping all the labels that are visible as they are
-        # for layer in viewer.layers:
-        #     layer.visible = False
-
-        # self._active_image_group.visible = True
-
         if edit_focused_label:
             self.edit_labels()
 
@@ -502,13 +510,21 @@ class LabelsManager:
             original_image_region = self._load_label_data(
                 input_layer_channel.source_data,
                 input_layer_channel.data_group,
+                input_layer_channel.source_axes,
                 input_layers_group.source_axes,
                 labels_source_axes,
                 curr_layer_channel
             )
+
+            if (original_image_region.ndim
+               < len(input_layers_group.source_axes)):
+                array_axes = input_layer_channel.source_axes
+            else:
+                array_axes = input_layers_group.source_axes
+
             label_spatial_shape = [
                 ax_s
-                for ax, ax_s in zip(input_layers_group.source_axes,
+                for ax, ax_s in zip(array_axes,
                                     original_image_region.shape)
                 if ax != "C"
             ]
@@ -573,6 +589,17 @@ class LabelsManager:
         self._active_layer_channel.layer.visible = False
 
         self._requires_commit = True
+
+        viewer = napari.current_viewer()
+
+        viewer.layers.events.removed.connect(
+            partial(self._remove_edit_layer, layer=self._active_edit_layer)
+        )
+        for layer in self._active_input_layers:
+            viewer.layers.events.removed.connect(
+                partial(self._remove_edit_layer, layer=layer)
+            )
+
         return True
 
     def commit(self):
@@ -603,9 +630,13 @@ class LabelsManager:
         self._active_input_layers = []
         self._requires_commit = False
 
-    def _remove_edit_layer(self, event):
+    def _remove_edit_layer(self, event, layer):
         removed_layer = event.value
 
-        if (removed_layer
-           in self._active_input_layers + [self._active_edit_layer]):
+        if removed_layer == layer:
+            viewer = napari.current_viewer()
+            viewer.layers.events.removed.disconnect(
+                partial(self._remove_edit_layer, layer=layer)
+            )
+
             self.commit()
