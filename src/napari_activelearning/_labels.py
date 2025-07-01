@@ -8,6 +8,7 @@ from qtpy.QtWidgets import QTreeWidgetItem
 import numpy as np
 import tensorstore as ts
 import zarrdataset as zds
+import dask
 import zarr
 
 import napari
@@ -496,6 +497,9 @@ class LabelsManager:
         )
 
         label_data = self._load_label_data(input_filename, data_group)
+
+        if isinstance(label_data, dask.array.Array):
+            label_data = label_data.compute()
 
         self._active_input_layers = []
         for input_layer_channel in map(
