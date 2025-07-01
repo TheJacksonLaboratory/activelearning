@@ -8,21 +8,28 @@ description: Tutorial for fine-tuning the "nuclei" model from `cellpose` to new 
 format:
   html:
     toc: true
-
   revealjs:
     output-file: cellpose_tutorial_presentation
     code-fold: false
     progress: true
     controls: true
     fontsize: 18pt
-
 execute:
   cache: true
   warning: false
   error: false
   echo: false
-
-jupyter: python3
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.7
+  kernelspec:
+    display_name: micro-sam
+    language: python
+    name: python3
 ---
 
 ```{python}
@@ -141,6 +148,25 @@ def highlight_layers(draw, layer_list, layer_item,
     draw_annotation(draw, (tl_x, tl_y), (br_x, br_y), item_annotation, item_annotation_position, item_annotation_fontsize)
 
 
+def highlight_tab(draw, tab_widget, item_idx,
+  item_annotation=None,
+  item_annotation_position=None,
+  item_annotation_fontsize=36,
+  offset_x=0,
+  offset_y=0):
+    main_window = viewer.window._qt_window
+    main_window_global = main_window.mapToGlobal(main_window.rect().topLeft())
+
+    tab_bar = tab_widget.tabBar()
+
+    tl = tab_bar.mapToGlobal(tab_bar.tabRect(item_idx).topLeft())
+    tl_x, tl_y = tl.x() - main_window_global.x() - offset_x, tl.y() - main_window_global.y() - offset_y
+    br = tab_bar.mapToGlobal(tab_bar.tabRect(item_idx).bottomRight())
+    br_x, br_y = br.x() - main_window_global.x() - offset_x, br.y() - main_window_global.y() - offset_y
+
+    draw_annotation(draw, (tl_x, tl_y), (br_x, br_y), item_annotation, item_annotation_position, item_annotation_fontsize)
+
+
 def highlight_widget(draw, layout, item_idx,
   item_annotation=None,
   item_annotation_position=None,
@@ -176,13 +202,15 @@ def highlight_item(draw, item, tree_widget, item_annotation=None,
         item = (item, item)
 
     rect = tree_widget.visualItemRect(item[0])
-    tl = tree_widget.viewport().mapToGlobal(rect.topLeft())
-    rect = tree_widget.visualItemRect(item[1])
-    br = tree_widget.viewport().mapToGlobal(rect.bottomRight())
-
+    tl = tree_widget.mapToGlobal(rect.topLeft())
     tl_x, tl_y = tl.x() - main_window_global.x() - offset_x, tl.y() - main_window_global.y() - offset_y
 
+    rect = tree_widget.visualItemRect(item[-1])
+    br = tree_widget.mapToGlobal(rect.bottomRight())
     br_x, br_y = br.x() - main_window_global.x() - offset_x, br.y() - main_window_global.y() - offset_y
+
+    tl_x, br_x = min(br_x, tl_x), max(br_x, tl_x)
+    tl_y, br_y = min(br_y, tl_y), max(br_y, tl_y)
 
     draw_annotation(draw, (tl_x, tl_y), (br_x, br_y), item_annotation, item_annotation_position, item_annotation_fontsize)
 
@@ -242,11 +270,15 @@ Such hierarchical structure is implemented as follows:
 :::
 
 ```{python}
-image_groups_mgr, acquisition_fun_cfg, label_groups_mgr = al.get_active_learning_widget()
+al_widget = al.get_active_learning_widget()
+
+image_groups_mgr = al_widget.widget(0)
+acquisition_fun_mgr = al_widget.widget(1)
+label_groups_mgr = al_widget.widget(2)
 ```
 
 ```{python}
-image_groups_mgr_dw = viewer.window.add_dock_widget(image_groups_mgr)
+al_docked_widget = viewer.window.add_dock_widget(al_widget)
 ```
 
 ```{python}
@@ -323,8 +355,6 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_item(draw, image_groups_mgr.groups_root.child(0).child(0), image_groups_mgr.image_groups_tw, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
-
 highlight_widget(draw, image_groups_mgr.image_groups_editor.layout, 0, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, (8, 9), item_annotation=3, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
@@ -338,17 +368,7 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 
 # 3. Segmentation on image groups
 
-## 3.1. Add the _Acquisition function configuration_ widget to napari's window
-
-The _Acquisition function configuration_ is under the _Active Learning_ plugin in napari's plugins menu.
-
-```
-Plugins > Active Learning > Acquisition function configuration
-```
-
-::: {.callout-tip}
-All _Active Learning_ widgets can be _un-docked_ from their current place and _re-docked_ into other more convenient location within `napari`'s window, or even as tabs, as illustrated in this tutorial.
-:::
+## 3.1. Select the _Acquisition function manager_ tab
 
 ::: {.callout-note title="About the _Acquisition function configuration_" collapse="true"}
 The _Acquisition function configuration_ widget comprises the processes of _inference_ and _fine tunning_ of deep learning models.
@@ -362,22 +382,18 @@ Finally, this widget executes the inference process on the same sampled patches 
 :::
 
 ```{python}
-acquisition_fun_cfg_dw = viewer.window.add_dock_widget(acquisition_fun_cfg)
-viewer.window._qt_window.tabifyDockWidget(image_groups_mgr_dw, acquisition_fun_cfg_dw)
-
-image_groups_mgr_dw.setWindowTitle("Image groups manager")
-acquisition_fun_cfg_dw.setWindowTitle("Acquisition function configuration")
-```
-
-```{python}
-acquisition_fun_cfg_dw.raise_()
+al_widget.setCurrentIndex(1)
 ```
 
 ```{python}
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
-image = Image.fromarray(screenshot)
-image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.0, height_prop=0.0)
+
+highlight_tab(draw, al_widget, 1, item_annotation=None, item_annotation_position=None, item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 :::
@@ -391,10 +407,10 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 ::: {.column width=0.3}
 
 ```{python}
-focus_widget = acquisition_fun_cfg.layout().itemAt(0).widget()
+focus_widget = acquisition_fun_mgr.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
 
-acquisition_fun_cfg.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
+acquisition_fun_mgr.patch_sizes_mspn.sizes = {"Z": 1, "Y": 256, "X": 256}
 ```
 
 ```{python}
@@ -403,9 +419,9 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 0, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, 0, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 2, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, 2, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -432,7 +448,7 @@ This directs the Active Learning plugin to sample at random patches of size $256
 ::: {.column width=0.3}
 
 ```{python}
-acquisition_fun_cfg.max_samples_spn.setValue(4)
+acquisition_fun_mgr.max_samples_spn.setValue(4)
 ```
 
 ```{python}
@@ -441,7 +457,7 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, (3, 4), item_annotation=None, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, (3, 4), item_annotation=None, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -487,10 +503,10 @@ This tells `cellpose` to segment the first channel ($0$) and use the second chan
 <!-- #endregion -->
 
 ```{python}
-acquisition_fun_cfg.methods_cmb.setCurrentIndex(2)
-acquisition_fun_cfg.tunable_segmentation_method.advanced_segmentation_options_chk.setChecked(True)
-acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.channels.value = (0, 1)
-acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
+acquisition_fun_mgr.methods_cmb.setCurrentIndex(2)
+acquisition_fun_mgr.tunable_segmentation_method.advanced_segmentation_options_chk.setChecked(True)
+acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.channels.value = (0, 1)
+acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
 ```
 
 ```{python}
@@ -499,13 +515,13 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, (11, 12), item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, (11, 12), item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 0, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method.layout, 0, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 0, item_annotation=3, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.native.layout, 0, item_annotation=3, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 2, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.native.layout, 2, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -535,13 +551,13 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, 14, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ```{python}
-_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+_ = acquisition_fun_mgr.compute_acquisition_layers(run_all=True)
 ```
 
 :::
@@ -610,7 +626,7 @@ The new mask will appear as "images mask (1)" since there already exists one mas
 ::: {.column width=0.3}
 
 ```{python}
-image_groups_mgr_dw.raise_()
+al_widget.setCurrentIndex(0)
 
 focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
@@ -624,6 +640,8 @@ screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
+
+highlight_tab(draw, al_widget, 0, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 highlight_widget(draw, image_groups_mgr.mask_generator.layout, 0, item_annotation=2, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
@@ -695,9 +713,6 @@ draw.rectangle([140, 50, 180, 90], outline="green", width=2)
 draw_text(draw, "3", (750, 300), text_size=50)
 draw_text(draw, "+", (740, 350), text_size=90)
 
-draw.rectangle([295, 1000, 1280, 1035], outline="white", width=5)
-draw.rectangle([295, 1000, 1280, 1035], outline="green", width=2)
-
 cropped_image.resize((int(screenshot_scale * 0.7 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
@@ -718,7 +733,7 @@ viewer.layers["images mask (1)"].refresh()
 - Return to the _Acquisition function configuration_ tab and run the segmentation process again (clicking "Run on all image groups" button).
 
 ```{python}
-acquisition_fun_cfg_dw.raise_()
+al_widget.setCurrentIndex(1)
 ```
 
 ```{python}
@@ -728,13 +743,13 @@ org_height, org_width = screenshot.shape[:2]
 image = Image.fromarray(screenshot)
 draw = ImageDraw.Draw(image)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
+highlight_widget(draw, acquisition_fun_mgr.layout, 14, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=0, offset_y=0)
 
 image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ```{python}
-_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+_ = acquisition_fun_mgr.compute_acquisition_layers(run_all=True)
 ```
 
 ## 4.4. Inspect the results from the segmentation applied only to masked regions
@@ -777,13 +792,7 @@ for layer in removable_layers:
 
 # 5. Fine tune the segmentation model
 
-## 5.1. Add the _Label groups manager_ widget to napari's window
-
-You can find the _Label groups manager_ under the _Active Learning_ plugin in napari's plugins menu.
-
-```
-Plugins > Active Learning > Label groups manager
-```
+## 5.1. Select the _Label groups manager_ tab
 
 ::: {.callout-note title="About the _Label groups manager_" collapse="true"}
 The _Label groups manager_ widget contains the coordinates of the sampled patches acquired by the _Acquisition function configuration_ widget.
@@ -793,21 +802,18 @@ It additionally permits to edit the pixel data of the selected patch's _labels_ 
 :::
 
 ```{python}
-label_groups_mgr_dw = viewer.window.add_dock_widget(label_groups_mgr)
-viewer.window._qt_window.tabifyDockWidget(acquisition_fun_cfg_dw, label_groups_mgr_dw)
-
-label_groups_mgr_dw.setWindowTitle("Label groups manager")
-```
-
-```{python}
-label_groups_mgr_dw.raise_()
+al_widget.setCurrentIndex(2)
 ```
 
 ```{python}
 screenshot = viewer.screenshot(canvas_only=False, flash=False)
 org_height, org_width = screenshot.shape[:2]
-image = Image.fromarray(screenshot)
-image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
+
+cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.0, height_prop=0.0)
+
+highlight_tab(draw, al_widget, 2, item_annotation=None, item_annotation_position=None, item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+
+cropped_image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ## 5.2. Navigate between patches with the _Label groups manager_
@@ -931,7 +937,7 @@ Additionally, the performance of the _fine-tuned_ model will depend highly on ho
 :::
 
 ```{python}
-z_tmp = zarr.open(r"C:\Users\Public\Documents\membrane.zarr\segmentation\0", mode="r")
+z_tmp = zarr.open("data/Cells3D.zarr/segmentation/0", mode="r")
 ```
 
 ```{python}
@@ -942,7 +948,7 @@ for c_idx in range(label_groups_mgr.labels_group_root.child(0).childCount()):
     )
 
     label_groups_mgr.labels_group_root.child(0).child(c_idx)._position
-    viewer.layers["Labels edit"].data[:] = z_tmp[0, 0, ...][label_groups_mgr.labels_group_root.child(0).child(c_idx)._position]
+    viewer.layers["Labels edit"].data[:] = z_tmp[label_groups_mgr.labels_group_root.child(0).child(c_idx)._position]
     label_groups_mgr.commit()
 ```
 
@@ -980,7 +986,7 @@ In this tutorial, the labels must be of `napari.layers.Labels` type.
 ::: {.column width=0.3}
 
 ```{python}
-image_groups_mgr_dw.raise_()
+al_widget.setCurrentIndex(0)
 
 focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
@@ -1001,8 +1007,6 @@ org_height, org_width = screenshot.shape[:2]
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
 image_groups_mgr.image_groups_editor.use_as_labels_chk.setChecked(True)
-
-highlight_item(draw, image_groups_mgr.groups_root.child(0).child(3), image_groups_mgr.image_groups_tw, item_annotation=1, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, 16, item_annotation=2, item_annotation_position="S", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
@@ -1028,12 +1032,12 @@ cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_sc
 ::: {.column width=0.3}
 
 ```{python}
-acquisition_fun_cfg_dw.raise_()
+al_widget.setCurrentIndex(1)
 ```
 
 ```{python}
-acquisition_fun_cfg.tunable_segmentation_method.advanced_finetuning_options_chk.setChecked(True)
-acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.save_path.value = "C:/Users/Public/Documents/models"
+acquisition_fun_mgr.tunable_segmentation_method.advanced_finetuning_options_chk.setChecked(True)
+acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.save_path.value = "C:/Users/Public/Documents/models"
 ```
 
 ```{python}
@@ -1042,9 +1046,9 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method.layout, 1, item_annotation=1, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method.layout, 1, item_annotation=1, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 6, item_annotation=2, item_annotation_position="NE", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.native.layout, 6, item_annotation=2, item_annotation_position="NE", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -1078,12 +1082,12 @@ You can modify other parameters for the training process here, such as the numbe
 ::: {.column width=0.3}
 
 ```{python}
-vertical_scroll_bar = acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters_scr.verticalScrollBar()
+vertical_scroll_bar = acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters_scr.verticalScrollBar()
 vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
  
-acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.model_name.value = "nuclei_ft"
-acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.batch_size.value = 3
-acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.learning_rate.value = 0.0001
+acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.model_name.value = "nuclei_ft"
+acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.batch_size.value = 3
+acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.learning_rate.value = 0.0001
 ```
 
 ```{python}
@@ -1092,11 +1096,11 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 14, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.native.layout, 14, item_annotation=4, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 15, item_annotation=5, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.native.layout, 15, item_annotation=5, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._finetuning_parameters.native.layout, 16, item_annotation=6, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._finetuning_parameters.native.layout, 16, item_annotation=6, item_annotation_position="W", item_annotation_fontsize=30, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
@@ -1135,13 +1139,13 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 17, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, 17, item_annotation=None, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ```{python}
-_ = acquisition_fun_cfg.fine_tune()
+_ = acquisition_fun_mgr.fine_tune()
 ```
 
 :::
@@ -1191,7 +1195,7 @@ image.resize((int(screenshot_scale * org_width), int(screenshot_scale * org_heig
 ::: {.column width=0.3}
 
 ```{python}
-image_groups_mgr_dw.raise_()
+al_widget.setCurrentIndex(0)
 
 focus_widget = image_groups_mgr.mask_generator.layout().itemAt(0).widget()
 focus_widget.setChecked(True)
@@ -1221,7 +1225,7 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_item(draw, image_groups_mgr.groups_root.child(0).child(image_groups_mgr.groups_root.child(0).childCount() - 1), image_groups_mgr.image_groups_tw, item_annotation=3, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+# highlight_item(draw, image_groups_mgr.groups_root.child(0).child(image_groups_mgr.groups_root.child(0).childCount() - 1), image_groups_mgr.image_groups_tw, item_annotation=3, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 highlight_widget(draw, image_groups_mgr.image_groups_editor.editor_widget.layout, 15, item_annotation=4, item_annotation_position="E", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
@@ -1241,7 +1245,7 @@ The fine tuned model can be used in *Cellpose*'s GUI software, their python API 
 :::
 
 ```{python}
-_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+_ = acquisition_fun_mgr.compute_acquisition_layers(run_all=True)
 
 viewer.camera.center = (33, 128, 128)
 viewer.dims.current_step = (33, 128, 128)
@@ -1273,12 +1277,12 @@ This will execute the segmentation process with the non-fine-tuned "nuclei" mode
 ::: {.column width=0.3}
 
 ```{python}
-acquisition_fun_cfg_dw.raise_()
+al_widget.setCurrentIndex(1)
  
-vertical_scroll_bar = acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters_scr.verticalScrollBar()
+vertical_scroll_bar = acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters_scr.verticalScrollBar()
 vertical_scroll_bar.setValue(vertical_scroll_bar.maximum())
 
-acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
+acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.model_type.value = "nuclei"
 ```
 
 ```{python}
@@ -1287,15 +1291,15 @@ org_height, org_width = screenshot.shape[:2]
 
 cropped_image, draw, offset_x, offset_y = crop_screenshot(screenshot, width_prop=0.6, height_prop=0.0)
 
-highlight_widget(draw, acquisition_fun_cfg.tunable_segmentation_method._segmentation_parameters.native.layout, 2, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.tunable_segmentation_method._segmentation_parameters.native.layout, 2, item_annotation=1, item_annotation_position="W", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
-highlight_widget(draw, acquisition_fun_cfg.layout, 14, item_annotation=2, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
+highlight_widget(draw, acquisition_fun_mgr.layout, 14, item_annotation=2, item_annotation_position="N", item_annotation_fontsize=36, offset_x=offset_x, offset_y=offset_y)
 
 cropped_image.resize((int(screenshot_scale * 0.3 * org_width), int(screenshot_scale * org_height)), Image.Resampling.LANCZOS)
 ```
 
 ```{python}
-_ = acquisition_fun_cfg.compute_acquisition_layers(run_all=True)
+_ = acquisition_fun_mgr.compute_acquisition_layers(run_all=True)
 ```
 
 :::

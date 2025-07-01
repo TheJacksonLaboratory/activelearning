@@ -391,7 +391,7 @@
     "href": "reference/compute_acquisition_fun.html",
     "title": "compute_acquisition_fun",
     "section": "",
-    "text": "compute_acquisition_fun\ncompute_acquisition_fun(\n    tunable_segmentation_method,\n    img,\n    MC_repetitions,\n    img_superpixel=None,\n)",
+    "text": "compute_acquisition_fun\ncompute_acquisition_fun(\n    tunable_segmentation_method,\n    img,\n    MC_repetitions,\n    img_superpixel=None,\n    ndim=2,\n)",
     "crumbs": [
       "API Reference",
       "Acquisition Function Configuration",
@@ -403,7 +403,7 @@
     "href": "reference/compute_BALD.html",
     "title": "compute_BALD",
     "section": "",
-    "text": "compute_BALD\ncompute_BALD(probs)",
+    "text": "compute_BALD\ncompute_BALD(probs, ndim=2)",
     "crumbs": [
       "API Reference",
       "Acquisition Function Configuration",
@@ -691,11 +691,11 @@
     "text": "2.4. Edit the image group properties\n\n\n\nSelect the “images” layers group_ that has been created under the new image group.\nClick the Edit group properties checkbox.\nMake sure that Axes order is “CZYX”, otherwise, you can edit it and press Enter to update the axes names."
   },
   {
-    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
-    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-acquisition-function-manager-tab",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-acquisition-function-manager-tab",
     "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
-    "section": "3.1. Add the Acquisition function configuration widget to napari’s window",
-    "text": "3.1. Add the Acquisition function configuration widget to napari’s window\nThe Acquisition function configuration is under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Acquisition function configuration\n\n\n\n\n\n\nTip\n\n\nAll Active Learning widgets can be un-docked from their current place and re-docked into other more convenient location within napari’s window, or even as tabs, as illustrated in this tutorial.\n\n\n\n\n\n\n\n\n\n\nAbout the Acquisition function configuration\n\n\nThe Acquisition function configuration widget comprises the processes of inference and fine tunning of deep learning models.\nThis tool allows to define the sampling configuration used to retrieve patches from the input image at random. Such configuration involves the size on each dimension of the patches, the maximum number of patches that can be sampled from each image, and the order of the axes that are passed to the model’s inference function. Parameters for such model can also be configured within this widget.\nThe fine-tuning process can also be configured and launched from within this widget. Finally, this widget executes the inference process on the same sampled patches to compare the base and fine-tuned model performance visually.\n\n\n\n\n\n:::\n::::"
+    "section": "3.1. Select the Acquisition function manager tab",
+    "text": "3.1. Select the Acquisition function manager tab\n\n\n\n\n\n\n\nAbout the Acquisition function configuration\n\n\nThe Acquisition function configuration widget comprises the processes of inference and fine tunning of deep learning models.\nThis tool allows to define the sampling configuration used to retrieve patches from the input image at random. Such configuration involves the size on each dimension of the patches, the maximum number of patches that can be sampled from each image, and the order of the axes that are passed to the model’s inference function. Parameters for such model can also be configured within this widget.\nThe fine-tuning process can also be configured and launched from within this widget. Finally, this widget executes the inference process on the same sampled patches to compare the base and fine-tuned model performance visually.\n\n\n\n\n\n:::\n::::"
   },
   {
     "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#set-the-size-of-the-sampling-patch",
@@ -761,11 +761,11 @@
     "text": "4.4. Inspect the results from the segmentation applied only to masked regions\n\nAll slices between \\(27\\) and \\(30\\) were picked and segmented thanks to the sampling mask!\n\n\n\n\n\n\n\nNote\n\n\nAt this point, multiple layers have been added to napari’s layers list and it could start to look clutered.\nThe following layers will be used in the remainder of this tutorial: “membrane”, “nuclei”, “images mask (1)”, and “images segmentation [1]”.\nThe rest of the layers can be safely removed from the list (i.e. “images acquisition function [1]”, “images acquisition function”, “images mask”, and “images segmentation”)."
   },
   {
-    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-label-groups-manager-widget-to-naparis-window",
-    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-label-groups-manager-tab",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#select-the-label-groups-manager-tab",
     "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
-    "section": "5.1. Add the Label groups manager widget to napari’s window",
-    "text": "5.1. Add the Label groups manager widget to napari’s window\nYou can find the Label groups manager under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Label groups manager\n\n\n\n\n\n\n\nAbout the Label groups manager\n\n\nThe Label groups manager widget contains the coordinates of the sampled patches acquired by the Acquisition function configuration widget.\nThis widget allows to navigate between patches without serching them in the complete extent of their corresponding image. It additionally permits to edit the pixel data of the selected patch’s labels in order to correct the inference output in a human-in-the-loop approach."
+    "section": "5.1. Select the Label groups manager tab",
+    "text": "5.1. Select the Label groups manager tab\n\n\n\n\n\n\n\nAbout the Label groups manager\n\n\nThe Label groups manager widget contains the coordinates of the sampled patches acquired by the Acquisition function configuration widget.\nThis widget allows to navigate between patches without serching them in the complete extent of their corresponding image. It additionally permits to edit the pixel data of the selected patch’s labels in order to correct the inference output in a human-in-the-loop approach."
   },
   {
     "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial_presentation.html#navigate-between-patches-with-the-label-groups-manager",
@@ -887,11 +887,11 @@
     "text": "2.4. Edit the image group properties\n\n\n\nSelect the “images” layers group_ that has been created under the new image group.\nClick the Edit group properties checkbox.\nMake sure that Axes order is “CZYX”, otherwise, you can edit it and press Enter to update the axes names."
   },
   {
-    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
-    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-acquisition-function-configuration-widget-to-naparis-window",
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-acquisition-function-manager-tab",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-acquisition-function-manager-tab",
     "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
-    "section": "3.1. Add the Acquisition function configuration widget to napari’s window",
-    "text": "3.1. Add the Acquisition function configuration widget to napari’s window\nThe Acquisition function configuration is under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Acquisition function configuration\n\n\n\n\n\n\nTip\n\n\n\nAll Active Learning widgets can be un-docked from their current place and re-docked into other more convenient location within napari’s window, or even as tabs, as illustrated in this tutorial.\n\n\n\n\n\n\n\n\nAbout the Acquisition function configuration\n\n\n\n\n\nThe Acquisition function configuration widget comprises the processes of inference and fine tunning of deep learning models.\nThis tool allows to define the sampling configuration used to retrieve patches from the input image at random. Such configuration involves the size on each dimension of the patches, the maximum number of patches that can be sampled from each image, and the order of the axes that are passed to the model’s inference function. Parameters for such model can also be configured within this widget.\nThe fine-tuning process can also be configured and launched from within this widget. Finally, this widget executes the inference process on the same sampled patches to compare the base and fine-tuned model performance visually.\n\n\n\n\n\n\n\n\n\n\n\n\n:::\n::::"
+    "section": "3.1. Select the Acquisition function manager tab",
+    "text": "3.1. Select the Acquisition function manager tab\n\n\n\n\n\n\nAbout the Acquisition function configuration\n\n\n\n\n\nThe Acquisition function configuration widget comprises the processes of inference and fine tunning of deep learning models.\nThis tool allows to define the sampling configuration used to retrieve patches from the input image at random. Such configuration involves the size on each dimension of the patches, the maximum number of patches that can be sampled from each image, and the order of the axes that are passed to the model’s inference function. Parameters for such model can also be configured within this widget.\nThe fine-tuning process can also be configured and launched from within this widget. Finally, this widget executes the inference process on the same sampled patches to compare the base and fine-tuned model performance visually.\n\n\n\n\n\n\n\n\n\n\n\n\n:::\n::::"
   },
   {
     "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#set-the-size-of-the-sampling-patch",
@@ -957,11 +957,11 @@
     "text": "4.4. Inspect the results from the segmentation applied only to masked regions\n\nAll slices between \\(27\\) and \\(30\\) were picked and segmented thanks to the sampling mask!\n\n\n\n\n\n\n\nNote\n\n\n\nAt this point, multiple layers have been added to napari’s layers list and it could start to look clutered.\nThe following layers will be used in the remainder of this tutorial: “membrane”, “nuclei”, “images mask (1)”, and “images segmentation [1]”.\nThe rest of the layers can be safely removed from the list (i.e. “images acquisition function [1]”, “images acquisition function”, “images mask”, and “images segmentation”)."
   },
   {
-    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-label-groups-manager-widget-to-naparis-window",
-    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#add-the-label-groups-manager-widget-to-naparis-window",
+    "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-label-groups-manager-tab",
+    "href": "tutorials/cellpose_tutorial/cellpose_tutorial.html#select-the-label-groups-manager-tab",
     "title": "Tutorial: How to fine tune a Cellpose model with the Active Learning plugin for Napari",
-    "section": "5.1. Add the Label groups manager widget to napari’s window",
-    "text": "5.1. Add the Label groups manager widget to napari’s window\nYou can find the Label groups manager under the Active Learning plugin in napari’s plugins menu.\nPlugins &gt; Active Learning &gt; Label groups manager\n\n\n\n\n\n\nAbout the Label groups manager\n\n\n\n\n\nThe Label groups manager widget contains the coordinates of the sampled patches acquired by the Acquisition function configuration widget.\nThis widget allows to navigate between patches without serching them in the complete extent of their corresponding image. It additionally permits to edit the pixel data of the selected patch’s labels in order to correct the inference output in a human-in-the-loop approach."
+    "section": "5.1. Select the Label groups manager tab",
+    "text": "5.1. Select the Label groups manager tab\n\n\n\n\n\n\nAbout the Label groups manager\n\n\n\n\n\nThe Label groups manager widget contains the coordinates of the sampled patches acquired by the Acquisition function configuration widget.\nThis widget allows to navigate between patches without serching them in the complete extent of their corresponding image. It additionally permits to edit the pixel data of the selected patch’s labels in order to correct the inference output in a human-in-the-loop approach."
   },
   {
     "objectID": "tutorials/cellpose_tutorial/cellpose_tutorial.html#navigate-between-patches-with-the-label-groups-manager",
