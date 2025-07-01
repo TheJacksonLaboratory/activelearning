@@ -20,8 +20,10 @@ from ._labels import LabelsManager, LabelItem
 from ._utils import get_dataloader, save_zarr, downsample_image, update_labels
 
 
-def compute_BALD(probs):
-    if probs.ndim == 3:
+def compute_BALD(probs, ndim=2):
+    if ndim == 2 and probs.ndim == 3:
+        probs = np.stack((probs, 1 - probs), axis=1)
+    elif ndim == 3 and probs.ndim == 4:
         probs = np.stack((probs, 1 - probs), axis=1)
 
     T = probs.shape[0]
@@ -51,7 +53,8 @@ def compute_acquisition_superpixel(mutual_info, super_pixel_labels):
 
 
 def compute_acquisition_fun(tunable_segmentation_method, img, MC_repetitions,
-                            img_superpixel=None):
+                            img_superpixel=None,
+                            ndim=2):
     probs = []
     for _ in range(MC_repetitions):
         probs.append(
@@ -59,7 +62,7 @@ def compute_acquisition_fun(tunable_segmentation_method, img, MC_repetitions,
         )
     probs = np.stack(probs, axis=0)
 
-    mutual_info = compute_BALD(probs)
+    mutual_info = compute_BALD(probs, ndim=ndim)
     if img_superpixel is not None:
         u_sp_lab = compute_acquisition_superpixel(mutual_info, img_superpixel)
     else:
@@ -536,6 +539,7 @@ class AcquisitionFunction:
                     img,
                     self._MC_repetitions,
                     # img_superpixel=img_sp,
+                    ndim=len(model_spatial_axes)
                 )
 
                 acquisition_fun[pos_u_lab] = u_sp_lab[pred_sel]

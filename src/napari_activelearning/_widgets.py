@@ -1,3 +1,4 @@
+from qtpy.QtWidgets import QTabWidget
 from ._models import TunableMethod
 from ._interface import (ImageGroupsManagerWidget,
                          LabelsManagerWidget,
@@ -34,8 +35,10 @@ def register_model(model_name: str, model: TunableMethod):
 
 register_model("simple", SimpleTunableWidget)
 if USING_CELLPOSE:
-    from ._models_impl_interface import CellposeTunableWidget
+    from ._models_impl_interface import (CellposeTunableWidget,
+                                         Cellpose3DTunableWidget)
     register_model("cellpose", CellposeTunableWidget)
+    register_model("cellpose3D", Cellpose3DTunableWidget)
 
 
 def get_image_groups_manager_widget():
@@ -72,8 +75,34 @@ def get_acquisition_function_widget():
 
 
 def get_active_learning_widget():
-    return [
-        get_image_groups_manager_widget(),
-        get_acquisition_function_widget(),
-        get_label_groups_manager_widget()
-    ]
+    global CURRENT_IMAGE_GROUPS_MANAGER
+    global CURRENT_ACQUISITION_FUNCTION
+    global CURRENT_LABEL_GROUPS_MANAGER
+
+    tab_widget = QTabWidget()
+
+    try:
+        tab_widget.addTab(get_image_groups_manager_widget(),
+                          "Image Groups manager")
+    except RuntimeError:
+        CURRENT_IMAGE_GROUPS_MANAGER = None
+        tab_widget.addTab(get_image_groups_manager_widget(),
+                          "Image Groups manager")
+
+    try:
+        tab_widget.addTab(get_acquisition_function_widget(),
+                          "Acquisition Function manager")
+    except RuntimeError:
+        CURRENT_ACQUISITION_FUNCTION = None
+        tab_widget.addTab(get_acquisition_function_widget(),
+                          "Acquisition Function manager")
+
+    try:
+        tab_widget.addTab(get_label_groups_manager_widget(),
+                          "Label Groups manager")
+    except RuntimeError:
+        CURRENT_LABEL_GROUPS_MANAGER = None
+        tab_widget.addTab(get_label_groups_manager_widget(),
+                          "Label Groups manager")
+
+    return tab_widget

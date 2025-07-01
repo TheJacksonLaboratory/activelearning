@@ -8,6 +8,7 @@ from ._models import TunableMethod, InvalidSample
 
 try:
     import cellpose
+    import cv2
     from cellpose import core, transforms, models, train
     import torch
 
@@ -30,6 +31,30 @@ try:
                                              channels=self._channels)
             img_t = transforms.normalize_img(img_t, invert=False,
                                              axis=self._channel_axis)
+            return img_t
+
+    class Cellpose3DTransform(zds.MaskGenerator):
+        def __init__(self, channels=None, channel_axis=None):
+            self._channel_axis = channel_axis
+            self._channels = channels
+            axes = ["Z", "Y", "X"]
+
+            if self._channel_axis is not None:
+                axes.insert(self._channel_axis, "C")
+
+            axes = "".join(axes)
+
+            super(Cellpose3DTransform, self).__init__(axes=axes)
+
+        def _compute_transform(self, image: np.ndarray) -> np.ndarray:
+            img_t = transforms.convert_image(image,
+                                             channel_axis=self._channel_axis,
+                                             channels=self._channels,
+                                             z_axis=0,
+                                             do_3D=True)
+            img_t = transforms.normalize_img(img_t, invert=False,
+                                             axis=self._channel_axis,
+                                             norm3D=True)
             return img_t
 
     class EnsureInputs:
@@ -259,6 +284,143 @@ try:
             self.refresh_model = True
 
             return True
+
+    class Cellpose3DTunable(CellposeTunable):
+        model_axes = "ZYXC"
+        _channel_axis = 3
+        _z_axis = 0
+        _slices_per_volume = 10
+        _crop_size = 512
+        _tile_norm = 0
+        _sharpen_radius = 0.0
+
+        def __init__(self):
+            super().__init__()
+            self._anisotropy = 1
+            self._flow3D_smooth = None
+
+        def _model_init(self):
+            super()._model_init()
+
+            self._custom_transform = Cellpose3DTransform(self._channels,
+                                                         self._channel_axis)
+
+        def _run_pred(self, img, *args, **kwargs):
+            self._model_init()
+
+            with torch.no_grad():
+                img_t = self._custom_transform(img)
+
+                if img_t.ndim < 3:
+                    img_t = img_t[..., None]
+
+                if img_t.shape[-1] == 1:
+                    img_t = np.repeat(img_t, 2, axis=-1)
+
+                _, y, _ = self._model_dropout._run_net(
+                    img_t,
+                    anisotropy=self._anisotropy,
+                    do_3D=True)
+
+                logits = torch.from_numpy(y)
+                probs = logits.sigmoid().numpy()
+
+            return probs
+
+        def _run_eval(self, img, *args, **kwargs):
+            self._model_init()
+
+            img_t = self._custom_transform(img)
+
+            img_t = img_t[None, ...]
+
+            if img_t.ndim < 4:
+                img_t = img_t[..., None]
+
+            if img_t.shape[-1] == 1:
+                img_t = np.repeat(img_t, 2, axis=-1)
+
+            seg, _, _ = self._model.eval(
+                img_t,
+                diameter=None,
+                flow_threshold=None,
+                channels=self._channels,
+                do_3D=True,
+                anisotropy=self._anisotropy,
+            )
+            return seg
+
+        def _preload_data(self, dataloader):
+            # Extract XY, XZ, and YZ slices from the 3D volumes for training
+            raw_data = []
+            label_data = []
+            for img0, lab0 in dataloader:
+                if USING_PYTORCH:
+                    img0 = img0[0].numpy().squeeze()
+                    lab0 = lab0[0].numpy().squeeze()
+
+                pm = [(0, 1, 2, 3), (2, 0, 1, 3), (1, 0, 2, 3)]
+                lab_pm = [(0, 1, 2), (2, 0, 1), (1, 0, 2)]
+
+                for p in range(3):
+                    img = img0.transpose(pm[p]).copy()
+                    lab = lab0.transpose(lab_pm[p]).copy()
+
+                    Ly, Lx = img.shape[1:3]
+                    samples_idx = np.random.choice(
+                        img.shape[0],
+                        size=self._slices_per_volume
+                    )
+
+                    imgs = img[samples_idx]
+                    labs = lab[samples_idx]
+
+                    if self._anisotropy > 1.0 and p > 0:
+                        imgs = transforms.resize_image(
+                            imgs,
+                            Ly=int(self._anisotropy * Ly),
+                            Lx=Lx
+                        )
+                        labs = transforms.resize_image(
+                            labs,
+                            Ly=int(self._anisotropy * Ly),
+                            Lx=Lx,
+                            interpolation=cv2.INTER_NEAREST_EXACT
+                        )
+
+                    for k, (img, lab) in enumerate(zip(imgs, labs)):
+                        if self._tile_norm:
+                            img = transforms.normalize99_tile(
+                                img,
+                                blocksize=self._tile_norm
+                            )
+                        if self._sharpen_radius:
+                            img = transforms.smooth_sharpen_img(
+                                img,
+                                sharpen_radius=self._sharpen_radius
+                            )
+
+                        if Ly - self._crop_size <= 0:
+                            ly = 0
+                        else:
+                            ly = np.random.randint(0, Ly - self._crop_size)
+
+                        if Lx - self._crop_size <= 0:
+                            lx = 0
+                        else:
+                            np.random.randint(0, Lx - self._crop_size)
+
+                        raw_data.append(
+                            img[ly:ly + self._crop_size,
+                                lx:lx + self._crop_size]
+                        )
+
+                        label_data.append(
+                            lab[ly:ly + self._crop_size,
+                                lx:lx + self._crop_size]
+                        )
+
+            return raw_data, label_data
 
     USING_CELLPOSE = True
 

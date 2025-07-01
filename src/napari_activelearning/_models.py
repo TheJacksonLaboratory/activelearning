@@ -150,7 +150,7 @@ class MyZarrDataset(zds.ZarrDataset):
                     yield batch
                     n_samples += 1
 
-                except InvalidSample:
+                except InvalidSample as e:
                     continue
 
                 except StopIteration:
@@ -219,21 +219,23 @@ class TunableMethod(SegmentationMethod):
             ))
 
         worker_init_fn = None
+        train_datasets_list = []
+        val_datasets_list = []
 
-        if len(dataset_metadata_list) == 1:
-            if isinstance(dataset_metadata_list[0]["masks"]["filenames"], str):
+        for img_dataset_metadata in dataset_metadata_list:
+            if isinstance(img_dataset_metadata["masks"]["filenames"], str):
                 z_grp = zarr.open(
-                    dataset_metadata_list[0]["masks"]["filenames"],
+                    img_dataset_metadata["masks"]["filenames"],
                     mode="r"
                 )
 
                 sampling_mask = np.copy(
-                    z_grp[dataset_metadata_list[0]["masks"]["data_group"]][:]
+                    z_grp[img_dataset_metadata["masks"]["data_group"]][:]
                 )
-            elif isinstance(dataset_metadata_list[0]["masks"]["filenames"],
+            elif isinstance(img_dataset_metadata["masks"]["filenames"],
                             np.ndarray):
                 sampling_mask = np.copy(
-                    dataset_metadata_list[0]["masks"]["filenames"]
+                    img_dataset_metadata["masks"]["filenames"]
                 )
             else:
                 raise ValueError("The mask filenames must be a numpy array or "
@@ -258,14 +260,14 @@ class TunableMethod(SegmentationMethod):
 
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
-                spatial_axes=dataset_metadata_list[0]["labels"]["axes"],
+                spatial_axes=img_dataset_metadata["labels"]["axes"],
                 min_area=1
             )
 
-            dataset_metadata_list[0]["masks"]["filenames"] = train_mask
+            img_dataset_metadata["masks"]["filenames"] = train_mask
 
-            train_datasets = MyZarrDataset(
-                list(dataset_metadata_list[0].values()),
+            img_train_dataset = MyZarrDataset(
+                list(img_dataset_metadata.values()),
                 return_positions=False,
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
@@ -274,10 +276,10 @@ class TunableMethod(SegmentationMethod):
                 max_samples=self.max_samples if self.max_samples > 0 else None
             )
 
-            dataset_metadata_list[0]["masks"]["filenames"] = val_mask
+            img_dataset_metadata["masks"]["filenames"] = val_mask
 
-            val_datasets = MyZarrDataset(
-                list(dataset_metadata_list[0].values()),
+            img_val_dataset = MyZarrDataset(
+                list(img_dataset_metadata.values()),
                 return_positions=False,
                 draw_same_chunk=False,
                 patch_sampler=patch_sampler,
@@ -287,52 +289,22 @@ class TunableMethod(SegmentationMethod):
             )
 
             for input_mode, transform_mode in mode_transforms.items():
-                train_datasets.add_transform(input_mode, transform_mode)
+                img_train_dataset.add_transform(input_mode, transform_mode)
 
             for input_mode, transform_mode in mode_transforms.items():
-                val_datasets.add_transform(input_mode, transform_mode)
+                img_val_dataset.add_transform(input_mode, transform_mode)
 
-            worker_init_fn = zds.zarrdataset_worker_init_fn
+            train_datasets_list.append(img_train_dataset)
+            val_datasets_list.append(img_val_dataset)
 
-        else:
-            train_datasets = []
-            val_datasets = []
-
-            training_indices = np.random.choice(
-                len(dataset_metadata_list),
-                int(train_data_proportion * len(dataset_metadata_list))
-            ).tolist()
-
-            for idx, dataset_metadata in enumerate(dataset_metadata_list):
-                patch_sampler = zds.PatchSampler(
-                    patch_size=patch_sizes,
-                    spatial_axes=dataset_metadata["labels"]["axes"],
-                    min_area=0.01
-                )
-
-                dataset = MyZarrDataset(
-                    list(dataset_metadata.values()),
-                    return_positions=False,
-                    draw_same_chunk=False,
-                    patch_sampler=patch_sampler,
-                    shuffle=True,
-                    repetitions_per_sample=self.repetitions_per_sample,
-                    max_samples=(
-                        self.max_samples if self.max_samples > 0 else None
-                    )
-                )
-
-                for input_mode, transform_mode in mode_transforms.items():
-                    dataset.add_transform(input_mode, transform_mode)
-
-                if idx in training_indices:
-                    train_datasets.append(dataset)
-                else:
-                    val_datasets.append(dataset)
-
-            train_datasets = ChainDataset(train_datasets)
-            val_datasets = ChainDataset(val_datasets)
+        if len(train_datasets_list) > 1:
+            train_datasets = ChainDataset(train_datasets_list)
+            val_datasets = ChainDataset(val_datasets_list)
             worker_init_fn = zds.chained_zarrdataset_worker_init_fn
+        else:
+            train_datasets = train_datasets_list[0]
+            val_datasets = val_datasets_list[0]
+            worker_init_fn = zds.zarrdataset_worker_init_fn
 
         if USING_PYTORCH:
             train_dataloader = DataLoader(

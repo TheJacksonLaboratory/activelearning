@@ -290,6 +290,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.editor_widget.setVisible(show)
 
     def _clear_image_group(self):
+        self._finished_clearing = False
+
         self.layers_group_name_cmb.clear()
         self.group_name_le.setText("None selected")
 
@@ -298,6 +300,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.output_dir_btn.setEnabled(False)
 
     def _clear_layers_group(self):
+        self._finished_clearing = False
+
         self.edit_axes_le.setText("None selected")
 
         self.edit_axes_le.setEnabled(False)
@@ -308,6 +312,7 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.use_as_labels_chk.setChecked(False)
         self.use_as_sampling_chk.setEnabled(False)
         self.use_as_sampling_chk.setChecked(False)
+        self.data_groups_cmb.setEnabled(False)
 
         self.edit_scale_mdspn.axes = ""
         self.edit_translate_mdspn.axes = ""
@@ -321,7 +326,6 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
         self.edit_channel_spn.setEnabled(False)
         self.edit_scale_mdspn.setEnabled(False)
         self.edit_translate_mdspn.setEnabled(False)
-        self.data_groups_cmb.setEnabled(False)
 
     def _fill_image_group(self):
         self._clear_image_group()
@@ -340,6 +344,8 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
             self.output_dir_btn.setEnabled(True)
             self.output_dir_le.setEnabled(True)
             self.group_name_le.setEnabled(True)
+
+        self._finished_clearing = True
 
         self._fill_layers_group()
 
@@ -364,11 +370,26 @@ class ImageGroupEditorWidget(ImageGroupEditor, QWidget):
                 self._active_layers_group.use_as_sampling_mask
             )
 
+            self.data_groups_cmb.clear()
+            if self._active_layers_group.available_data_groups:
+                self.data_groups_cmb.addItems(
+                    self._active_layers_group.available_data_groups
+                )
+
+                self.data_groups_cmb.setCurrentIndex(
+                    self._active_layers_group.available_data_groups.index(
+                        self._active_layers_group.data_group
+                    )
+                )
+
+            self.data_groups_cmb.setEnabled(True)
             self.layers_group_name_cmb.setEnabled(True)
             self.edit_axes_le.setEnabled(True)
             self.use_as_input_chk.setEnabled(True)
             self.use_as_labels_chk.setEnabled(True)
             self.use_as_sampling_chk.setEnabled(True)
+
+        self._finished_clearing = True
 
         self._fill_layer()
 
@@ -554,7 +575,7 @@ class MaskGeneratorWidget(MaskGenerator, QWidget):
         self.edit_mask_widget.setVisible(show)
 
     def _set_patch_size(self, patch_sizes):
-        super().set_patch_size(list(patch_sizes.values()))
+        super().set_patch_size(patch_sizes)
 
     def update_reference_info(self):
         if super().update_reference_info():
@@ -909,7 +930,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         self.patch_sizes_widget.setLayout(patch_sizes_lyt)
 
         patch_sizes_chk = QCheckBox("Edit patch sizes")
-        patch_sizes_chk.setChecked(False)
+        patch_sizes_chk.setChecked(True)
 
         self.input_axes_lbl = QLabel("No image groups added", )
         self.model_axes_lbl = QLabel("No method selected")
@@ -925,11 +946,11 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
 
         self.max_samples_spn = QSpinBox(minimum=1, maximum=10000,
                                         value=self._max_samples,
-                                        singleStep=10)
+                                        singleStep=1)
 
         self.MC_repetitions_spn = QSpinBox(minimum=2, maximum=100,
                                            value=self._MC_repetitions,
-                                           singleStep=10)
+                                           singleStep=1)
         self.num_workers_spn = QSpinBox(minimum=0, maximum=100,
                                         value=self._num_workers,
                                         singleStep=1)
@@ -974,7 +995,7 @@ class AcquisitionFunctionWidget(AcquisitionFunction, QWidget):
         acquisition_lyt.addWidget(self.patch_pb, 10, 1, 1, 3)
 
         self.setLayout(acquisition_lyt)
-        self.patch_sizes_widget.setVisible(False)
+        self.patch_sizes_widget.setVisible(True)
 
         patch_sizes_chk.toggled.connect(self._show_patch_sizes)
         self.patch_sizes_mspn.sizesChanged.connect(self._set_patch_size)
