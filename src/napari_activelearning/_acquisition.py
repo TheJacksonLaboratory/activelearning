@@ -315,12 +315,16 @@ class AcquisitionFunction:
 
             if layer_type in ["images", "labels", "masks"]:
                 try:
+                    # Limit the ROI of all inputs to a region that,
+                    # when scaled, is divisible by the patch size of the
+                    # sampling process.
                     dataset_metadata[layer_type]["roi"] = [tuple(
                         slice(0,
-                              math.ceil(ax_s / displayed_shape[ax]
-                                        * (displayed_shape[ax]
-                                           - displayed_shape[ax]
-                                           % scaled_patch_sizes.get(ax, 1))))
+                              math.ceil(
+                                  ax_s / displayed_shape[ax]
+                                  * (displayed_shape[ax]
+                                     - displayed_shape[ax]
+                                     % scaled_patch_sizes.get(ax, 1))))
                         if (ax in displayed_shape
                             and (ax in self.tunable_segmentation_method
                                            .model_axes
