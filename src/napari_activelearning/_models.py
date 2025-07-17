@@ -1,6 +1,7 @@
 from typing import Iterable, Union
 from functools import partial
 
+import random
 import numpy as np
 import zarr
 import zarrdataset as zds
@@ -222,7 +223,10 @@ class TunableMethod(SegmentationMethod):
         train_datasets_list = []
         val_datasets_list = []
 
-        for img_dataset_metadata in dataset_metadata_list:
+        n_datasets = len(dataset_metadata_list)
+        n_val = 0
+
+        for ds_i, img_dataset_metadata in enumerate(dataset_metadata_list, 1):
             if isinstance(img_dataset_metadata["masks"]["filenames"], str):
                 z_grp = zarr.open(
                     img_dataset_metadata["masks"]["filenames"],
@@ -245,18 +249,27 @@ class TunableMethod(SegmentationMethod):
             sampling_locations = np.ravel_multi_index(sampling_locations,
                                                       sampling_mask.shape)
 
-            trn_samples = int(len(sampling_locations) * train_data_proportion)
-            sampling_locations = np.random.choice(
-                sampling_locations,
-                size=trn_samples,
-                replace=False
-            )
+            if sampling_mask.size == 1:
+                if (random.random() > train_data_proportion
+                   or (ds_i == n_datasets and n_val == 0)):
+                    sampling_locations = np.empty((0, ), dtype=np.uint8)
+            else:
+                trn_samples = int(len(sampling_locations)
+                                  * train_data_proportion)
+                sampling_locations = np.random.choice(
+                    sampling_locations,
+                    size=trn_samples,
+                    replace=False
+                )
             sampling_locations = np.unravel_index(sampling_locations,
                                                   sampling_mask.shape)
 
             train_mask = np.zeros_like(sampling_mask)
             train_mask[sampling_locations] = True
             val_mask = np.bitwise_xor(train_mask, sampling_mask)
+
+            # Track how many samples had been assigned for validation
+            n_val += val_mask.sum()
 
             patch_sampler = zds.PatchSampler(
                 patch_size=patch_sizes,
